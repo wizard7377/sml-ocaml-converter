@@ -7,7 +7,7 @@
 
     @see <http://mitpress.mit.edu/books/definition-standard-ml> The Definition of Standard ML *)
 
-open Stdlib
+(* open Stdlib *)
 
 (** {1 Programs}
 

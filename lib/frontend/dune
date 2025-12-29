@@ -1,9 +1,10 @@
-(menhir
- (modules parser))
-
 (ocamllex lexer)
-
 
 (library
  (name frontend)
- (libraries ast))
+ (libraries ast common menhirLib)
+ (modules tokens lexer parser))
+
+(menhir
+ (modules parser)
+ (flags --table))
