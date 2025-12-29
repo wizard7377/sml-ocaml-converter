@@ -3,9 +3,10 @@
 (library
  (name frontend)
  (libraries ast common menhirLib)
- (modules tokens lexer parser))
+ (modules tokens utils lexer parser))
 
 (menhir
  (modules parser)
- (flags --table --dump)
+ (flags --comment -la 0 --trace -lc 0 --dump --dump-resolved)
+ ; (flags --dump)
  (explain true))

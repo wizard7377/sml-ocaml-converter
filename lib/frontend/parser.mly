@@ -1,6 +1,7 @@
 %{
     open Tokens
     open Ast
+    open Utils
 %}
 
 (* ========================================================================= *)
@@ -100,7 +101,7 @@
 %right ARROW                       (* function types *)
 %left STAR                         (* tuple types *)
 %nonassoc RAISE                    (* exception raising *)
-
+%right SEMICOLON                  (* sequencing *)
 (* ========================================================================= *)
 (* Type declarations for nonterminals                                        *)
 (* ========================================================================= *)
@@ -137,7 +138,7 @@
 %type <Ast.str_desc> strdesc
 %type <Ast.typ_refine> typrefin
 %type <Ast.idx> longid lab vid
-%type <Ast.idx list> tyvarseq tyvarseq1 longid_list
+%type <Ast.idx list> tyvarseq longid_list
 %type <Ast.con> scon
 %type <Ast.with_op> op_vid
 %type <Ast.fixity> fixity
@@ -152,20 +153,14 @@
 (* ========================================================================= *)
 
 program:
-    | EOF                           { [ProgEmpty] }
-    | prog_list EOF                 { $1 }
+    | separated_nonempty_list(SEMICOLON,prog) EOF                 { $1 }
     ;
 
-prog_list:
-    | prog                          { [$1] }
-    | prog prog_list                { $1 :: $2 }
-    ;
 
 prog:
     | dec                           { ProgDec $1 }
     | FUNCTOR fctbind               { ProgFun $2 }
     | SIGNATURE sigbind             { ProgStr $2 }
-    | prog SEMICOLON prog           { ProgSeq ($1, $3) }
     ;
 
 (* ========================================================================= *)
@@ -254,8 +249,7 @@ tyvar:
 
 (* List of long identifiers *)
 longid_list:
-    | longid                        { [$1] }
-    | longid longid_list            { $1 :: $2 }
+    | nonempty_list(longid)         { $1 }
     ;
 
 (* ========================================================================= *)
@@ -265,12 +259,8 @@ longid_list:
 tyvarseq:
     | (* empty *)                   { [] }
     | tyvar                         { [$1] }
-    | LPAREN tyvarseq1 RPAREN       { $2 }
-    ;
-
-tyvarseq1:
-    | tyvar                         { [$1] }
-    | tyvar COMMA tyvarseq1         { $1 :: $3 }
+    | LPAREN separated_nonempty_list(COMMA, tyvar) RPAREN
+                                    { $2 }
     ;
 
 (* ========================================================================= *)
@@ -305,38 +295,18 @@ atomic_exp:
     | op_vid                        { ExpIdx (match $1 with WithOp i -> i | WithoutOp i -> i) }
     | LPAREN RPAREN                 { TupleExp [] }
     | LPAREN exp RPAREN             { ParenExp $2 }
-    | LPAREN exp COMMA exp_comma_list RPAREN
+    | LPAREN exp COMMA separated_list(COMMA, exp) RPAREN
                                     { TupleExp ($2 :: $4) }
-    | LPAREN exp SEMICOLON exp_semi_list RPAREN
+    | LPAREN exp SEMICOLON separated_list(SEMICOLON, exp) RPAREN
                                     { SeqExp ($2 :: $4) }
     | LBRACE RBRACE                 { RecordExp [] }
     | LBRACE exprow RBRACE          { RecordExp [$2] }
     | HASH lab                      { RecordSelector $2 }
     | LBRACKET RBRACKET             { ListExp [] }
-    | LBRACKET exp list_exp_comma RBRACKET
-                                    { ListExp ($2 :: $3) }
-    | LET dec_seq IN exp let_exp_semi END
-                                    { LetExp ($2, $4 :: $5) }
-    ;
-
-exp_comma_list:
-    | exp                           { [$1] }
-    | exp COMMA exp_comma_list      { $1 :: $3 }
-    ;
-
-exp_semi_list:
-    | exp                           { [$1] }
-    | exp SEMICOLON exp_semi_list   { $1 :: $3 }
-    ;
-
-list_exp_comma:
-    | (* empty *)                   { [] }
-    | COMMA exp list_exp_comma      { $2 :: $3 }
-    ;
-
-let_exp_semi:
-    | (* empty *)                   { [] }
-    | SEMICOLON exp let_exp_semi    { $2 :: $3 }
+    | LBRACKET separated_nonempty_list(COMMA, exp) RBRACKET
+                                    { ListExp $2 }
+    | LET dec_seq IN separated_nonempty_list(SEMICOLON, exp) END
+                                    { LetExp ($2, $4) }
     ;
 
 (* Expression rows for records *)
@@ -379,23 +349,13 @@ atomic_pat:
     | op_vid                        { PatIdx $1 }
     | LPAREN RPAREN                 { PatTuple [] }
     | LPAREN pat RPAREN             { PatParen $2 }
-    | LPAREN pat COMMA pat_comma_list RPAREN
+    | LPAREN pat COMMA separated_list(COMMA, pat) RPAREN
                                     { PatTuple ($2 :: $4) }
     | LBRACE RBRACE                 { PatRecord [] }
     | LBRACE patrow RBRACE          { PatRecord [$2] }
     | LBRACKET RBRACKET             { PatList [] }
-    | LBRACKET pat list_pat_comma RBRACKET
-                                    { PatList ($2 :: $3) }
-    ;
-
-pat_comma_list:
-    | pat                           { [$1] }
-    | pat COMMA pat_comma_list      { $1 :: $3 }
-    ;
-
-list_pat_comma:
-    | (* empty *)                   { [] }
-    | COMMA pat list_pat_comma      { $2 :: $3 }
+    | LBRACKET separated_nonempty_list(COMMA, pat) RBRACKET
+                                    { PatList $2 }
     ;
 
 (* Pattern rows for records *)
@@ -422,12 +382,8 @@ typ:
 
 tuple_typ:
     | app_typ                       { $1 }
-    | app_typ STAR tuple_typ_list   { TypTuple ($1 :: $3) }
-    ;
-
-tuple_typ_list:
-    | app_typ                       { [$1] }
-    | app_typ STAR tuple_typ_list   { $1 :: $3 }
+    | app_typ STAR separated_nonempty_list(STAR, app_typ)
+                                    { TypTuple ($1 :: $3) }
     ;
 
 app_typ:
@@ -445,9 +401,7 @@ atomic_typ:
     | LBRACE typrow RBRACE          { TypRecord [$2] }
     ;
 
-typ_comma_list:
-    | typ                           { [$1] }
-    | typ COMMA typ_comma_list      { $1 :: $3 }
+typ_comma_list: separated_list(COMMA, typ) { $1 }
     ;
 
 (* Type rows for records *)
@@ -483,13 +437,8 @@ dec:
 
 dec_seq:
     | (* empty *)                   { [] }
-    | dec dec_seq_rest              { $1 :: $2 }
-    ;
-
-dec_seq_rest:
-    | (* empty *)                   { [] }
-    | SEMICOLON dec_seq             { $2 }
-    | dec dec_seq_rest              { $1 :: $2 }
+    | dec list(preceded(option(SEMICOLON), dec)) option(SEMICOLON)
+                                    { $1 :: $2 }
     ;
 
 vid_list:
@@ -538,13 +487,11 @@ funmatch:
     ;
 
 pat_list:
-    | (* empty *)                   { [] }
-    | atomic_pat pat_list           { $1 :: $2 }
+    | list(atomic_pat)              { $1 }
     ;
 
 pat_list1:
-    | atomic_pat                    { [$1] }
-    | atomic_pat pat_list1          { $1 :: $2 }
+    | nonempty_list(atomic_pat)     { $1 }
     ;
 
 typ_annot_opt:
@@ -668,21 +615,12 @@ spec:
     ;
 
 spec_seq:
-    | (* empty *)                   { SpecVal (ValDesc (IdxIdx "", TypVar (IdxVar "'a"), None)) (* empty spec placeholder *) }
-    | spec                          { $1 }
-    | spec SEMICOLON spec_seq       { SpecSeq ($1, $3) }
-    | spec spec_seq_nonempty        { SpecSeq ($1, $2) }
-    ;
-
-spec_seq_nonempty:
-    | spec                          { $1 }
-    | spec SEMICOLON spec_seq       { SpecSeq ($1, $3) }
-    | spec spec_seq_nonempty        { SpecSeq ($1, $2) }
+    | list(terminated(spec, option(SEMICOLON)))
+        { fold_spec_list $1 (SpecVal (ValDesc (IdxIdx "", TypVar (IdxVar "'a"), None))) }
     ;
 
 longid_eq_list:
-    | longid EQUAL longid           { [$1; $3] }
-    | longid EQUAL longid_eq_list
+    | longid EQUAL separated_nonempty_list(EQUAL, longid)
                                     { $1 :: $3 }
     ;
 
