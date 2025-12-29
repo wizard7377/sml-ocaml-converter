@@ -1,4 +1,9 @@
 
-val sml_to_ocaml : string -> string 
-val fun_to_ocaml : string -> string
-val sig_to_ocaml : string -> string
+type sml = Ast.prog list
+type ocaml = Parsetree.toplevel_phrase list
+
+val read_to_sml : string -> sml
+val sml_to_ppx : sml -> ocaml 
+val debug_sml : sml -> string 
+val ppx_to_ocaml : ocaml -> string
+val sml_to_ocaml : string -> string

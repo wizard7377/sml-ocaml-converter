@@ -31,7 +31,9 @@ type prog =
   | ProgStr of sign_bind
       (** Signature declaration: [signature sigbind]. *)
   | ProgSeq of prog * prog
+  | ProgEmpty
       (** Sequence of programs: [prog1 ; prog2]. *)
+    [@@deriving show]
 
 (** Functor bindings.
 

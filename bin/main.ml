@@ -1,7 +1,7 @@
 
 open Sml_ocaml_converter
 
-let rec convert (file : string list) = List.iter process_file file
+let rec convert (file : string list) = List.iter process_file (List.flatten (List.map (String.split_on_char ' ') file))
 and process_file (file : string) : unit = print_endline ("processing " ^ file) ; let 
     file_contents = Common.get_file file in 
     let ast = sml_to_ocaml file_contents in

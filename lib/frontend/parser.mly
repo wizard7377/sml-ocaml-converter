@@ -152,13 +152,20 @@
 (* ========================================================================= *)
 
 program:
-    | prog=list(prog) EOF { prog }
+    | EOF                           { [ProgEmpty] }
+    | prog_list EOF                 { $1 }
+    ;
+
+prog_list:
+    | prog                          { [$1] }
+    | prog prog_list                { $1 :: $2 }
     ;
 
 prog:
-    | d=dec                             { ProgDec d }
-    | FUNCTOR fb=fctbind                { ProgFun fb }
-    | SIGNATURE sb=sigbind              { ProgStr sb }
+    | dec                           { ProgDec $1 }
+    | FUNCTOR fctbind               { ProgFun $2 }
+    | SIGNATURE sigbind             { ProgStr $2 }
+    | prog SEMICOLON prog           { ProgSeq ($1, $3) }
     ;
 
 (* ========================================================================= *)
@@ -167,20 +174,20 @@ prog:
 
 fctbind:
     (* id1 ( id2 : sig ) [:[:>] sig] = str [and fctbind] *)
-    | id1=vid LPAREN id2=vid COLON s1=sig_ RPAREN ann=sigconstraint_opt EQUAL body=str rest=and_fctbind_opt
-        { match ann with
-          | None -> FctBind (id1, id2, s1, None, body, rest)
-          | Some (a, s2) -> FctBind (id1, id2, s1, Some (a, s2), body, rest) }
+    | vid LPAREN vid COLON sig_ RPAREN sigconstraint_opt EQUAL str and_fctbind_opt
+        { match $7 with
+          | None -> FctBind ($1, $3, $5, None, $9, $10)
+          | Some (a, s2) -> FctBind ($1, $3, $5, Some (a, s2), $9, $10) }
     (* id ( spec ) [:[:>] sig] = str [and fctbind] - opened form *)
-    | id=vid LPAREN sp=spec RPAREN ann=sigconstraint_opt EQUAL body=str rest=and_fctbind_opt
-        { match ann with
-          | None -> FctBindOpen (id, sp, None, body, rest)
-          | Some (a, s) -> FctBindOpen (id, sp, Some (a, s), body, rest) }
+    | vid LPAREN spec RPAREN sigconstraint_opt EQUAL str and_fctbind_opt
+        { match $5 with
+          | None -> FctBindOpen ($1, $3, None, $7, $8)
+          | Some (a, s) -> FctBindOpen ($1, $3, Some (a, s), $7, $8) }
     ;
 
 and_fctbind_opt:
-    | (* empty *)                       { None }
-    | AND fb=fctbind                    { Some fb }
+    | (* empty *)                   { None }
+    | AND fctbind                   { Some $2 }
     ;
 
 (* ========================================================================= *)
@@ -188,13 +195,13 @@ and_fctbind_opt:
 (* ========================================================================= *)
 
 sigbind:
-    | id=vid EQUAL s=sig_ rest=and_sigbind_opt
-        { SignBind (id, s, rest) }
+    | vid EQUAL sig_ and_sigbind_opt
+        { SignBind ($1, $3, $4) }
     ;
 
 and_sigbind_opt:
-    | (* empty *)                       { None }
-    | AND sb=sigbind                    { Some sb }
+    | (* empty *)                   { None }
+    | AND sigbind                   { Some $2 }
     ;
 
 (* ========================================================================= *)
@@ -202,11 +209,11 @@ and_sigbind_opt:
 (* ========================================================================= *)
 
 scon:
-    | s=INT_LIT                         { ConInt s }
-    | s=HEX_LIT                         { ConWord s }
-    | s=FLOAT_LIT                       { ConFloat s }
-    | s=CHAR_LIT                        { ConChar s }
-    | s=STRING_LIT                      { ConString s }
+    | INT_LIT                       { ConInt $1 }
+    | HEX_LIT                       { ConWord $1 }
+    | FLOAT_LIT                     { ConFloat $1 }
+    | CHAR_LIT                      { ConChar $1 }
+    | STRING_LIT                    { ConString $1 }
     ;
 
 (* ========================================================================= *)
@@ -215,40 +222,40 @@ scon:
 
 (* Any short identifier (alphanumeric or symbolic) *)
 vid:
-    | id=SHORT_IDENT                    { match id with Name s -> IdxIdx s | Symbol s -> IdxIdx s }
-    | STAR                              { IdxIdx "*" }
-    | EQUAL                             { IdxIdx "=" }
+    | SHORT_IDENT                   { match $1 with Name s -> IdxIdx s | Symbol s -> IdxIdx s }
+    | STAR                          { IdxIdx "*" }
+    | EQUAL                         { IdxIdx "=" }
     ;
 
 (* Long or short identifier *)
 longid:
-    | id=SHORT_IDENT                    { match id with Name s -> IdxIdx s | Symbol s -> IdxIdx s }
-    | ids=LONG_IDENT                    { IdxLong (List.map (fun id -> match id with Name s -> IdxIdx s | Symbol s -> IdxIdx s) ids) }
-    | STAR                              { IdxIdx "*" }
-    | EQUAL                             { IdxIdx "=" }
+    | SHORT_IDENT                   { match $1 with Name s -> IdxIdx s | Symbol s -> IdxIdx s }
+    | LONG_IDENT                    { IdxLong (List.map (fun id -> match id with Name s -> IdxIdx s | Symbol s -> IdxIdx s) $1) }
+    | STAR                          { IdxIdx "*" }
+    | EQUAL                         { IdxIdx "=" }
     ;
 
 (* Identifier usable as a value (includes op prefix) *)
 op_vid:
-    | id=longid                         { WithoutOp id }
-    | OP id=longid                      { WithOp id }
+    | longid                        { WithoutOp $1 }
+    | OP longid                     { WithOp $2 }
     ;
 
 (* Record label *)
 lab:
-    | id=SHORT_IDENT                    { match id with Name s -> IdxLab s | Symbol s -> IdxLab s }
-    | n=INT_LIT                         { IdxNum n }
+    | SHORT_IDENT                   { match $1 with Name s -> IdxLab s | Symbol s -> IdxLab s }
+    | INT_LIT                       { IdxNum $1 }
     ;
 
 (* Type variable *)
 tyvar:
-    | tv=TYVAR                          { IdxVar tv }
+    | TYVAR                         { IdxVar $1 }
     ;
 
 (* List of long identifiers *)
 longid_list:
-    | id=longid                         { [id] }
-    | id=longid ids=longid_list         { id :: ids }
+    | longid                        { [$1] }
+    | longid longid_list            { $1 :: $2 }
     ;
 
 (* ========================================================================= *)
@@ -256,14 +263,14 @@ longid_list:
 (* ========================================================================= *)
 
 tyvarseq:
-    | (* empty *)                       { [] }
-    | tv=tyvar                          { [tv] }
-    | LPAREN tvs=tyvarseq1 RPAREN       { tvs }
+    | (* empty *)                   { [] }
+    | tyvar                         { [$1] }
+    | LPAREN tyvarseq1 RPAREN       { $2 }
     ;
 
 tyvarseq1:
-    | tv=tyvar                          { [tv] }
-    | tv=tyvar COMMA tvs=tyvarseq1      { tv :: tvs }
+    | tyvar                         { [$1] }
+    | tyvar COMMA tyvarseq1         { $1 :: $3 }
     ;
 
 (* ========================================================================= *)
@@ -271,78 +278,78 @@ tyvarseq1:
 (* ========================================================================= *)
 
 exp:
-    | e=infix_exp                       { e }
-    | e=exp COLON t=typ                 { TypedExp (e, t) }
-    | e1=exp ANDALSO e2=exp             { AndExp (e1, e2) }
-    | e1=exp ORELSE e2=exp              { OrExp (e1, e2) }
-    | e=exp HANDLE m=match_clause       { HandleExp (e, m) }
-    | RAISE e=exp                       { RaiseExp e }
-    | IF e1=exp THEN e2=exp ELSE e3=exp { IfExp (e1, e2, e3) }
-    | WHILE e1=exp DO e2=exp            { WhileExp (e1, e2) }
-    | CASE e=exp OF m=match_clause      { CaseExp (e, m) }
-    | FN m=match_clause                 { FnExp m }
+    | infix_exp                     { $1 }
+    | exp COLON typ                 { TypedExp ($1, $3) }
+    | exp ANDALSO exp               { AndExp ($1, $3) }
+    | exp ORELSE exp                { OrExp ($1, $3) }
+    | exp HANDLE match_clause       { HandleExp ($1, $3) }
+    | RAISE exp                     { RaiseExp $2 }
+    | IF exp THEN exp ELSE exp      { IfExp ($2, $4, $6) }
+    | WHILE exp DO exp              { WhileExp ($2, $4) }
+    | CASE exp OF match_clause      { CaseExp ($2, $4) }
+    | FN match_clause               { FnExp $2 }
     ;
 
 infix_exp:
-    | e=app_exp                         { e }
-    | e1=infix_exp id=vid e2=infix_exp  { InfixApp (e1, id, e2) }
+    | app_exp                       { $1 }
+    | infix_exp vid infix_exp       { InfixApp ($1, $2, $3) }
     ;
 
 app_exp:
-    | e=atomic_exp                      { e }
-    | e1=app_exp e2=atomic_exp          { ExpApp (e1, e2) }
+    | atomic_exp                    { $1 }
+    | app_exp atomic_exp            { ExpApp ($1, $2) }
     ;
 
 atomic_exp:
-    | c=scon                            { ExpCon c }
-    | id=op_vid                         { ExpIdx (match id with WithOp i -> i | WithoutOp i -> i) }
-    | LPAREN RPAREN                     { TupleExp [] }
-    | LPAREN e=exp RPAREN               { ParenExp e }
-    | LPAREN e=exp COMMA es=exp_comma_list RPAREN
-                                        { TupleExp (e :: es) }
-    | LPAREN e=exp SEMICOLON es=exp_semi_list RPAREN
-                                        { SeqExp (e :: es) }
-    | LBRACE RBRACE                     { RecordExp [] }
-    | LBRACE r=exprow RBRACE            { RecordExp [r] }
-    | HASH l=lab                        { RecordSelector l }
-    | LBRACKET RBRACKET                 { ListExp [] }
-    | LBRACKET e=exp es=list_exp_comma RBRACKET
-                                        { ListExp (e :: es) }
-    | LET d=dec_seq IN e=exp es=let_exp_semi END
-                                        { LetExp (d, e :: es) }
+    | scon                          { ExpCon $1 }
+    | op_vid                        { ExpIdx (match $1 with WithOp i -> i | WithoutOp i -> i) }
+    | LPAREN RPAREN                 { TupleExp [] }
+    | LPAREN exp RPAREN             { ParenExp $2 }
+    | LPAREN exp COMMA exp_comma_list RPAREN
+                                    { TupleExp ($2 :: $4) }
+    | LPAREN exp SEMICOLON exp_semi_list RPAREN
+                                    { SeqExp ($2 :: $4) }
+    | LBRACE RBRACE                 { RecordExp [] }
+    | LBRACE exprow RBRACE          { RecordExp [$2] }
+    | HASH lab                      { RecordSelector $2 }
+    | LBRACKET RBRACKET             { ListExp [] }
+    | LBRACKET exp list_exp_comma RBRACKET
+                                    { ListExp ($2 :: $3) }
+    | LET dec_seq IN exp let_exp_semi END
+                                    { LetExp ($2, $4 :: $5) }
     ;
 
 exp_comma_list:
-    | e=exp                             { [e] }
-    | e=exp COMMA es=exp_comma_list     { e :: es }
+    | exp                           { [$1] }
+    | exp COMMA exp_comma_list      { $1 :: $3 }
     ;
 
 exp_semi_list:
-    | e=exp                             { [e] }
-    | e=exp SEMICOLON es=exp_semi_list  { e :: es }
+    | exp                           { [$1] }
+    | exp SEMICOLON exp_semi_list   { $1 :: $3 }
     ;
 
 list_exp_comma:
-    | (* empty *)                       { [] }
-    | COMMA e=exp es=list_exp_comma     { e :: es }
+    | (* empty *)                   { [] }
+    | COMMA exp list_exp_comma      { $2 :: $3 }
     ;
 
 let_exp_semi:
-    | (* empty *)                       { [] }
-    | SEMICOLON e=exp es=let_exp_semi   { e :: es }
+    | (* empty *)                   { [] }
+    | SEMICOLON exp let_exp_semi    { $2 :: $3 }
     ;
 
 (* Expression rows for records *)
 exprow:
-    | l=lab EQUAL e=exp                 { Row (l, e, None) }
-    | l=lab EQUAL e=exp COMMA r=exprow  { Row (l, e, Some r) }
+    | lab EQUAL exp                 { Row ($1, $3, None) }
+    | lab EQUAL exp COMMA exprow    { Row ($1, $3, Some $5) }
     ;
 
 (* Match clauses *)
 match_clause:
-    | p=pat BIGARROW e=exp              { Case (p, e, None) }
-    | p=pat BIGARROW e=exp BAR m=match_clause
-                                        { Case (p, e, Some m) }
+    | pat BIGARROW exp              { Case ($1, $3, None) }
+    | pat BIGARROW exp BAR match_clause
+                                    { Case ($1, $3, Some $5) }
     ;
 
 (* ========================================================================= *)
@@ -350,58 +357,58 @@ match_clause:
 (* ========================================================================= *)
 
 pat:
-    | p=infix_pat                       { p }
-    | p=pat COLON t=typ                 { PatTyp (p, t) }
-    | id=op_vid AS p=pat                { PatAs (id, None, p) }
-    | id=op_vid COLON t=typ AS p=pat    { PatAs (id, Some t, p) }
+    | infix_pat                     { $1 }
+    | pat COLON typ                 { PatTyp ($1, $3) }
+    | op_vid AS pat                 { PatAs ($1, None, $3) }
+    | op_vid COLON typ AS pat       { PatAs ($1, Some $3, $5) }
     ;
 
 infix_pat:
-    | p=app_pat                         { p }
-    | p1=infix_pat id=vid p2=infix_pat  { PatInfix (p1, id, p2) }
+    | app_pat                       { $1 }
+    | infix_pat vid infix_pat       { PatInfix ($1, $2, $3) }
     ;
 
 app_pat:
-    | p=atomic_pat                      { p }
-    | id=op_vid p=atomic_pat            { PatApp (id, p) }
+    | atomic_pat                    { $1 }
+    | op_vid atomic_pat             { PatApp ($1, $2) }
     ;
 
 atomic_pat:
-    | c=scon                            { PatCon c }
-    | UNDERSCORE                        { PatWildcard }
-    | id=op_vid                         { PatIdx id }
-    | LPAREN RPAREN                     { PatTuple [] }
-    | LPAREN p=pat RPAREN               { PatParen p }
-    | LPAREN p=pat COMMA ps=pat_comma_list RPAREN
-                                        { PatTuple (p :: ps) }
-    | LBRACE RBRACE                     { PatRecord [] }
-    | LBRACE r=patrow RBRACE            { PatRecord [r] }
-    | LBRACKET RBRACKET                 { PatList [] }
-    | LBRACKET p=pat ps=list_pat_comma RBRACKET
-                                        { PatList (p :: ps) }
+    | scon                          { PatCon $1 }
+    | UNDERSCORE                    { PatWildcard }
+    | op_vid                        { PatIdx $1 }
+    | LPAREN RPAREN                 { PatTuple [] }
+    | LPAREN pat RPAREN             { PatParen $2 }
+    | LPAREN pat COMMA pat_comma_list RPAREN
+                                    { PatTuple ($2 :: $4) }
+    | LBRACE RBRACE                 { PatRecord [] }
+    | LBRACE patrow RBRACE          { PatRecord [$2] }
+    | LBRACKET RBRACKET             { PatList [] }
+    | LBRACKET pat list_pat_comma RBRACKET
+                                    { PatList ($2 :: $3) }
     ;
 
 pat_comma_list:
-    | p=pat                             { [p] }
-    | p=pat COMMA ps=pat_comma_list     { p :: ps }
+    | pat                           { [$1] }
+    | pat COMMA pat_comma_list      { $1 :: $3 }
     ;
 
 list_pat_comma:
-    | (* empty *)                       { [] }
-    | COMMA p=pat ps=list_pat_comma     { p :: ps }
+    | (* empty *)                   { [] }
+    | COMMA pat list_pat_comma      { $2 :: $3 }
     ;
 
 (* Pattern rows for records *)
 patrow:
-    | ELLIPSIS                          { PatRowPoly }
-    | l=lab EQUAL p=pat                 { PatRowSimple (l, p, PatRowPoly) }
-    | l=lab EQUAL p=pat COMMA r=patrow  { PatRowSimple (l, p, r) }
-    | id=vid                            { PatRowVar (id, None, None, None) }
-    | id=vid COLON t=typ                { PatRowVar (id, Some t, None, None) }
-    | id=vid AS p=pat                   { PatRowVar (id, None, None (* should be Some id for as *), Some (PatRowSimple (id, p, PatRowPoly))) }
-    | id=vid COLON t=typ AS p=pat       { PatRowVar (id, Some t, None, Some (PatRowSimple (id, p, PatRowPoly))) }
-    | id=vid COMMA r=patrow             { PatRowVar (id, None, None, Some r) }
-    | id=vid COLON t=typ COMMA r=patrow { PatRowVar (id, Some t, None, Some r) }
+    | ELLIPSIS                      { PatRowPoly }
+    | lab EQUAL pat                 { PatRowSimple ($1, $3, PatRowPoly) }
+    | lab EQUAL pat COMMA patrow    { PatRowSimple ($1, $3, $5) }
+    | vid                           { PatRowVar ($1, None, None, None) }
+    | vid COLON typ                 { PatRowVar ($1, Some $3, None, None) }
+    | vid AS pat                    { PatRowVar ($1, None, None (* should be Some id for as *), Some (PatRowSimple ($1, $3, PatRowPoly))) }
+    | vid COLON typ AS pat          { PatRowVar ($1, Some $3, None, Some (PatRowSimple ($1, $5, PatRowPoly))) }
+    | vid COMMA patrow              { PatRowVar ($1, None, None, Some $3) }
+    | vid COLON typ COMMA patrow    { PatRowVar ($1, Some $3, None, Some $5) }
     ;
 
 (* ========================================================================= *)
@@ -409,44 +416,44 @@ patrow:
 (* ========================================================================= *)
 
 typ:
-    | t=tuple_typ                       { t }
-    | t1=typ ARROW t2=typ               { TypFun (t1, t2) }
+    | tuple_typ                     { $1 }
+    | typ ARROW typ                 { TypFun ($1, $3) }
     ;
 
 tuple_typ:
-    | t=app_typ                         { t }
-    | t=app_typ STAR ts=tuple_typ_list  { TypTuple (t :: ts) }
+    | app_typ                       { $1 }
+    | app_typ STAR tuple_typ_list   { TypTuple ($1 :: $3) }
     ;
 
 tuple_typ_list:
-    | t=app_typ                         { [t] }
-    | t=app_typ STAR ts=tuple_typ_list  { t :: ts }
+    | app_typ                       { [$1] }
+    | app_typ STAR tuple_typ_list   { $1 :: $3 }
     ;
 
 app_typ:
-    | t=atomic_typ                      { t }
-    | t=app_typ id=longid               { TypCon ([t], id) }
+    | atomic_typ                    { $1 }
+    | app_typ longid                { TypCon ([$1], $2) }
     ;
 
 atomic_typ:
-    | tv=tyvar                          { TypVar tv }
-    | id=longid                         { TypCon ([], id) }
-    | LPAREN t=typ RPAREN               { TypPar t }
-    | LPAREN t=typ COMMA ts=typ_comma_list RPAREN id=longid
-                                        { TypCon (t :: ts, id) }
-    | LBRACE RBRACE                     { TypRecord [] }
-    | LBRACE r=typrow RBRACE            { TypRecord [r] }
+    | tyvar                         { TypVar $1 }
+    | longid                        { TypCon ([], $1) }
+    | LPAREN typ RPAREN             { TypPar $2 }
+    | LPAREN typ COMMA typ_comma_list RPAREN longid
+                                    { TypCon ($2 :: $4, $6) }
+    | LBRACE RBRACE                 { TypRecord [] }
+    | LBRACE typrow RBRACE          { TypRecord [$2] }
     ;
 
 typ_comma_list:
-    | t=typ                             { [t] }
-    | t=typ COMMA ts=typ_comma_list     { t :: ts }
+    | typ                           { [$1] }
+    | typ COMMA typ_comma_list      { $1 :: $3 }
     ;
 
 (* Type rows for records *)
 typrow:
-    | l=lab COLON t=typ                 { TypRow (l, t, None) }
-    | l=lab COLON t=typ COMMA r=typrow  { TypRow (l, t, Some r) }
+    | lab COLON typ                 { TypRow ($1, $3, None) }
+    | lab COLON typ COMMA typrow    { TypRow ($1, $3, Some $5) }
     ;
 
 (* ========================================================================= *)
@@ -454,49 +461,49 @@ typrow:
 (* ========================================================================= *)
 
 dec:
-    | VAL tvs=tyvarseq vb=valbind       { ValDec (tvs, vb) }
-    | FUN fb=funbind                    { FunDec fb }
-    | TYPE tb=typbind                   { TypDec tb }
-    | DATATYPE db=datbind               { DatDec (db, None) }
-    | DATATYPE db=datbind WITHTYPE tb=typbind
-                                        { DatDec (db, Some tb) }
-    | DATATYPE id=vid EQUAL DATATYPE lid=longid
-                                        { DataDecAlias (id, lid) }
-    | ABSTYPE db=datbind WITH d=dec_seq END
-                                        { AbstractDec (db, None, d) }
-    | ABSTYPE db=datbind WITHTYPE tb=typbind WITH d=dec_seq END
-                                        { AbstractDec (db, Some tb, d) }
-    | EXCEPTION eb=exnbind              { ExnDec eb }
-    | STRUCTURE sb=strbind              { StrDec sb }
-    | LOCAL d1=dec_seq IN d2=dec_seq END
-                                        { LocalDec (SeqDec d1, SeqDec d2) }
-    | OPEN ids=longid_list              { OpenDec ids }
-    | fix=fixity ids=vid_list           { FixityDec (fix, ids) }
+    | VAL tyvarseq valbind          { ValDec ($2, $3) }
+    | FUN funbind                   { FunDec $2 }
+    | TYPE typbind                  { TypDec $2 }
+    | DATATYPE datbind              { DatDec ($2, None) }
+    | DATATYPE datbind WITHTYPE typbind
+                                    { DatDec ($2, Some $4) }
+    | DATATYPE vid EQUAL DATATYPE longid
+                                    { DataDecAlias ($2, $5) }
+    | ABSTYPE datbind WITH dec_seq END
+                                    { AbstractDec ($2, None, $4) }
+    | ABSTYPE datbind WITHTYPE typbind WITH dec_seq END
+                                    { AbstractDec ($2, Some $4, $6) }
+    | EXCEPTION exnbind             { ExnDec $2 }
+    | STRUCTURE strbind             { StrDec $2 }
+    | LOCAL dec_seq IN dec_seq END
+                                    { LocalDec (SeqDec $2, SeqDec $4) }
+    | OPEN longid_list              { OpenDec $2 }
+    | fixity vid_list               { FixityDec ($1, $2) }
     ;
 
 dec_seq:
-    | (* empty *)                       { [] }
-    | d=dec ds=dec_seq_rest             { d :: ds }
+    | (* empty *)                   { [] }
+    | dec dec_seq_rest              { $1 :: $2 }
     ;
 
 dec_seq_rest:
-    | (* empty *)                       { [] }
-    | SEMICOLON ds=dec_seq              { ds }
-    | d=dec ds=dec_seq_rest             { d :: ds }
+    | (* empty *)                   { [] }
+    | SEMICOLON dec_seq             { $2 }
+    | dec dec_seq_rest              { $1 :: $2 }
     ;
 
 vid_list:
-    | id=vid                            { [id] }
-    | id=vid ids=vid_list               { id :: ids }
+    | vid                           { [$1] }
+    | vid vid_list                  { $1 :: $2 }
     ;
 
 (* Fixity *)
 fixity:
-    | NONFIX                            { Nonfix }
-    | INFIX                             { Infix 0 }
-    | INFIX n=INT_LIT                   { Infix (int_of_string n) }
-    | INFIXR                            { Infixr 0 }
-    | INFIXR n=INT_LIT                  { Infixr (int_of_string n) }
+    | NONFIX                        { Nonfix }
+    | INFIX                         { Infix 0 }
+    | INFIX INT_LIT                 { Infix (int_of_string $2) }
+    | INFIXR                        { Infixr 0 }
+    | INFIXR INT_LIT                { Infixr (int_of_string $2) }
     ;
 
 (* ========================================================================= *)
@@ -504,9 +511,9 @@ fixity:
 (* ========================================================================= *)
 
 valbind:
-    | p=pat EQUAL e=exp                 { ValBind (p, e, None) }
-    | p=pat EQUAL e=exp AND vb=valbind  { ValBind (p, e, Some vb) }
-    | REC vb=valbind                    { ValBindRec vb }
+    | pat EQUAL exp                 { ValBind ($1, $3, None) }
+    | pat EQUAL exp AND valbind     { ValBind ($1, $3, Some $5) }
+    | REC valbind                   { ValBindRec $2 }
     ;
 
 (* ========================================================================= *)
@@ -514,40 +521,40 @@ valbind:
 (* ========================================================================= *)
 
 funbind:
-    | fm=funmatch                       { FunBind (fm, None) }
-    | fm=funmatch AND fb=funbind        { FunBind (fm, Some fb) }
+    | funmatch                      { FunBind ($1, None) }
+    | funmatch AND funbind          { FunBind ($1, Some $3) }
     ;
 
 funmatch:
     (* [op] id pat1 ... patn [: typ] = exp [| funmatch] - prefix form *)
-    | id=op_vid ps=pat_list1 t=typ_annot_opt EQUAL e=exp rest=funmatch_rest
-        { FunMatchPrefix (id, ps, t, e, rest) }
+    | op_vid pat_list1 typ_annot_opt EQUAL exp funmatch_rest
+        { FunMatchPrefix ($1, $2, $3, $5, $6) }
     (* pat1 id pat2 [: typ] = exp [| funmatch] - infix form *)
-    | p1=atomic_pat id=vid p2=atomic_pat t=typ_annot_opt EQUAL e=exp rest=funmatch_rest
-        { FunMatchInfix (p1, id, p2, t, e, rest) }
+    | atomic_pat vid atomic_pat typ_annot_opt EQUAL exp funmatch_rest
+        { FunMatchInfix ($1, $2, $3, $4, $6, $7) }
     (* ( pat1 id pat2 ) pat'1 ... pat'n [: typ] = exp [| funmatch] - curried infix *)
-    | LPAREN p1=pat id=vid p2=pat RPAREN ps=pat_list t=typ_annot_opt EQUAL e=exp rest=funmatch_rest
-        { FunMatchLow (p1, id, p2, ps, t, e, rest) }
+    | LPAREN pat vid pat RPAREN pat_list typ_annot_opt EQUAL exp funmatch_rest
+        { FunMatchLow ($2, $3, $4, $6, $7, $9, $10) }
     ;
 
 pat_list:
-    | (* empty *)                       { [] }
-    | p=atomic_pat ps=pat_list          { p :: ps }
+    | (* empty *)                   { [] }
+    | atomic_pat pat_list           { $1 :: $2 }
     ;
 
 pat_list1:
-    | p=atomic_pat                      { [p] }
-    | p=atomic_pat ps=pat_list1         { p :: ps }
+    | atomic_pat                    { [$1] }
+    | atomic_pat pat_list1          { $1 :: $2 }
     ;
 
 typ_annot_opt:
-    | (* empty *)                       { None }
-    | COLON t=typ                       { Some t }
+    | (* empty *)                   { None }
+    | COLON typ                     { Some $2 }
     ;
 
 funmatch_rest:
-    | (* empty *)                       { None }
-    | BAR fm=funmatch                   { Some fm }
+    | (* empty *)                   { None }
+    | BAR funmatch                  { Some $2 }
     ;
 
 (* ========================================================================= *)
@@ -555,9 +562,9 @@ funmatch_rest:
 (* ========================================================================= *)
 
 typbind:
-    | tvs=tyvarseq id=vid EQUAL t=typ   { TypBind (tvs, id, t, None) }
-    | tvs=tyvarseq id=vid EQUAL t=typ AND tb=typbind
-                                        { TypBind (tvs, id, t, Some tb) }
+    | tyvarseq vid EQUAL typ        { TypBind ($1, $2, $4, None) }
+    | tyvarseq vid EQUAL typ AND typbind
+                                    { TypBind ($1, $2, $4, Some $6) }
     ;
 
 (* ========================================================================= *)
@@ -565,17 +572,17 @@ typbind:
 (* ========================================================================= *)
 
 datbind:
-    | tvs=tyvarseq id=vid EQUAL cb=conbind
-                                        { DatBind (tvs, id, cb, None) }
-    | tvs=tyvarseq id=vid EQUAL cb=conbind AND db=datbind
-                                        { DatBind (tvs, id, cb, Some db) }
+    | tyvarseq vid EQUAL conbind
+                                    { DatBind ($1, $2, $4, None) }
+    | tyvarseq vid EQUAL conbind AND datbind
+                                    { DatBind ($1, $2, $4, Some $6) }
     ;
 
 conbind:
-    | id=vid                            { ConBind (id, None, None) }
-    | id=vid OF t=typ                   { ConBind (id, Some t, None) }
-    | id=vid BAR cb=conbind             { ConBind (id, None, Some cb) }
-    | id=vid OF t=typ BAR cb=conbind    { ConBind (id, Some t, Some cb) }
+    | vid                           { ConBind ($1, None, None) }
+    | vid OF typ                    { ConBind ($1, Some $3, None) }
+    | vid BAR conbind               { ConBind ($1, None, Some $3) }
+    | vid OF typ BAR conbind        { ConBind ($1, Some $3, Some $5) }
     ;
 
 (* ========================================================================= *)
@@ -583,13 +590,13 @@ conbind:
 (* ========================================================================= *)
 
 exnbind:
-    | id=vid                            { ExnBind (id, None, None) }
-    | id=vid OF t=typ                   { ExnBind (id, Some t, None) }
-    | id=vid EQUAL lid=longid           { ExnBindAlias (id, lid, None) }
-    | id=vid AND eb=exnbind             { ExnBind (id, None, Some eb) }
-    | id=vid OF t=typ AND eb=exnbind    { ExnBind (id, Some t, Some eb) }
-    | id=vid EQUAL lid=longid AND eb=exnbind
-                                        { ExnBindAlias (id, lid, Some eb) }
+    | vid                           { ExnBind ($1, None, None) }
+    | vid OF typ                    { ExnBind ($1, Some $3, None) }
+    | vid EQUAL longid              { ExnBindAlias ($1, $3, None) }
+    | vid AND exnbind               { ExnBind ($1, None, Some $3) }
+    | vid OF typ AND exnbind        { ExnBind ($1, Some $3, Some $5) }
+    | vid EQUAL longid AND exnbind
+                                    { ExnBindAlias ($1, $3, Some $5) }
     ;
 
 (* ========================================================================= *)
@@ -597,28 +604,28 @@ exnbind:
 (* ========================================================================= *)
 
 str:
-    | id=longid                         { StrIdx id }
-    | STRUCT d=dec_seq END              { StructStr (SeqDec d) }
+    | longid                        { StrIdx $1 }
+    | STRUCT dec_seq END            { StructStr (SeqDec $2) }
     (* Note: The AST AnotateStr doesn't store the signature - only the annotation type *)
-    | s=str COLON _sg=sig_              { AnotateStr (IdxIdx "", Transparent, s) }
-    | s=str COLON_GT _sg=sig_           { AnotateStr (IdxIdx "", Opaque, s) }
-    | id=vid LPAREN s=str RPAREN        { FunctorApp (id, s) }
-    | id=vid LPAREN d=dec_seq RPAREN    { FunctorAppAnonymous (id, SeqDec d) }
-    | LET d=dec_seq IN s=str END        { LocalDec (SeqDec d, s) }
+    | str COLON sig_                { AnotateStr (IdxIdx "", Transparent, $1) }
+    | str COLON_GT sig_             { AnotateStr (IdxIdx "", Opaque, $1) }
+    | vid LPAREN str RPAREN         { FunctorApp ($1, $3) }
+    | vid LPAREN dec_seq RPAREN     { FunctorAppAnonymous ($1, SeqDec $3) }
+    | LET dec_seq IN str END        { LocalDec (SeqDec $2, $4) }
     ;
 
 strbind:
     (* Note: The AST str_bind type omits the structure expression - see AST definition *)
-    | id=vid ann=sigconstraint_opt EQUAL _s=str
-                                        { StrBind (id, ann, None) }
-    | id=vid ann=sigconstraint_opt EQUAL _s=str AND sb=strbind
-                                        { StrBind (id, ann, Some sb) }
+    | vid sigconstraint_opt EQUAL str
+                                    { StrBind ($1, $2, None) }
+    | vid sigconstraint_opt EQUAL str AND strbind
+                                    { StrBind ($1, $2, Some $6) }
     ;
 
 sigconstraint_opt:
-    | (* empty *)                       { None }
-    | COLON sg=sig_                     { Some (Transparent, sg) }
-    | COLON_GT sg=sig_                  { Some (Opaque, sg) }
+    | (* empty *)                   { None }
+    | COLON sig_                    { Some (Transparent, $2) }
+    | COLON_GT sig_                 { Some (Opaque, $2) }
     ;
 
 (* ========================================================================= *)
@@ -626,16 +633,16 @@ sigconstraint_opt:
 (* ========================================================================= *)
 
 sig_:
-    | id=vid                            { SignIdx id }
-    | SIG sp=spec_seq END               { SignSig (SignIdx (IdxIdx ""), sp) }
-    | s=sig_ WHERE TYPE tr=typrefin     { SignWhere (s, tr) }
+    | vid                           { SignIdx $1 }
+    | SIG spec_seq END              { SignSig (SignIdx (IdxIdx ""), $2) }
+    | sig_ WHERE TYPE typrefin      { SignWhere ($1, $4) }
     ;
 
 typrefin:
-    | tvs=tyvarseq id=longid EQUAL t=typ
-        { TypRef (tvs, id, t, None) }
-    | tvs=tyvarseq id=longid EQUAL t=typ AND TYPE tr=typrefin
-        { TypRef (tvs, id, t, Some (t, tr)) }
+    | tyvarseq longid EQUAL typ
+        { TypRef ($1, $2, $4, None) }
+    | tyvarseq longid EQUAL typ AND TYPE typrefin
+        { TypRef ($1, $2, $4, Some ($4, $7)) }
     ;
 
 (* ========================================================================= *)
@@ -643,84 +650,84 @@ typrefin:
 (* ========================================================================= *)
 
 spec:
-    | VAL vd=valdesc                    { SpecVal vd }
-    | TYPE td=typdesc                   { SpecTyp td }
-    | EQTYPE td=typdesc                 { SpecEqtyp td }
-    | TYPE tb=typbind                   { SpecTypBind tb }
-    | DATATYPE dd=datdesc               { SpecDat dd }
-    | DATATYPE id=vid EQUAL DATATYPE lid=longid
-                                        { SpecDatAlias (id, lid) }
-    | EXCEPTION ed=exndesc              { SpecExn ed }
-    | STRUCTURE sd=strdesc              { SpecStr sd }
-    | INCLUDE sg=sig_                   { SpecInclude sg }
-    | INCLUDE ids=vid_list              { SpecIncludeIdx ids }
-    | sp=spec SHARING TYPE ids=longid_eq_list
-                                        { SpecSharingTyp (sp, ids) }
-    | sp=spec SHARING ids=longid_eq_list
-                                        { SpecSharingStr (sp, ids) }
+    | VAL valdesc                   { SpecVal $2 }
+    | TYPE typdesc                  { SpecTyp $2 }
+    | EQTYPE typdesc                { SpecEqtyp $2 }
+    | TYPE typbind                  { SpecTypBind $2 }
+    | DATATYPE datdesc              { SpecDat $2 }
+    | DATATYPE vid EQUAL DATATYPE longid
+                                    { SpecDatAlias ($2, $5) }
+    | EXCEPTION exndesc             { SpecExn $2 }
+    | STRUCTURE strdesc             { SpecStr $2 }
+    | INCLUDE sig_                  { SpecInclude $2 }
+    | INCLUDE vid_list              { SpecIncludeIdx $2 }
+    | spec SHARING TYPE longid_eq_list
+                                    { SpecSharingTyp ($1, $4) }
+    | spec SHARING longid_eq_list
+                                    { SpecSharingStr ($1, $3) }
     ;
 
 spec_seq:
-    | (* empty *)                       { SpecVal (ValDesc (IdxIdx "", TypVar (IdxVar "'a"), None)) (* empty spec placeholder *) }
-    | sp=spec                           { sp }
-    | sp=spec SEMICOLON sps=spec_seq    { SpecSeq (sp, sps) }
-    | sp=spec sps=spec_seq_nonempty     { SpecSeq (sp, sps) }
+    | (* empty *)                   { SpecVal (ValDesc (IdxIdx "", TypVar (IdxVar "'a"), None)) (* empty spec placeholder *) }
+    | spec                          { $1 }
+    | spec SEMICOLON spec_seq       { SpecSeq ($1, $3) }
+    | spec spec_seq_nonempty        { SpecSeq ($1, $2) }
     ;
 
 spec_seq_nonempty:
-    | sp=spec                           { sp }
-    | sp=spec SEMICOLON sps=spec_seq    { SpecSeq (sp, sps) }
-    | sp=spec sps=spec_seq_nonempty     { SpecSeq (sp, sps) }
+    | spec                          { $1 }
+    | spec SEMICOLON spec_seq       { SpecSeq ($1, $3) }
+    | spec spec_seq_nonempty        { SpecSeq ($1, $2) }
     ;
 
 longid_eq_list:
-    | id1=longid EQUAL id2=longid       { [id1; id2] }
-    | id=longid EQUAL ids=longid_eq_list
-                                        { id :: ids }
+    | longid EQUAL longid           { [$1; $3] }
+    | longid EQUAL longid_eq_list
+                                    { $1 :: $3 }
     ;
 
 (* Value descriptions *)
 valdesc:
-    | id=vid COLON t=typ                { ValDesc (id, t, None) }
-    | id=vid COLON t=typ AND vd=valdesc { ValDesc (id, t, Some vd) }
+    | vid COLON typ                 { ValDesc ($1, $3, None) }
+    | vid COLON typ AND valdesc     { ValDesc ($1, $3, Some $5) }
     ;
 
 (* Type descriptions *)
 typdesc:
-    | tvs=tyvarseq id=vid               { TypDesc (tvs, id, None) }
-    | tvs=tyvarseq id=vid AND td=typdesc
-                                        { TypDesc (tvs, id, Some td) }
+    | tyvarseq vid                  { TypDesc ($1, $2, None) }
+    | tyvarseq vid AND typdesc
+                                    { TypDesc ($1, $2, Some $4) }
     ;
 
 (* Datatype descriptions *)
 datdesc:
-    | tvs=tyvarseq id=vid EQUAL cd=condesc
-                                        { DatDesc (tvs, id, cd, None) }
-    | tvs=tyvarseq id=vid EQUAL cd=condesc AND dd=datdesc
-                                        { DatDesc (tvs, id, cd, Some dd) }
+    | tyvarseq vid EQUAL condesc
+                                    { DatDesc ($1, $2, $4, None) }
+    | tyvarseq vid EQUAL condesc AND datdesc
+                                    { DatDesc ($1, $2, $4, Some $6) }
     ;
 
 (* Constructor descriptions *)
 condesc:
-    | id=vid                            { ConDesc (id, None, None) }
-    | id=vid OF t=typ                   { ConDesc (id, Some t, None) }
-    | id=vid BAR cd=condesc             { ConDesc (id, None, Some cd) }
-    | id=vid OF t=typ BAR cd=condesc    { ConDesc (id, Some t, Some cd) }
+    | vid                           { ConDesc ($1, None, None) }
+    | vid OF typ                    { ConDesc ($1, Some $3, None) }
+    | vid BAR condesc               { ConDesc ($1, None, Some $3) }
+    | vid OF typ BAR condesc        { ConDesc ($1, Some $3, Some $5) }
     ;
 
 (* Exception descriptions *)
 exndesc:
-    | id=vid                            { ExnDesc (id, None, None) }
-    | id=vid OF t=typ                   { ExnDesc (id, Some t, None) }
-    | id=vid AND ed=exndesc             { ExnDesc (id, None, Some ed) }
-    | id=vid OF t=typ AND ed=exndesc    { ExnDesc (id, Some t, Some ed) }
+    | vid                           { ExnDesc ($1, None, None) }
+    | vid OF typ                    { ExnDesc ($1, Some $3, None) }
+    | vid AND exndesc               { ExnDesc ($1, None, Some $3) }
+    | vid OF typ AND exndesc        { ExnDesc ($1, Some $3, Some $5) }
     ;
 
 (* Structure descriptions *)
 strdesc:
-    | id=vid COLON sg=sig_              { StrDesc (id, sg, None) }
-    | id=vid COLON sg=sig_ AND sd=strdesc
-                                        { StrDesc (id, sg, Some sd) }
+    | vid COLON sig_                { StrDesc ($1, $3, None) }
+    | vid COLON sig_ AND strdesc
+                                    { StrDesc ($1, $3, Some $5) }
     ;
 
 %%
