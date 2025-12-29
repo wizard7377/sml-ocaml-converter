@@ -1,0 +1,1 @@
+module Builder = Ppxlib.Ast_builder.Make(struct let loc = Ppxlib.Location.none end)

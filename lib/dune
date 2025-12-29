@@ -1,0 +1,5 @@
+
+(library
+ (name sml_ocaml_converter)
+ (libraries frontend backend common helpers)
+ (modules sml_ocaml_converter))
