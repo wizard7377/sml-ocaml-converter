@@ -7,6 +7,6 @@
 
 (menhir
  (modules parser)
- (flags --comment -la 0 --trace -lc 0 --dump --dump-resolved)
- ; (flags --dump)
+ ; (flags --comment -la 2 --trace -lc 2 --dump --dump-resolved)
+ (flags --dump)
  (explain true))

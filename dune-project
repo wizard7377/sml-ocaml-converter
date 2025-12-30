@@ -19,7 +19,11 @@
  (name sml-ocaml-converter)
  (synopsis "A short synopsis")
  (description "A longer description")
- (depends ocaml)
+ (depends
+  ocaml
+  (alcotest :with-test)
+  ppxlib
+  cmdliner)
  (tags
   ("add topics" "to describe" your project)))
 

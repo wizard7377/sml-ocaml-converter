@@ -58,7 +58,8 @@
 
   (* Track comment nesting depth *)
   let comment_depth = ref 0
-  let comment_buf = Buffer.create 256
+  let file_comments : string list ref = ref []
+  let comment_buf = Buffer.create 2048
 }
 
 (* Character classes *)
@@ -170,7 +171,7 @@ rule token = parse
   | symbolic_id as s { SHORT_IDENT (Symbol s) }
 
   (* End of file *)
-  | eof           { EOF }
+  | eof           { file_comments := [] ; EOF !file_comments }
 
   (* Error case *)
   | _ as c        { raise (Lexer_error (Printf.sprintf "Unexpected character: '%c'" c)) }
@@ -182,9 +183,11 @@ and comment = parse
                     comment lexbuf }
   | "*)"          { decr comment_depth;
                     Buffer.add_string comment_buf "*)";
-                    if !comment_depth = 0 then
-                      COMMENT (Buffer.contents comment_buf)
-                    else
+                    if !comment_depth = 0 then (
+                      file_comments := (Buffer.contents comment_buf) :: !file_comments;
+                      comment_buf |> Buffer.clear;
+                      token lexbuf
+                    ) else
                       comment lexbuf }
   | newline       { Lexing.new_line lexbuf;
                     Buffer.add_char comment_buf '\n';

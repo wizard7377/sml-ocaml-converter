@@ -1,2 +1,5 @@
 (library
- (name backend))
+ (name backend)
+ (inline_tests)
+ (libraries ast common helpers ppxlib ppx_inline_test)
+ (preprocess (pps ppx_inline_test ppxlib.metaquot)))
