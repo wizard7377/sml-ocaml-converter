@@ -123,7 +123,8 @@
 (* Type declarations for nonterminals                                        *)
 (* ========================================================================= *)
 
-%type <Ast.prog * string list> program
+%type <Ast.prog * string list> file
+%type <Ast.prog> program
 %type <Ast.dec> dec_seq kwdec kwcoredec kwmoduledec
 %type <Ast.dec list> kwdec_seq kwcoredec_seq
 %type <Ast.exp> exp atomic_exp
@@ -187,7 +188,7 @@
 %type <int> digit_opt
 %type <Ast.pat option> as_pat_opt
 
-%start program
+%start file
 
 %%
 
@@ -445,13 +446,16 @@ pat:
   | atomic_pat_seq1 {
       match $1 with
       | [p] -> p
-      | (PatIdx op) :: args ->
+      (* | (PatIdx op) :: args -> *)
+      | op :: args ->
           List.fold_left (fun acc arg -> PatApp (
             (match acc with
              | PatIdx w -> w
              | PatApp (w, _) -> w
-             | _ -> WithoutOp (IdxIdx "?")), arg)) (PatIdx op) args
-      | _ -> failwith "invalid pattern application"
+             (* | _ -> WithoutOp (IdxIdx "?")), arg)) (PatIdx op) args *)
+             | _ -> WithoutOp (IdxIdx "?")), arg)) op args 
+          
+      | _ -> failwith "impossible: invalid pattern sequence"
     }
   | pat COLON typ { PatTyp ($1, $3) }
   | pat AS pat {
@@ -930,7 +934,11 @@ and_fctbind_opt:
 (* ========================================================================= *)
 
 program:
-  | dec_seq EOF { (ProgDec $1, $2) }
-  | FUNCTOR fctbind SEMICOLON? EOF { (ProgFun $2, $4) }
-  | SIGNATURE sigbind SEMICOLON? EOF { (ProgStr $2, $4) }
+  | dec_seq { (ProgDec $1) }
+  | FUNCTOR fctbind SEMICOLON? { (ProgFun $2) }
+  | SIGNATURE sigbind SEMICOLON? { (ProgStr $2) }
 ;
+file: 
+  | program EOF { ($1, $2) }
+  (* TODO *)
+  ;

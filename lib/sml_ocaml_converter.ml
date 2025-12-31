@@ -4,11 +4,15 @@ type ocaml = Parsetree.toplevel_phrase list
 let lexer (lexbuf : Lexing.lexbuf) : Frontend.Parser.token =
   let res = Frontend.Lexer.token lexbuf in
   res
-let read_to_sml (input : string) : Ast.prog =
-  let (res, comments) = Frontend.Parser.program lexer (Lexing.from_string input) in
-  let output = Ast.show_prog res in
-  print_endline output ;
-  res
+let read_to_sml (input : string) : sml =
+  let res : sml * string list = 
+      Frontend.Parser.file 
+      lexer 
+      (Lexing.from_string input) 
+  in
+  let output = Ast.show_prog (Stdlib.fst res) in
+  (* print_endline output ; *)
+  (Stdlib.fst res)
 let sml_to_ppx (prog : Ast.prog) = assert false
 let ppx_to_ocaml (ppx : ocaml) = assert false
 

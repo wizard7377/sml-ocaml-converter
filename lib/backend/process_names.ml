@@ -2,7 +2,7 @@ open Stdlib
 open Helpers
 (** A name, after processing *)
 type idx = Operator of string | Name of string | Var of string | Label of string | Numbered of string | Long of idx list
-type name_context = Module | ModuleType | Value | TypeVar | ValueType | PatternHead | PatternOther | Constructor | Label
+type name_context = Module | PatternVar | ModuleType | Value | TypeVar | ValueType | PatternHead | PatternOther | Constructor | Label
 
 exception WrongTypeContext of name_context
 exception WrongTypeName
@@ -15,6 +15,28 @@ let all_process (name:string) =
   let name3 = if String.ends_with "'" name2 then name2 ^ "'" else name2 in
   let name4 = if List.mem name3 ocaml_reserved_names then name3 ^ "_" else name3 in
   name4
+(** Checks if a pattern variable is supposed to be a variable or constructor 
+  How this is decided:
+  {ul
+  {- If the name is already lowercase, it is a variable}
+  {- If the name is in the list of known constructor names, it is {i not} a variable}
+  {- If the name is shorter than 4 characters, it is a variable}
+  {- Otherwise, it is a constructor}
+  }
+
+  {b WARNING}: This function should only be called on pattern tails, pattern heads are automatically constructors.
+  *)
+let pattern_is_var (name:string) : bool = 
+  if (String.length name = 0) then true
+  else if Char.lowercase_ascii (String.get name 0) = String.get name 0 then true
+  else if List.mem name constructor_names then false
+  else if String.length name < 4 then true
+  else false
+
+let pattern_is_var_idx (name:Ast.idx) : bool = match name with 
+  | Ast.IdxIdx s -> pattern_is_var s
+  | Ast.IdxLab l -> pattern_is_var l
+  | _ -> false
 exception EmptyList
 let rec lait = function 
   | (x :: []) -> ([], x)
@@ -35,6 +57,7 @@ let process_idx (context :  name_context) (name:string) : string = match context
   | PatternOther -> String.uncapitalize_ascii (all_process name)
   | Constructor -> String.capitalize_ascii (all_process name)
   | Label -> all_process name
+  | PatternVar -> String.uncapitalize_ascii (all_process name)
 
 
 let rec process_name ~(context:name_context) (name:Ast.idx) : idx = match context, name with 
