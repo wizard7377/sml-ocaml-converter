@@ -42,7 +42,7 @@ let test_process_type_var () =
     (core_type_to_string result)
 
 let test_process_type_var_equality () =
-  let input = TypVar (IdxVar "''eq") in
+  let input = TypVar (IdxVar "'eq") in
   let result = process_type_value input in
   let expected_str = "''eq" in
   check string "equality type variable ''eq"

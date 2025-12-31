@@ -5,7 +5,7 @@ let lexer (lexbuf : Lexing.lexbuf) : Frontend.Parser.token =
   let res = Frontend.Lexer.token lexbuf in
   res
 let read_to_sml (input : string) : Ast.prog =
-  let res = Frontend.Parser.program lexer (Lexing.from_string input) in
+  let (res, comments) = Frontend.Parser.program lexer (Lexing.from_string input) in
   let output = Ast.show_prog res in
   print_endline output ;
   res

@@ -61,4 +61,5 @@ let rec process_longid (name : idx) : Longident.t = match name with
   | Long [] -> raise EmptyList
   | Long lst -> let (lst', fin) = lait lst in 
     Longident.Ldot (process_longid (Long lst') , idx_to_string fin)
+  | _ -> Longident.Lident (idx_to_string name)
 (** Parse type expressions *)
