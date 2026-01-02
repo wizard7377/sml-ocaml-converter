@@ -117,7 +117,7 @@
 %right ARROW
 %nonassoc SHORT_IDENT EQUAL
 %right STAR
-%left COLON COLON_GT
+%left COLON COLON_GT 
 
 (* ========================================================================= *)
 (* Type declarations for nonterminals                                        *)
@@ -935,10 +935,15 @@ and_fctbind_opt:
 
 program:
   | dec_seq { (ProgDec $1) }
-  | FUNCTOR fctbind SEMICOLON? { (ProgFun $2) }
-  | SIGNATURE sigbind SEMICOLON? { (ProgStr $2) }
+  | FUNCTOR fctbind { (ProgFun $2) }
+  | SIGNATURE sigbind { (ProgStr $2) }
 ;
+program_list :
+  p0=program { p0 }
+  |  p0=program; p1=program { ProgSeq (p0, p1) }
+  | p0=program; SEMICOLON ; ps=program_list { ProgSeq (p0, ps) }
+  ;
 file: 
-  | program EOF { ($1, $2) }
+  | program_list SEMICOLON? EOF { ($1, $3) }
   (* TODO *)
   ;

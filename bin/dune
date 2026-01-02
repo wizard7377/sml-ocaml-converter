@@ -1,4 +1,4 @@
 (executable
  (public_name sml-ocaml-converter)
  (name main)
- (libraries sml_ocaml_converter cmdliner))
+ (libraries sml_ocaml_converter cmdliner cli))

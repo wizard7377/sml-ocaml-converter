@@ -9,6 +9,10 @@
 
 (* open Stdlib *)
 
+type 'a node = {
+    value : 'a ;
+    comments : string list ;
+}
 (** {1 Programs}
 
     Programs are the top-level syntactic category in SML. A program consists of
@@ -676,3 +680,13 @@ and pat_row =
   | PatRowVar of idx * typ option * idx option * pat_row option
       (** Variable row: [id \[: typ\] \[as pat\]].
           Shorthand where the label equals the variable name. *)
+
+
+
+
+type cm_filetype = CM_CM | CM_Sig | CM_Sml | CM_Fun
+type cm_file = { 
+
+    cm_header : string ; 
+    cm_sources : (string * cm_filetype) list
+}

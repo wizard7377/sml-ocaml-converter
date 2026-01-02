@@ -1,0 +1,15 @@
+{1 CM to Dune}
+
+The conversion from CM files to Dune, while not perfect, is relatively straightforward.
+The first part is the new names of all files.
+
+{v *.sml -> *_sml.ml v}
+{v *.sig -> *_sig.ml v}
+{v *.fun -> *_fun.ml v}
+{v *.cm -> dune, *.ml, *.mli v}
+
+The second part is the conversion of the CM file itself.
+
+We divide the CM file into sections, {v Library ... #endif v}, {v ... v}, the first part is copied to the new interface file as a comment.
+The second portion depends on what it is. 
+If the line contains 

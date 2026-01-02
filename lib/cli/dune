@@ -1,0 +1,4 @@
+(library 
+ (name cli)
+
+ (libraries cmdliner process sml_ocaml_converter))

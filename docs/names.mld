@@ -1,0 +1,10 @@
+{1 Names and the like}
+
+OCaml and SML have different conventions for naming certain entities, such as types (in OCaml, they are always lowercase, while in SML this is a convention)
+
+{2 Types}
+
+Types names become lowercase. 
+This is the simplest transformation 
+
+{2 

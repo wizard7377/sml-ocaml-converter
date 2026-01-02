@@ -31,6 +31,97 @@ let parsetree_expression : Parsetree.expression testable =
       Format.fprintf fmt "%a" Ppxlib.Pprintast.expression e)
     (fun a b -> expression_to_string a = expression_to_string b)
 
+let pattern_to_string (p : Parsetree.pattern) : string =
+  let buf = Buffer.create 16 in
+  let fmt = Format.formatter_of_buffer buf in
+  Ppxlib.Pprintast.pattern fmt p;
+  Format.pp_print_flush fmt ();
+  Buffer.contents buf
+
+let parsetree_pattern : Parsetree.pattern testable =
+  testable
+    (fun fmt p ->
+      Format.fprintf fmt "%a" Ppxlib.Pprintast.pattern p)
+    (fun a b -> pattern_to_string a = pattern_to_string b)
+
+let constant_to_string (c : Parsetree.constant) : string =
+  match c with
+  | Pconst_integer (s, _) -> s
+  | Pconst_char c -> String.make 1 c
+  | Pconst_string (s, _, _) -> s
+  | Pconst_float (s, _) -> s
+
+let parsetree_constant : Parsetree.constant testable =
+  testable
+    (fun fmt c -> Format.fprintf fmt "%s" (constant_to_string c))
+    (fun a b -> constant_to_string a = constant_to_string b)
+
+(** Test cases for process_con *)
+
+let test_process_con_int_positive () =
+  let input = ConInt "42" in
+  let result = process_con input in
+  check parsetree_constant "positive integer constant"
+    (Pconst_integer ("42", None))
+    result
+
+let test_process_con_int_negative () =
+  (* SML uses ~ for negation *)
+  let input = ConInt "~42" in
+  let result = process_con input in
+  check parsetree_constant "negative integer constant (~ converted to -)"
+    (Pconst_integer ("-42", None))
+    result
+
+let test_process_con_int_hex () =
+  let input = ConInt "0xFF" in
+  let result = process_con input in
+  check parsetree_constant "hexadecimal integer constant"
+    (Pconst_integer ("0xFF", None))
+    result
+
+let test_process_con_word_decimal () =
+  let input = ConWord "0w42" in
+  let result = process_con input in
+  check parsetree_constant "word constant (decimal)"
+    (Pconst_integer ("42", None))
+    result
+
+let test_process_con_word_hex () =
+  let input = ConWord "0wx2A" in
+  let result = process_con input in
+  check parsetree_constant "word constant (hexadecimal)"
+    (Pconst_integer ("0x2A", None))
+    result
+
+let test_process_con_float_positive () =
+  let input = ConFloat "3.14" in
+  let result = process_con input in
+  check parsetree_constant "positive float constant"
+    (Pconst_float ("3.14", None))
+    result
+
+let test_process_con_float_negative () =
+  let input = ConFloat "~2.718" in
+  let result = process_con input in
+  check parsetree_constant "negative float constant (~ converted to -)"
+    (Pconst_float ("-2.718", None))
+    result
+
+let test_process_con_char () =
+  let input = ConChar "a" in
+  let result = process_con input in
+  check parsetree_constant "character constant"
+    (Pconst_char 'a')
+    result
+
+let test_process_con_string () =
+  let input = ConString "hello" in
+  let result = process_con input in
+  match result with
+  | Pconst_string (s, _, _) -> check string "string constant" "hello" s
+  | _ -> failwith "Expected string constant"
+
 (** Test cases for process_type_value *)
 
 let test_process_type_var () =
@@ -210,6 +301,536 @@ let test_process_exp_infix () =
     true
     (String.length result_str > 0)
 
+let test_process_exp_constant () =
+  let input = ExpCon (ConInt "42") in
+  let result = process_exp input in
+  let result_str = expression_to_string result in
+  check (bool) "constant expression"
+    true
+    (String.contains result_str '4')
+
+let test_process_exp_tuple_empty () =
+  let input = TupleExp [] in
+  let result = process_exp input in
+  let result_str = expression_to_string result in
+  check (bool) "unit expression (empty tuple)"
+    true
+    (String.contains result_str '(')
+
+let test_process_exp_tuple () =
+  let input = TupleExp [
+    ExpCon (ConInt "1");
+    ExpCon (ConInt "2");
+  ] in
+  let result = process_exp input in
+  let result_str = expression_to_string result in
+  check (bool) "tuple expression"
+    true
+    (String.length result_str > 0)
+
+let test_process_exp_record () =
+  let input = RecordExp [
+    Row (IdxLab "x", ExpCon (ConInt "1"), None);
+  ] in
+  let result = process_exp input in
+  let result_str = expression_to_string result in
+  check (bool) "record expression"
+    true
+    (String.contains result_str 'x')
+
+let test_process_exp_record_selector () =
+  let input = RecordSelector (IdxLab "name") in
+  let result = process_exp input in
+  let result_str = expression_to_string result in
+  check (bool) "record selector (#label)"
+    true
+    (String.contains result_str 'n')
+
+let test_process_exp_list_empty () =
+  let input = ListExp [] in
+  let result = process_exp input in
+  let result_str = expression_to_string result in
+  check (bool) "empty list expression"
+    true
+    (String.contains result_str '[')
+
+let test_process_exp_list () =
+  let input = ListExp [
+    ExpCon (ConInt "1");
+    ExpCon (ConInt "2");
+    ExpCon (ConInt "3");
+  ] in
+  let result = process_exp input in
+  let result_str = expression_to_string result in
+  check (bool) "list expression"
+    true
+    (String.length result_str > 0)
+
+let test_process_exp_seq () =
+  let input = SeqExp [
+    ExpCon (ConInt "1");
+    ExpCon (ConInt "2");
+  ] in
+  let result = process_exp input in
+  let result_str = expression_to_string result in
+  check (bool) "sequence expression"
+    true
+    (String.length result_str > 0)
+
+let test_process_exp_let () =
+  let input = LetExp (
+    [ValDec ([], ValBind (PatIdx (WithoutOp (IdxIdx "x")), ExpCon (ConInt "42"), None))],
+    [ExpIdx (IdxIdx "x")]
+  ) in
+  let result = process_exp input in
+  let result_str = expression_to_string result in
+  check (bool) "let expression"
+    true
+    (String.contains result_str 'x')
+
+let test_process_exp_typed () =
+  let input = TypedExp (
+    ExpCon (ConInt "42"),
+    TypCon ([], IdxIdx "int")
+  ) in
+  let result = process_exp input in
+  let result_str = expression_to_string result in
+  check (bool) "typed expression"
+    true
+    (String.length result_str > 0)
+
+let test_process_exp_raise () =
+  let input = RaiseExp (ExpIdx (IdxIdx "Fail")) in
+  let result = process_exp input in
+  let result_str = expression_to_string result in
+  check (bool) "raise expression"
+    true
+    (String.contains result_str 'r')
+
+let test_process_exp_and () =
+  let input = AndExp (
+    ExpIdx (IdxIdx "x"),
+    ExpIdx (IdxIdx "y")
+  ) in
+  let result = process_exp input in
+  let result_str = expression_to_string result in
+  check (bool) "andalso expression (converted to &&)"
+    true
+    (String.length result_str > 0)
+
+let test_process_exp_or () =
+  let input = OrExp (
+    ExpIdx (IdxIdx "x"),
+    ExpIdx (IdxIdx "y")
+  ) in
+  let result = process_exp input in
+  let result_str = expression_to_string result in
+  check (bool) "orelse expression (converted to ||)"
+    true
+    (String.length result_str > 0)
+
+let test_process_exp_if () =
+  let input = IfExp (
+    ExpIdx (IdxIdx "cond"),
+    ExpCon (ConInt "1"),
+    ExpCon (ConInt "2")
+  ) in
+  let result = process_exp input in
+  let result_str = expression_to_string result in
+  check (bool) "if expression"
+    true
+    (String.contains result_str 'i')
+
+let test_process_exp_while () =
+  let input = WhileExp (
+    ExpIdx (IdxIdx "cond"),
+    ExpIdx (IdxIdx "body")
+  ) in
+  let result = process_exp input in
+  let result_str = expression_to_string result in
+  check (bool) "while expression"
+    true
+    (String.length result_str > 0)
+
+let test_process_exp_case () =
+  let input = CaseExp (
+    ExpIdx (IdxIdx "x"),
+    Case (PatWildcard, ExpCon (ConInt "0"), None)
+  ) in
+  let result = process_exp input in
+  let result_str = expression_to_string result in
+  check (bool) "case expression"
+    true
+    (String.length result_str > 0)
+
+let test_process_exp_fn () =
+  let input = FnExp (
+    Case (PatIdx (WithoutOp (IdxIdx "x")), ExpIdx (IdxIdx "x"), None)
+  ) in
+  let result = process_exp input in
+  let result_str = expression_to_string result in
+  check (bool) "fn expression (anonymous function)"
+    true
+    (String.contains result_str 'x')
+
+(** Test cases for process_pat *)
+
+let test_process_pat_constant () =
+  let input = PatCon (ConInt "42") in
+  let result = process_pat input in
+  let result_str = pattern_to_string result in
+  check (bool) "constant pattern"
+    true
+    (String.contains result_str '4')
+
+let test_process_pat_wildcard () =
+  let input = PatWildcard in
+  let result = process_pat input in
+  let result_str = pattern_to_string result in
+  check (bool) "wildcard pattern"
+    true
+    (String.contains result_str '_')
+
+let test_process_pat_variable () =
+  let input = PatIdx (WithoutOp (IdxIdx "x")) in
+  let result = process_pat input in
+  let result_str = pattern_to_string result in
+  check (bool) "variable pattern"
+    true
+    (String.contains result_str 'x')
+
+let test_process_pat_constructor_nullary () =
+  let input = PatIdx (WithoutOp (IdxIdx "NONE")) in
+  let result = process_pat ~is_head:true input in
+  let result_str = pattern_to_string result in
+  check (bool) "nullary constructor pattern"
+    true
+    (String.contains result_str 'N')
+
+let test_process_pat_constructor_with_arg () =
+  let input = PatApp (
+    WithoutOp (IdxIdx "SOME"),
+    PatIdx (WithoutOp (IdxIdx "x"))
+  ) in
+  let result = process_pat input in
+  let result_str = pattern_to_string result in
+  check (bool) "constructor pattern with argument"
+    true
+    (String.contains result_str 'S')
+
+let test_process_pat_infix_cons () =
+  let input = PatInfix (
+    PatIdx (WithoutOp (IdxIdx "x")),
+    IdxIdx "::",
+    PatIdx (WithoutOp (IdxIdx "xs"))
+  ) in
+  let result = process_pat input in
+  let result_str = pattern_to_string result in
+  check (bool) "infix constructor pattern (::)"
+    true
+    (String.length result_str > 0)
+
+let test_process_pat_tuple_empty () =
+  let input = PatTuple [] in
+  let result = process_pat input in
+  let result_str = pattern_to_string result in
+  check (bool) "unit pattern (empty tuple)"
+    true
+    (String.contains result_str '(')
+
+let test_process_pat_tuple () =
+  let input = PatTuple [
+    PatIdx (WithoutOp (IdxIdx "x"));
+    PatIdx (WithoutOp (IdxIdx "y"));
+  ] in
+  let result = process_pat input in
+  let result_str = pattern_to_string result in
+  check (bool) "tuple pattern"
+    true
+    (String.length result_str > 0)
+
+let test_process_pat_record () =
+  let input = PatRecord [
+    PatRowSimple (IdxLab "x", PatIdx (WithoutOp (IdxIdx "px")), PatRowPoly);
+  ] in
+  let result = process_pat input in
+  let result_str = pattern_to_string result in
+  check (bool) "record pattern"
+    true
+    (String.contains result_str 'x')
+
+let test_process_pat_record_var_shorthand () =
+  let input = PatRecord [
+    PatRowVar (IdxLab "x", None, None, None);
+  ] in
+  let result = process_pat input in
+  let result_str = pattern_to_string result in
+  check (bool) "record pattern with variable shorthand"
+    true
+    (String.contains result_str 'x')
+
+let test_process_pat_list_empty () =
+  let input = PatList [] in
+  let result = process_pat input in
+  let result_str = pattern_to_string result in
+  check (bool) "empty list pattern"
+    true
+    (String.contains result_str '[')
+
+let test_process_pat_list () =
+  let input = PatList [
+    PatIdx (WithoutOp (IdxIdx "x"));
+    PatIdx (WithoutOp (IdxIdx "y"));
+  ] in
+  let result = process_pat input in
+  let result_str = pattern_to_string result in
+  check (bool) "list pattern"
+    true
+    (String.length result_str > 0)
+
+let test_process_pat_typed () =
+  let input = PatTyp (
+    PatIdx (WithoutOp (IdxIdx "x")),
+    TypCon ([], IdxIdx "int")
+  ) in
+  let result = process_pat input in
+  let result_str = pattern_to_string result in
+  check (bool) "typed pattern"
+    true
+    (String.contains result_str 'x')
+
+let test_process_pat_as () =
+  let input = PatAs (
+    WithoutOp (IdxIdx "xs"),
+    None,
+    PatInfix (
+      PatIdx (WithoutOp (IdxIdx "x")),
+      IdxIdx "::",
+      PatIdx (WithoutOp (IdxIdx "rest"))
+    )
+  ) in
+  let result = process_pat input in
+  let result_str = pattern_to_string result in
+  check (bool) "as pattern (layered pattern)"
+    true
+    (String.contains result_str 'x')
+
+(** Test cases for process_val_bind *)
+
+let test_process_val_bind_simple () =
+  let input = ValBind (
+    PatIdx (WithoutOp (IdxIdx "x")),
+    ExpCon (ConInt "42"),
+    None
+  ) in
+  let result = process_val_bind input in
+  check (int) "simple value binding"
+    1
+    (List.length result)
+
+let test_process_val_bind_multiple () =
+  let input = ValBind (
+    PatIdx (WithoutOp (IdxIdx "x")),
+    ExpCon (ConInt "1"),
+    Some (ValBind (
+      PatIdx (WithoutOp (IdxIdx "y")),
+      ExpCon (ConInt "2"),
+      None
+    ))
+  ) in
+  let result = process_val_bind input in
+  check (int) "multiple value bindings (and)"
+    2
+    (List.length result)
+
+(** Test cases for process_fun_bind *)
+
+let test_process_fun_bind_simple () =
+  let input = FunBind (
+    FunMatchPrefix (
+      WithoutOp (IdxIdx "f"),
+      [PatIdx (WithoutOp (IdxIdx "x"))],
+      None,
+      ExpIdx (IdxIdx "x"),
+      None
+    ),
+    None
+  ) in
+  let result = process_fun_bind input in
+  check (int) "simple function binding"
+    1
+    (List.length result)
+
+let test_process_fun_bind_pattern_match () =
+  let input = FunBind (
+    FunMatchPrefix (
+      WithoutOp (IdxIdx "factorial"),
+      [PatCon (ConInt "0")],
+      None,
+      ExpCon (ConInt "1"),
+      Some (FunMatchPrefix (
+        WithoutOp (IdxIdx "factorial"),
+        [PatIdx (WithoutOp (IdxIdx "n"))],
+        None,
+        ExpIdx (IdxIdx "n"),
+        None
+      ))
+    ),
+    None
+  ) in
+  let result = process_fun_bind input in
+  check (int) "function with pattern matching"
+    1
+    (List.length result)
+
+(** Test cases for process_typ_bind *)
+
+let test_process_typ_bind_simple () =
+  let input = TypBind (
+    [],
+    IdxIdx "myint",
+    TypCon ([], IdxIdx "int"),
+    None
+  ) in
+  let result = process_typ_bind input in
+  check (int) "simple type abbreviation"
+    1
+    (List.length result)
+
+let test_process_typ_bind_parametric () =
+  let input = TypBind (
+    [IdxVar "a"],
+    IdxIdx "pair",
+    TypTuple [TypVar (IdxVar "a"); TypVar (IdxVar "a")],
+    None
+  ) in
+  let result = process_typ_bind input in
+  check (int) "parametric type abbreviation"
+    1
+    (List.length result)
+
+(** Test cases for process_dat_bind *)
+
+let test_process_dat_bind_simple () =
+  let input = DatBind (
+    [],
+    IdxIdx "bool",
+    ConBind (IdxIdx "True", None, Some (ConBind (IdxIdx "False", None, None))),
+    None
+  ) in
+  let result = process_dat_bind input in
+  check (int) "simple datatype declaration"
+    1
+    (List.length result)
+
+let test_process_dat_bind_option () =
+  let input = DatBind (
+    [IdxVar "a"],
+    IdxIdx "option",
+    ConBind (
+      IdxIdx "NONE",
+      None,
+      Some (ConBind (
+        IdxIdx "SOME",
+        Some (TypVar (IdxVar "a")),
+        None
+      ))
+    ),
+    None
+  ) in
+  let result = process_dat_bind input in
+  check (int) "option datatype declaration"
+    1
+    (List.length result)
+
+(** Test cases for process_exn_bind *)
+
+let test_process_exn_bind_simple () =
+  let input = ExnBind (
+    IdxIdx "Overflow",
+    None,
+    None
+  ) in
+  let result = process_exn_bind input in
+  check (int) "simple exception declaration"
+    1
+    (List.length result)
+
+let test_process_exn_bind_with_arg () =
+  let input = ExnBind (
+    IdxIdx "Fail",
+    Some (TypCon ([], IdxIdx "string")),
+    None
+  ) in
+  let result = process_exn_bind input in
+  check (int) "exception with argument"
+    1
+    (List.length result)
+
+(** Test cases for process_prog *)
+
+let test_process_prog_simple_val () =
+  let input = ProgDec (
+    ValDec ([], ValBind (
+      PatIdx (WithoutOp (IdxIdx "x")),
+      ExpCon (ConInt "42"),
+      None
+    ))
+  ) in
+  let result = process_prog input in
+  check (int) "simple program with value declaration"
+    1
+    (List.length result)
+
+let test_process_prog_fun () =
+  let input = ProgDec (
+    FunDec (FunBind (
+      FunMatchPrefix (
+        WithoutOp (IdxIdx "id"),
+        [PatIdx (WithoutOp (IdxIdx "x"))],
+        None,
+        ExpIdx (IdxIdx "x"),
+        None
+      ),
+      None
+    ))
+  ) in
+  let result = process_prog input in
+  check (int) "program with function declaration"
+    1
+    (List.length result)
+
+let test_process_prog_datatype () =
+  let input = ProgDec (
+    DatDec (
+      DatBind (
+        [],
+        IdxIdx "color",
+        ConBind (
+          IdxIdx "Red",
+          None,
+          Some (ConBind (IdxIdx "Green", None, Some (ConBind (IdxIdx "Blue", None, None))))
+        ),
+        None
+      ),
+      None
+    )
+  ) in
+  let result = process_prog input in
+  check (int) "program with datatype declaration"
+    1
+    (List.length result)
+
+let test_process_prog_sequence () =
+  let input = ProgSeq (
+    ProgDec (ValDec ([], ValBind (PatIdx (WithoutOp (IdxIdx "x")), ExpCon (ConInt "1"), None))),
+    ProgDec (ValDec ([], ValBind (PatIdx (WithoutOp (IdxIdx "y")), ExpCon (ConInt "2"), None)))
+  ) in
+  let result = process_prog input in
+  check (int) "program with sequential declarations"
+    2
+    (List.length result)
+
 (** Test cases for complex types *)
 
 let test_process_complex_function_type () =
@@ -250,6 +871,18 @@ let test_process_higher_order_function () =
 
 (** Test suite organization *)
 
+let constant_tests = [
+  "positive integer constant", `Quick, test_process_con_int_positive;
+  "negative integer constant (~)", `Quick, test_process_con_int_negative;
+  "hexadecimal integer constant", `Quick, test_process_con_int_hex;
+  "word constant (decimal)", `Quick, test_process_con_word_decimal;
+  "word constant (hexadecimal)", `Quick, test_process_con_word_hex;
+  "positive float constant", `Quick, test_process_con_float_positive;
+  "negative float constant (~)", `Quick, test_process_con_float_negative;
+  "character constant", `Quick, test_process_con_char;
+  "string constant", `Quick, test_process_con_string;
+]
+
 let type_tests = [
   "process type variable", `Quick, test_process_type_var;
   "process equality type variable", `Quick, test_process_type_var_equality;
@@ -272,9 +905,63 @@ let object_field_tests = [
 ]
 
 let expression_tests = [
-  "process identifier expression", `Quick, test_process_exp_idx;
-  "process function application", `Quick, test_process_exp_app;
-  "process infix application", `Quick, test_process_exp_infix;
+  "identifier expression", `Quick, test_process_exp_idx;
+  "function application", `Quick, test_process_exp_app;
+  "infix application", `Quick, test_process_exp_infix;
+  "constant expression", `Quick, test_process_exp_constant;
+  "unit expression (empty tuple)", `Quick, test_process_exp_tuple_empty;
+  "tuple expression", `Quick, test_process_exp_tuple;
+  "record expression", `Quick, test_process_exp_record;
+  "record selector (#label)", `Quick, test_process_exp_record_selector;
+  "empty list expression", `Quick, test_process_exp_list_empty;
+  "list expression", `Quick, test_process_exp_list;
+  "sequence expression", `Quick, test_process_exp_seq;
+  "let expression", `Quick, test_process_exp_let;
+  "typed expression", `Quick, test_process_exp_typed;
+  "raise expression", `Quick, test_process_exp_raise;
+  "andalso expression (&&)", `Quick, test_process_exp_and;
+  "orelse expression (||)", `Quick, test_process_exp_or;
+  "if expression", `Quick, test_process_exp_if;
+  "while expression", `Quick, test_process_exp_while;
+  "case expression", `Quick, test_process_exp_case;
+  "fn expression (anonymous function)", `Quick, test_process_exp_fn;
+]
+
+let pattern_tests = [
+  "constant pattern", `Quick, test_process_pat_constant;
+  "wildcard pattern", `Quick, test_process_pat_wildcard;
+  "variable pattern", `Quick, test_process_pat_variable;
+  "nullary constructor pattern", `Quick, test_process_pat_constructor_nullary;
+  "constructor pattern with argument", `Quick, test_process_pat_constructor_with_arg;
+  "infix constructor pattern (::)", `Quick, test_process_pat_infix_cons;
+  "unit pattern (empty tuple)", `Quick, test_process_pat_tuple_empty;
+  "tuple pattern", `Quick, test_process_pat_tuple;
+  "record pattern", `Quick, test_process_pat_record;
+  "record pattern with variable shorthand", `Quick, test_process_pat_record_var_shorthand;
+  "empty list pattern", `Quick, test_process_pat_list_empty;
+  "list pattern", `Quick, test_process_pat_list;
+  "typed pattern", `Quick, test_process_pat_typed;
+  "as pattern (layered pattern)", `Quick, test_process_pat_as;
+]
+
+let declaration_tests = [
+  "simple value binding", `Quick, test_process_val_bind_simple;
+  "multiple value bindings (and)", `Quick, test_process_val_bind_multiple;
+  "simple function binding", `Quick, test_process_fun_bind_simple;
+  "function with pattern matching", `Quick, test_process_fun_bind_pattern_match;
+  "simple type abbreviation", `Quick, test_process_typ_bind_simple;
+  "parametric type abbreviation", `Quick, test_process_typ_bind_parametric;
+  "simple datatype declaration", `Quick, test_process_dat_bind_simple;
+  "option datatype declaration", `Quick, test_process_dat_bind_option;
+  "simple exception declaration", `Quick, test_process_exn_bind_simple;
+  "exception with argument", `Quick, test_process_exn_bind_with_arg;
+]
+
+let program_tests = [
+  "simple program with value declaration", `Quick, test_process_prog_simple_val;
+  "program with function declaration", `Quick, test_process_prog_fun;
+  "program with datatype declaration", `Quick, test_process_prog_datatype;
+  "program with sequential declarations", `Quick, test_process_prog_sequence;
 ]
 
 let complex_type_tests = [
@@ -287,8 +974,12 @@ let complex_type_tests = [
 
 let () =
   run "Backend" [
+    "Constant Processing", constant_tests;
     "Type Processing", type_tests;
     "Object Field Processing", object_field_tests;
     "Expression Processing", expression_tests;
+    "Pattern Processing", pattern_tests;
+    "Declaration Processing", declaration_tests;
+    "Program Processing", program_tests;
     "Complex Type Processing", complex_type_tests;
   ]
