@@ -2,7 +2,7 @@ open Common
 open Ast 
 module type BACKEND = sig 
     module Config : CONFIG 
-    type res 
+    type res = Parsetree.toplevel_phrase 
     val process_sml : prog:Ast.prog -> res
 
     (** Exported for testing *)

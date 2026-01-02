@@ -23,7 +23,10 @@
   ocaml
   (alcotest :with-test)
   ppxlib
-  cmdliner)
+  cmdliner
+  menhir 
+  ppx_import 
+  ppx_deriving)
  (tags
   ("add topics" "to describe" your project)))
 

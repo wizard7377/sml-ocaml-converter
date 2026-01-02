@@ -15,6 +15,9 @@ depends: [
   "alcotest" {with-test}
   "ppxlib"
   "cmdliner"
+  "menhir"
+  "ppx_import"
+  "ppx_deriving"
   "odoc" {with-doc}
 ]
 build: [

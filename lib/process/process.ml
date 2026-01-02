@@ -1,5 +1,8 @@
 
 open Common 
+open Astlib.Pprintast
+
+
 class process_file cfg_init = 
   object (self) 
     val mutable cfg = cfg_init
@@ -13,8 +16,15 @@ class process_file cfg_init =
         let parsed_sml = Frontend.parse file_content in 
         let () = Printf.printf "Parsed SML program\n" in
         let ocaml_code = Backend.process_sml ~prog:parsed_sml in
-        let () = assert false in 
-        assert false
+        let () = Printf.printf "Processed to OCaml code\n" in
+        let output : Format.formatter = match cfg.output_file with 
+          | Some path -> 
+              let oc = open_out path in
+              Format.formatter_of_out_channel oc
+          | None -> Format.std_formatter
+          in 
+        let () = Pprintast.top_phrase output ocaml_code in
+        0
         
   end ;;
 
