@@ -8,6 +8,9 @@ let convert_file ~(input_file:string) ?(output_file:string option) ?(verb:int op
     input_file = input_file ;
     output_file = output_file ;
     verbosity = verb ;
+    guess_names = guess ;
+    curry_functions = curry ;
+    no_comments = no_comments ;
   } in
   let process = new process_file cfg in
   process#run ()

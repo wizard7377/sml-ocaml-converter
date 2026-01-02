@@ -5,3 +5,9 @@ OPTS +=
 .PHONY: test 
 test: $(SOURCES)
 	$(DUNE) exec $(TEST_EXE) -- $(OPTS)
+
+build:
+	$(DUNE) build
+
+install:
+	$(DUNE) install

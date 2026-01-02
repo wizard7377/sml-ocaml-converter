@@ -6,4 +6,4 @@ let fold_spec_list (specs : Ast.spec list) (empty : Ast.spec) : Ast.spec =
   match List.rev specs with
   | [] -> empty
   | [x] -> x
-  | last :: rest -> List.fold_left (fun acc s -> Ast.SpecSeq (s, acc)) last rest
+  | last :: rest -> List.fold_left (fun acc s -> Ast.SpecSeq (Ast.box_node s, Ast.box_node acc)) last rest

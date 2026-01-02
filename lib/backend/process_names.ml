@@ -34,8 +34,8 @@ let pattern_is_var (name:string) : bool =
   else false
 
 let pattern_is_var_idx (name:Ast.idx) : bool = match name with 
-  | Ast.IdxIdx s -> pattern_is_var s
-  | Ast.IdxLab l -> pattern_is_var l
+  | Ast.IdxIdx s -> pattern_is_var s.value
+  | Ast.IdxLab l -> pattern_is_var l.value
   | _ -> false
 exception EmptyList
 let rec lait = function 
@@ -61,11 +61,11 @@ let process_idx (context :  name_context) (name:string) : string = match context
 
 
 let rec process_name ~(context:name_context) (name:Ast.idx) : idx = match context, name with 
-  | _ , Ast.IdxIdx op -> if List.mem (String.get op 0) ocaml_id_chars then Name (process_idx context op) else Operator op
-  | TypeVar , Ast.IdxVar v -> Var (String.uncapitalize_ascii (all_process v))
-  | _ , Ast.IdxLab l -> Label (all_process l)
-  | _ , Ast.IdxNum n -> Numbered n
-  | _ , Ast.IdxLong lst -> let (lst', fin) = lait lst in Long ((List.map (process_name ~context:Module) lst') @ [process_name ~context:Module fin])
+  | _ , Ast.IdxIdx op -> if List.mem (String.get op.value 0) ocaml_id_chars then Name (process_idx context op.value) else Operator op.value
+  | TypeVar , Ast.IdxVar v -> Var (String.uncapitalize_ascii (all_process v.value))
+  | _ , Ast.IdxLab l -> Label (all_process l.value)
+  | _ , Ast.IdxNum n -> Numbered n.value
+  | _ , Ast.IdxLong lst -> let lst_unwrapped = List.map (fun n -> n.Ast.value) lst in let (lst', fin) = lait lst_unwrapped in Long ((List.map (process_name ~context:Module) lst') @ [process_name ~context:Module fin])
   | ctx , _ -> raise (WrongTypeContext ctx)
 
 let process_type_var name' : Parsetree.core_type = let name = process_name ~context:TypeVar name' in match name with 

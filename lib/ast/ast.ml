@@ -12,7 +12,10 @@
 type 'a node = {
     value : 'a ;
     comments : string list ;
-}
+} [@@deriving show]
+
+let box_node (v : 'a) : 'a node = { value = v ; comments = [] }
+let unbox_node (n : 'a node) : 'a = n.value
 (** {1 Programs}
 
     Programs are the top-level syntactic category in SML. A program consists of
@@ -28,13 +31,13 @@ type 'a node = {
            | prog1 [;] prog2               (* sequence *)
     ]} *)
 type prog =
-  | ProgDec of dec
+  | ProgDec of dec node
       (** Core declaration at the top level. *)
-  | ProgFun of fct_bind
+  | ProgFun of fct_bind node
       (** Functor declaration: [functor fctbind]. *)
-  | ProgStr of sign_bind
+  | ProgStr of sign_bind node
       (** Signature declaration: [signature sigbind]. *)
-  | ProgSeq of prog * prog
+  | ProgSeq of prog node * prog node
   | ProgEmpty
       (** Sequence of programs: [prog1 ; prog2]. *)
     [@@deriving show]
@@ -49,11 +52,11 @@ type prog =
     Functors are parameterized modules that take a structure matching a signature
     and produce a new structure. *)
 and fct_bind =
-  | FctBind of idx * idx * sign * (anotate * sign) option * str * fct_bind option
+  | FctBind of idx node * idx node * sign node * (anotate node * sign node) option * str node * fct_bind node option
       (** Plain functor: [id1 ( id2 : sig ) [:[:>] sig] = str].
           The tuple contains: functor name, parameter name, parameter signature,
           optional result annotation, body structure, and optional additional bindings. *)
-  | FctBindOpen of idx * spec * (anotate * sign) option * str * fct_bind option
+  | FctBindOpen of idx node * spec node * (anotate node * sign node) option * str node * fct_bind node option
       (** Opened functor: [id ( spec ) [:[:>] sig] = str].
           The specification is directly visible in the functor body without qualification. *)
 
@@ -65,7 +68,7 @@ and fct_bind =
 
     Binds identifiers to signatures for later use. *)
 and sign_bind =
-  | SignBind of idx * sign * sign_bind option
+  | SignBind of idx node * sign node * sign_bind node option
       (** Signature binding: [id = sig]. *)
 
 (** {1 Core Language}
@@ -89,15 +92,15 @@ and sign_bind =
     Character constants are written as [#"c"].
     String constants are enclosed in double quotes. *)
 and con =
-  | ConInt of string
+  | ConInt of string node
       (** Integer constant. Decimal: [\[~\]num], hexadecimal: [\[~\]0xhex]. *)
-  | ConWord of string
+  | ConWord of string node
       (** Word (unsigned integer) constant. Decimal: [0wnum], hexadecimal: [0wxhex]. *)
-  | ConFloat of string
+  | ConFloat of string node
       (** Floating point constant: [\[~\]num.num] or [\[~\]num\[.num\]e\[~\]num]. *)
-  | ConChar of string
+  | ConChar of string node
       (** Character constant: [#"ascii"]. *)
-  | ConString of string
+  | ConString of string node
       (** String constant: ["ascii*"]. *)
 
 (** {2 Identifiers}
@@ -116,15 +119,15 @@ and con =
     a single quote ([']) or double quote (['']) for equality type variables.
     Long identifiers are dot-separated qualified names. *)
 and idx =
-  | IdxIdx of string
+  | IdxIdx of string node
       (** Simple alphanumeric or symbolic identifier. *)
-  | IdxVar of string
+  | IdxVar of string node
       (** Type variable: ['var] or [''var] for equality type variables. *)
-  | IdxLong of idx list
+  | IdxLong of idx node list
       (** Long (qualified) identifier: [id1.id2...idn]. *)
-  | IdxLab of string
+  | IdxLab of string node
       (** Record label (alphanumeric identifier). *)
-  | IdxNum of string
+  | IdxNum of string node
       (** Numeric label for tuple access (1-indexed, may not start with 0). *)
 
 (** {2 Expressions}
@@ -152,55 +155,55 @@ and idx =
           | fn match                               (* function *)
     ]} *)
 and exp =
-  | ExpCon of con
+  | ExpCon of con node
       (** Constant expression. *)
-  | ExpIdx of idx
+  | ExpIdx of idx node
       (** Value or constructor identifier, optionally prefixed with [op]. *)
-  | ExpApp of exp * exp
+  | ExpApp of exp node * exp node
       (** Function application: [exp1 exp2]. Left-associative. *)
-  | InfixApp of exp * idx * exp
+  | InfixApp of exp node * idx node * exp node
       (** Infix operator application: [exp1 id exp2].
           The operator [id] must be declared infix. *)
-  | ParenExp of exp
+  | ParenExp of exp node
       (** Parenthesized expression: [( exp )]. *)
-  | TupleExp of exp list
+  | TupleExp of exp node list
       (** Tuple expression: [( exp1 , ... , expn )] where n != 1.
           The unit value [()] is represented as an empty list. *)
-  | RecordExp of row list
+  | RecordExp of row node list
       (** Record expression: [{ exprow }]. *)
-  | RecordSelector of idx
+  | RecordSelector of idx node
       (** Record field selector: [# lab]. Selects a field from a record. *)
-  | ListExp of exp list
+  | ListExp of exp node list
       (** List expression: [\[ exp1 , ... , expn \]] where n >= 0. *)
-  | SeqExp of exp list
+  | SeqExp of exp node list
       (** Sequential expression: [( exp1 ; ... ; expn )] where n >= 2.
           Evaluates expressions left-to-right, returning the last value. *)
-  | LetExp of dec list * exp list
+  | LetExp of dec node list * exp node list
       (** Local declaration: [let dec in exp1 ; ... ; expn end].
           Declarations are visible only within the body expressions. *)
-  | TypedExp of exp * typ
+  | TypedExp of exp node * typ node
       (** Type-annotated expression: [exp : typ]. *)
-  | RaiseExp of exp
+  | RaiseExp of exp node
       (** Exception raising: [raise exp].
           The expression must evaluate to an exception value. *)
-  | HandleExp of exp * matching
+  | HandleExp of exp node * matching node
       (** Exception handling: [exp handle match].
           If [exp] raises an exception, it is matched against [match]. *)
-  | AndExp of exp * exp
+  | AndExp of exp node * exp node
       (** Short-circuit conjunction: [exp1 andalso exp2].
           [exp2] is evaluated only if [exp1] is [true]. *)
-  | OrExp of exp * exp
+  | OrExp of exp node * exp node
       (** Short-circuit disjunction: [exp1 orelse exp2].
           [exp2] is evaluated only if [exp1] is [false]. *)
-  | IfExp of exp * exp * exp
+  | IfExp of exp node * exp node * exp node
       (** Conditional: [if exp1 then exp2 else exp3]. *)
-  | WhileExp of exp * exp
+  | WhileExp of exp node * exp node
       (** While loop: [while exp1 do exp2].
           Repeatedly evaluates [exp2] while [exp1] is [true]. Returns unit. *)
-  | CaseExp of exp * matching
+  | CaseExp of exp node * matching node
       (** Case analysis: [case exp of match].
           Pattern matches [exp] against the cases in [match]. *)
-  | FnExp of matching
+  | FnExp of matching node
       (** Anonymous function: [fn match].
           Creates a function value from a match. *)
 
@@ -212,7 +215,7 @@ and exp =
 
     Record rows bind labels to expressions in record literals. *)
 and row =
-  | Row of idx * exp * row option
+  | Row of idx node * exp node * row node option
       (** Expression row: [lab = exp].
           The optional third component allows chaining: [lab1 = exp1 , lab2 = exp2]. *)
 
@@ -225,7 +228,7 @@ and row =
     Matches are used in [case], [handle], and [fn] expressions.
     Each clause binds pattern variables in the corresponding expression. *)
 and matching =
-  | Case of pat * exp * matching option
+  | Case of pat node * exp node * matching node option
       (** Match clause: [pat => exp].
           The optional third component chains additional clauses: [pat1 => exp1 | pat2 => exp2]. *)
 
@@ -249,38 +252,38 @@ and matching =
           | infixr [digit] id1 ... idn                          (* right-associative infix, n >= 1 *)
     ]} *)
 and dec =
-  | ValDec of idx list * val_bind
+  | ValDec of idx node list * val_bind node
       (** Value declaration: [val \[var,\] valbind].
           The [idx list] contains explicit type variables for polymorphism. *)
-  | FunDec of fun_bind
+  | FunDec of fun_bind node
       (** Function declaration: [fun \[var,\] funbind].
           Syntactic sugar for recursive function definitions. *)
-  | TypDec of typ_bind
+  | TypDec of typ_bind node
       (** Type abbreviation: [type typbind].
           Introduces type synonyms. *)
-  | DatDec of dat_bind * typ_bind option
+  | DatDec of dat_bind node * typ_bind node option
       (** Datatype declaration: [datatype datbind \[withtype typbind\]].
           The optional [typbind] allows mutually recursive type abbreviations. *)
-  | DataDecAlias of idx * idx
+  | DataDecAlias of idx node * idx node
       (** Datatype replication: [datatype id = datatype longid].
           Makes [id] an alias for an existing datatype. *)
-  | AbstractDec of dat_bind * typ_bind option * dec list
+  | AbstractDec of dat_bind node * typ_bind node option * dec node list
       (** Abstract type: [abstype datbind \[withtype typbind\] with dec end].
           The datatype constructors are hidden outside the [with] block. *)
-  | ExnDec of exn_bind
+  | ExnDec of exn_bind node
       (** Exception declaration: [exception exnbind]. *)
-  | StrDec of str_bind
+  | StrDec of str_bind node
       (** Structure declaration: [structure strbind].
           Not allowed inside expressions. *)
-  | SeqDec of dec list
+  | SeqDec of dec node list
       (** Sequence of declarations: [dec1 ; dec2 ; ...]. *)
-  | LocalDec of dec * dec
+  | LocalDec of dec node * dec node
       (** Local declaration: [local dec1 in dec2 end].
           [dec1] is visible only within [dec2]. *)
-  | OpenDec of idx list
+  | OpenDec of idx node list
       (** Structure inclusion: [open longid1 ... longidn].
           Makes all bindings from the structures directly visible. *)
-  | FixityDec of fixity * idx list
+  | FixityDec of fixity node * idx node list
       (** Fixity declaration for operators. *)
 
 (** Operator fixity specifications.
@@ -295,9 +298,9 @@ and dec =
 and fixity =
   | Nonfix
       (** Remove infix status: [nonfix id]. *)
-  | Infix of int
+  | Infix of int node
       (** Left-associative infix: [infix \[n\] id]. Precedence 0-9. *)
-  | Infixr of int
+  | Infixr of int node
       (** Right-associative infix: [infixr \[n\] id]. Precedence 0-9. *)
 
 (** Value bindings.
@@ -307,10 +310,10 @@ and fixity =
               | rec valbind                 (* recursive *)
     ]} *)
 and val_bind =
-  | ValBind of pat * exp * val_bind option
+  | ValBind of pat node * exp node * val_bind node option
       (** Destructuring binding: [pat = exp].
           Pattern variables are bound to corresponding parts of the value. *)
-  | ValBindRec of val_bind
+  | ValBindRec of val_bind node
       (** Recursive binding: [rec valbind].
           Allows the bound names to be used in the expressions. *)
 
@@ -320,7 +323,7 @@ and val_bind =
     funbind ::= funmatch [and funbind]      (* clausal function *)
     ]} *)
 and fun_bind =
-  | FunBind of fun_match * fun_bind option
+  | FunBind of fun_match node * fun_bind node option
       (** Function binding with clauses. Additional bindings for mutual recursion. *)
 
 (** Function match clauses.
@@ -333,13 +336,13 @@ and fun_bind =
 
     Multiple clauses define pattern matching on function arguments. *)
 and fun_match =
-  | FunMatchPrefix of with_op * pat list * typ option * exp * fun_match option
+  | FunMatchPrefix of with_op node * pat node list * typ node option * exp node * fun_match node option
       (** Prefix (nonfix) function clause: [\[op\] id pat1 ... patn \[: typ\] = exp].
           The [with_op] indicates the function name (with optional [op] prefix). *)
-  | FunMatchInfix of pat * idx * pat * typ option * exp * fun_match option
+  | FunMatchInfix of pat node * idx node * pat node * typ node option * exp node * fun_match node option
       (** Infix function clause: [pat1 id pat2 \[: typ\] = exp].
           The identifier [id] must be declared infix. *)
-  | FunMatchLow of pat * idx * pat * pat list * typ option * exp * fun_match option
+  | FunMatchLow of pat node * idx node * pat node * pat node list * typ node option * exp node * fun_match node option
       (** Curried infix clause: [( pat1 id pat2 ) pat'1 ... pat'n \[: typ\] = exp].
           An infix operator with additional curried arguments. *)
 
@@ -351,7 +354,7 @@ and fun_match =
 
     Introduces type abbreviations (synonyms). *)
 and typ_bind =
-  | TypBind of idx list * idx * typ * typ_bind option
+  | TypBind of idx node list * idx node * typ node * typ_bind node option
       (** Type abbreviation: [\[var,\] id = typ].
           The [idx list] contains type parameters. *)
 
@@ -363,7 +366,7 @@ and typ_bind =
 
     Introduces new algebraic data types with constructors. *)
 and dat_bind =
-  | DatBind of idx list * idx * con_bind * dat_bind option
+  | DatBind of idx node list * idx node * con_bind node * dat_bind node option
       (** Datatype binding: [\[var,\] id = conbind].
           Type parameters, type name, constructors, and optional additional bindings. *)
 
@@ -375,7 +378,7 @@ and dat_bind =
 
     Defines data constructors for a datatype. *)
 and con_bind =
-  | ConBind of idx * typ option * con_bind option
+  | ConBind of idx node * typ node option * con_bind node option
       (** Constructor: [id \[of typ\]].
           The optional type specifies the constructor's argument type. *)
 
@@ -386,10 +389,10 @@ and con_bind =
               | id = longid [and exnbind]     (* renaming *)
     ]} *)
 and exn_bind =
-  | ExnBind of idx * typ option * exn_bind option
+  | ExnBind of idx node * typ node option * exn_bind node option
       (** Generative exception: [id \[of typ\]].
           Creates a new exception constructor. *)
-  | ExnBindAlias of idx * idx * exn_bind option
+  | ExnBindAlias of idx node * idx node * exn_bind node option
       (** Exception renaming: [id = longid].
           Makes [id] an alias for an existing exception. *)
 
@@ -410,19 +413,19 @@ and exn_bind =
           | let dec in str end            (* local declaration *)
     ]} *)
 and str =
-  | StrIdx of idx
+  | StrIdx of idx node
       (** Structure identifier (possibly qualified). *)
-  | StructStr of dec
+  | StructStr of dec node
       (** Structure expression: [struct dec end]. *)
-  | AnotateStr of idx * anotate * str
+  | AnotateStr of idx node * anotate node * str node
       (** Annotated structure: [str : sig] or [str :> sig].
           Note: Uses structure name as first component for binding context. *)
-  | FunctorApp of idx * str
+  | FunctorApp of idx node * str node
       (** Functor application: [id ( str )]. *)
-  | FunctorAppAnonymous of idx * dec
+  | FunctorAppAnonymous of idx node * dec node
       (** Functor application with anonymous argument: [id ( dec )].
           The declarations form an anonymous structure. *)
-  | LocalDec of dec * str
+  | LocalDec of dec node * str node
       (** Local declaration in structure: [let dec in str end]. *)
 
 (** Signature annotations for structures.
@@ -443,8 +446,8 @@ and anotate =
     strbind ::= id [:[:>] sig] = str [and strbind]
     ]} *)
 and str_bind =
-  | StrBind of idx * (anotate * sign) option * str_bind option
-      (** Structure binding: [id \[:[\:>\] sig\] = str].
+  | StrBind of idx node * (anotate node * sign node) option * str_bind node option
+      (** Structure binding: [id \[:\[\:>\] sig\] = str].
           Note: The structure expression is omitted here; see context. *)
 
 (** {2 Signatures}
@@ -455,12 +458,12 @@ and str_bind =
           | sig where type typrefin              (* refinement *)
     ]} *)
 and sign =
-  | SignIdx of idx
+  | SignIdx of idx node
       (** Signature identifier. *)
-  | SignSig of sign * spec
+  | SignSig of sign node * spec node
       (** Signature expression: [sig spec end].
           Note: Represented as signature with specification body. *)
-  | SignWhere of sign * typ_refine
+  | SignWhere of sign node * typ_refine node
       (** Signature with type refinement: [sig where type typrefin]. *)
 
 (** Type refinements in [where type] clauses.
@@ -471,7 +474,7 @@ and sign =
 
     Refines abstract types in a signature to specific types. *)
 and typ_refine =
-  | TypRef of idx list * idx * typ * (typ * typ_refine) option
+  | TypRef of idx node list * idx node * typ node * (typ node * typ_refine node) option
       (** Type refinement: [\[var,\] longid = typ].
           Type parameters, type path, definition, and optional additional refinements. *)
 
@@ -494,33 +497,33 @@ and typ_refine =
            | spec sharing longid1 = ... = longidn                 (* structure sharing, n >= 2 *)
     ]} *)
 and spec =
-  | SpecVal of val_desc
+  | SpecVal of val_desc node
       (** Value specification: [val valdesc]. *)
-  | SpecTyp of typ_desc
+  | SpecTyp of typ_desc node
       (** Abstract type specification: [type typdesc]. *)
-  | SpecEqtyp of typ_desc
+  | SpecEqtyp of typ_desc node
       (** Equality type specification: [eqtype typdesc].
           Specifies types that admit equality. *)
-  | SpecTypBind of typ_bind
+  | SpecTypBind of typ_bind node
       (** Type abbreviation in signature: [type typbind]. *)
-  | SpecDat of dat_desc
+  | SpecDat of dat_desc node
       (** Datatype specification: [datatype datdesc]. *)
-  | SpecDatAlias of idx * idx
+  | SpecDatAlias of idx node * idx node
       (** Datatype replication: [datatype id = datatype longid]. *)
-  | SpecExn of exn_desc
+  | SpecExn of exn_desc node
       (** Exception specification: [exception exndesc]. *)
-  | SpecStr of str_desc
+  | SpecStr of str_desc node
       (** Structure specification: [structure strdesc]. *)
-  | SpecSeq of spec * spec
+  | SpecSeq of spec node * spec node
       (** Sequence of specifications: [spec1 ; spec2]. *)
-  | SpecInclude of sign
+  | SpecInclude of sign node
       (** Include signature: [include sig]. *)
-  | SpecIncludeIdx of idx list
+  | SpecIncludeIdx of idx node list
       (** Include multiple signatures: [include id1 ... idn]. *)
-  | SpecSharingTyp of spec * idx list
+  | SpecSharingTyp of spec node * idx node list
       (** Type sharing constraint: [spec sharing type longid1 = ... = longidn].
           Asserts that the named types are the same. *)
-  | SpecSharingStr of spec * idx list
+  | SpecSharingStr of spec node * idx node list
       (** Structure sharing constraint: [spec sharing longid1 = ... = longidn].
           Asserts that the named structures share all type components. *)
 
@@ -530,7 +533,7 @@ and spec =
     valdesc ::= id : typ [and valdesc]
     ]} *)
 and val_desc =
-  | ValDesc of idx * typ * val_desc option
+  | ValDesc of idx node * typ node * val_desc node option
       (** Value description: [id : typ]. *)
 
 (** Type descriptions (abstract types) in signatures.
@@ -539,7 +542,7 @@ and val_desc =
     typdesc ::= [var,] id [and typdesc]
     ]} *)
 and typ_desc =
-  | TypDesc of idx list * idx * typ_desc option
+  | TypDesc of idx node list * idx node * typ_desc node option
       (** Type description: [\[var,\] id].
           Declares an abstract type with given arity. *)
 
@@ -549,7 +552,7 @@ and typ_desc =
     datdesc ::= [var,] id = condesc [and datdesc]
     ]} *)
 and dat_desc =
-  | DatDesc of idx list * idx * con_desc * dat_desc option
+  | DatDesc of idx node list * idx node * con_desc node * dat_desc node option
       (** Datatype description with constructors. *)
 
 (** Constructor descriptions in signatures.
@@ -558,7 +561,7 @@ and dat_desc =
     condesc ::= id [of typ] [| condesc]
     ]} *)
 and con_desc =
-  | ConDesc of idx * typ option * con_desc option
+  | ConDesc of idx node * typ node option * con_desc node option
       (** Constructor description: [id \[of typ\]]. *)
 
 (** Exception descriptions in signatures.
@@ -567,7 +570,7 @@ and con_desc =
     exndesc ::= id [of typ] [and exndesc]
     ]} *)
 and exn_desc =
-  | ExnDesc of idx * typ option * exn_desc option
+  | ExnDesc of idx node * typ node option * exn_desc node option
       (** Exception description: [id \[of typ\]]. *)
 
 (** Structure descriptions in signatures.
@@ -576,7 +579,7 @@ and exn_desc =
     strdesc ::= id : sig [and strdesc]
     ]} *)
 and str_desc =
-  | StrDesc of idx * sign * str_desc option
+  | StrDesc of idx node * sign node * str_desc node option
       (** Structure description: [id : sig]. *)
 
 (** {2 Types}
@@ -590,18 +593,18 @@ and str_desc =
           | { [typrow] }                 (* record *)
     ]} *)
 and typ =
-  | TypVar of idx
+  | TypVar of idx node
       (** Type variable: ['var] or [''var]. *)
-  | TypCon of typ list * idx
+  | TypCon of typ node list * idx node
       (** Type constructor application: [\[typ,\] longid].
           Examples: [int], [int list], [(int, string) either]. *)
-  | TypPar of typ
+  | TypPar of typ node
       (** Parenthesized type: [( typ )]. *)
-  | TypFun of typ * typ
+  | TypFun of typ node * typ node
       (** Function type: [typ1 -> typ2]. Right-associative. *)
-  | TypTuple of typ list
+  | TypTuple of typ node list
       (** Tuple type: [typ1 * ... * typn] where n >= 2. *)
-  | TypRecord of typ_row list
+  | TypRecord of typ_row node list
       (** Record type: [{ typrow }]. *)
 
 (** Type rows in record types.
@@ -610,7 +613,7 @@ and typ =
     typrow ::= lab : typ [, typrow]
     ]} *)
 and typ_row =
-  | TypRow of idx * typ * typ_row option
+  | TypRow of idx node * typ node * typ_row node option
       (** Type row: [lab : typ]. *)
 
 (** Identifier with optional [op] prefix.
@@ -618,9 +621,9 @@ and typ_row =
     The [op] keyword removes the infix status of an identifier,
     allowing it to be used as a regular prefix identifier. *)
 and with_op =
-  | WithOp of idx
+  | WithOp of idx node
       (** Identifier with [op] prefix: [op id]. *)
-  | WithoutOp of idx
+  | WithoutOp of idx node
       (** Plain identifier without [op] prefix. *)
 
 (** {2 Patterns}
@@ -639,28 +642,28 @@ and with_op =
           | [op] id [: typ] as pat            (* layered *)
     ]} *)
 and pat =
-  | PatCon of con
+  | PatCon of con node
       (** Constant pattern: matches a specific constant value. *)
   | PatWildcard
       (** Wildcard pattern: [_]. Matches any value without binding. *)
-  | PatIdx of with_op
+  | PatIdx of with_op node
       (** Variable or nullary constructor pattern: [\[op\] id]. *)
-  | PatApp of with_op * pat
+  | PatApp of with_op node * pat node
       (** Constructor application pattern: [\[op\] longid pat]. *)
-  | PatInfix of pat * idx * pat
+  | PatInfix of pat node * idx node * pat node
       (** Infix constructor pattern: [pat1 id pat2].
           The identifier must be an infix constructor (e.g., [::]). *)
-  | PatParen of pat
+  | PatParen of pat node
       (** Parenthesized pattern: [( pat )]. *)
-  | PatTuple of pat list
+  | PatTuple of pat node list
       (** Tuple pattern: [( pat1 , ... , patn )] where n != 1. *)
-  | PatRecord of pat_row list
+  | PatRecord of pat_row node list
       (** Record pattern: [{ patrow }]. *)
-  | PatList of pat list
+  | PatList of pat node list
       (** List pattern: [\[ pat1 , ... , patn \]] where n >= 0. *)
-  | PatTyp of pat * typ
+  | PatTyp of pat node * typ node
       (** Type-annotated pattern: [pat : typ]. *)
-  | PatAs of with_op * typ option * pat
+  | PatAs of with_op node * typ node option * pat node
       (** Layered (as) pattern: [\[op\] id \[: typ\] as pat].
           Binds the identifier to the entire matched value while also
           matching the inner pattern. *)
@@ -675,9 +678,9 @@ and pat =
 and pat_row =
   | PatRowPoly
       (** Wildcard row: [...]. Matches remaining record fields. *)
-  | PatRowSimple of idx * pat * pat_row
+  | PatRowSimple of idx node * pat node * pat_row node
       (** Pattern row: [lab = pat]. Matches a specific field. *)
-  | PatRowVar of idx * typ option * idx option * pat_row option
+  | PatRowVar of idx node * typ node option * idx node option * pat_row node option
       (** Variable row: [id \[: typ\] \[as pat\]].
           Shorthand where the label equals the variable name. *)
 
@@ -685,8 +688,8 @@ and pat_row =
 
 
 type cm_filetype = CM_CM | CM_Sig | CM_Sml | CM_Fun
-type cm_file = { 
+type cm_file = {
 
-    cm_header : string ; 
+    cm_header : string ;
     cm_sources : (string * cm_filetype) list
 }

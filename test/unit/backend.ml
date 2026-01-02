@@ -1,6 +1,24 @@
 open Alcotest
-open Backend
 open Ast
+
+(** Helper for box_node *)
+let b = Ast.box_node
+
+(** Test configuration *)
+module TestConfig : Common.CONFIG = struct
+  let config = {
+    Common.input_file = "";
+    output_file = None;
+    verbosity = None;
+    guess_names = true;
+    curry_functions = true;
+    no_comments = false;
+  }
+end
+
+(** Instantiate Backend with test config *)
+module TestBackend = Backend.Make(TestConfig)
+open TestBackend
 
 (** Helper functions for converting to strings *)
 
@@ -59,7 +77,7 @@ let parsetree_constant : Parsetree.constant testable =
 (** Test cases for process_con *)
 
 let test_process_con_int_positive () =
-  let input = ConInt "42" in
+  let input = ConInt (b "42") in
   let result = process_con input in
   check parsetree_constant "positive integer constant"
     (Pconst_integer ("42", None))
@@ -67,56 +85,56 @@ let test_process_con_int_positive () =
 
 let test_process_con_int_negative () =
   (* SML uses ~ for negation *)
-  let input = ConInt "~42" in
+  let input = ConInt (b "~42") in
   let result = process_con input in
   check parsetree_constant "negative integer constant (~ converted to -)"
     (Pconst_integer ("-42", None))
     result
 
 let test_process_con_int_hex () =
-  let input = ConInt "0xFF" in
+  let input = ConInt (b "0xFF") in
   let result = process_con input in
   check parsetree_constant "hexadecimal integer constant"
     (Pconst_integer ("0xFF", None))
     result
 
 let test_process_con_word_decimal () =
-  let input = ConWord "0w42" in
+  let input = ConWord (b "0w42") in
   let result = process_con input in
   check parsetree_constant "word constant (decimal)"
     (Pconst_integer ("42", None))
     result
 
 let test_process_con_word_hex () =
-  let input = ConWord "0wx2A" in
+  let input = ConWord (b "0wx2A") in
   let result = process_con input in
   check parsetree_constant "word constant (hexadecimal)"
     (Pconst_integer ("0x2A", None))
     result
 
 let test_process_con_float_positive () =
-  let input = ConFloat "3.14" in
+  let input = ConFloat (b "3.14") in
   let result = process_con input in
   check parsetree_constant "positive float constant"
     (Pconst_float ("3.14", None))
     result
 
 let test_process_con_float_negative () =
-  let input = ConFloat "~2.718" in
+  let input = ConFloat (b "~2.718") in
   let result = process_con input in
   check parsetree_constant "negative float constant (~ converted to -)"
     (Pconst_float ("-2.718", None))
     result
 
 let test_process_con_char () =
-  let input = ConChar "a" in
+  let input = ConChar (b "a") in
   let result = process_con input in
   check parsetree_constant "character constant"
     (Pconst_char 'a')
     result
 
 let test_process_con_string () =
-  let input = ConString "hello" in
+  let input = ConString (b "hello") in
   let result = process_con input in
   match result with
   | Pconst_string (s, _, _) -> check string "string constant" "hello" s
@@ -125,7 +143,7 @@ let test_process_con_string () =
 (** Test cases for process_type_value *)
 
 let test_process_type_var () =
-  let input = TypVar (IdxVar "a") in
+  let input = TypVar (b (IdxVar (b "a"))) in
   let result = process_type_value input in
   let expected_str = "'a" in
   check string "type variable 'a"
@@ -133,7 +151,7 @@ let test_process_type_var () =
     (core_type_to_string result)
 
 let test_process_type_var_equality () =
-  let input = TypVar (IdxVar "'eq") in
+  let input = TypVar (b (IdxVar (b "'eq"))) in
   let result = process_type_value input in
   let expected_str = "''eq" in
   check string "equality type variable ''eq"
@@ -141,14 +159,14 @@ let test_process_type_var_equality () =
     (core_type_to_string result)
 
 let test_process_type_con_int () =
-  let input = TypCon ([], IdxIdx "int") in
+  let input = TypCon ([], b (IdxIdx (b "int"))) in
   let result = process_type_value input in
   check string "simple type constructor 'int'"
     "int"
     (core_type_to_string result)
 
 let test_process_type_con_list () =
-  let input = TypCon ([TypVar (IdxVar "a")], IdxIdx "list") in
+  let input = TypCon ([b (TypVar (b (IdxVar (b "a"))))], b (IdxIdx (b "list"))) in
   let result = process_type_value input in
   (* OCaml renders this as 'a list *)
   check (bool) "type constructor with single arg"
@@ -157,8 +175,8 @@ let test_process_type_con_list () =
 
 let test_process_type_con_either () =
   let input = TypCon (
-    [TypVar (IdxVar "a"); TypVar (IdxVar "b")],
-    IdxIdx "either"
+    [b (TypVar (b (IdxVar (b "a")))); b (TypVar (b (IdxVar (b "b"))))],
+    b (IdxIdx (b "either"))
   ) in
   let result = process_type_value input in
   check (bool) "type constructor with multiple args"
@@ -166,7 +184,7 @@ let test_process_type_con_either () =
     (String.length (core_type_to_string result) > 0)
 
 let test_process_type_par () =
-  let input = TypPar (TypVar (IdxVar "a")) in
+  let input = TypPar (b (TypVar (b (IdxVar (b "a"))))) in
   let result = process_type_value input in
   let expected_str = "'a" in
   check string "parenthesized type"
@@ -175,8 +193,8 @@ let test_process_type_par () =
 
 let test_process_type_fun () =
   let input = TypFun (
-    TypVar (IdxVar "a"),
-    TypVar (IdxVar "b")
+    b (TypVar (b (IdxVar (b "a")))),
+    b (TypVar (b (IdxVar (b "b"))))
   ) in
   let result = process_type_value input in
   let result_str = core_type_to_string result in
@@ -186,8 +204,8 @@ let test_process_type_fun () =
 
 let test_process_type_fun_nested () =
   let input = TypFun (
-    TypVar (IdxVar "a"),
-    TypFun (TypVar (IdxVar "b"), TypVar (IdxVar "c"))
+    b (TypVar (b (IdxVar (b "a")))),
+    b (TypFun (b (TypVar (b (IdxVar (b "b")))), b (TypVar (b (IdxVar (b "c"))))))
   ) in
   let result = process_type_value input in
   check (bool) "nested function type"
@@ -196,8 +214,8 @@ let test_process_type_fun_nested () =
 
 let test_process_type_tuple () =
   let input = TypTuple [
-    TypVar (IdxVar "a");
-    TypVar (IdxVar "b");
+    b (TypVar (b (IdxVar (b "a"))));
+    b (TypVar (b (IdxVar (b "b"))));
   ] in
   let result = process_type_value input in
   let result_str = core_type_to_string result in
@@ -207,9 +225,9 @@ let test_process_type_tuple () =
 
 let test_process_type_tuple_three () =
   let input = TypTuple [
-    TypVar (IdxVar "a");
-    TypVar (IdxVar "b");
-    TypVar (IdxVar "c");
+    b (TypVar (b (IdxVar (b "a"))));
+    b (TypVar (b (IdxVar (b "b"))));
+    b (TypVar (b (IdxVar (b "c"))));
   ] in
   let result = process_type_value input in
   check (bool) "three-element tuple type"
@@ -218,7 +236,7 @@ let test_process_type_tuple_three () =
 
 let test_process_type_record_single () =
   let input = TypRecord [
-    TypRow (IdxLab "name", TypCon ([], IdxIdx "string"), None)
+    b (TypRow (b (IdxLab (b "name")), b (TypCon ([], b (IdxIdx (b "string")))), None))
   ] in
   let result = process_type_value input in
   let result_str = core_type_to_string result in
@@ -228,11 +246,11 @@ let test_process_type_record_single () =
 
 let test_process_type_record_multiple () =
   let input = TypRecord [
-    TypRow (
-      IdxLab "name",
-      TypCon ([], IdxIdx "string"),
-      Some (TypRow (IdxLab "age", TypCon ([], IdxIdx "int"), None))
-    )
+    b (TypRow (
+      b (IdxLab (b "name")),
+      b (TypCon ([], b (IdxIdx (b "string")))),
+      Some (b (TypRow (b (IdxLab (b "age")), b (TypCon ([], b (IdxIdx (b "int")))), None)))
+    ))
   ] in
   let result = process_type_value input in
   check (bool) "record type with multiple fields"
@@ -242,7 +260,7 @@ let test_process_type_record_multiple () =
 (** Test cases for process_object_field_type *)
 
 let test_process_object_field_simple () =
-  let input = TypRow (IdxLab "x", TypCon ([], IdxIdx "int"), None) in
+  let input = TypRow (b (IdxLab (b "x")), b (TypCon ([], b (IdxIdx (b "int")))), None) in
   let result = process_object_field_type input in
   check (int) "single object field"
     1
@@ -250,9 +268,9 @@ let test_process_object_field_simple () =
 
 let test_process_object_field_multiple () =
   let input = TypRow (
-    IdxLab "x",
-    TypCon ([], IdxIdx "int"),
-    Some (TypRow (IdxLab "y", TypCon ([], IdxIdx "string"), None))
+    b (IdxLab (b "x")),
+    b (TypCon ([], b (IdxIdx (b "int")))),
+    Some (b (TypRow (b (IdxLab (b "y")), b (TypCon ([], b (IdxIdx (b "string")))), None)))
   ) in
   let result = process_object_field_type input in
   check (int) "multiple object fields"
@@ -262,7 +280,7 @@ let test_process_object_field_multiple () =
 (** Test cases for process_type (wrapper) *)
 
 let test_process_type_wrapper () =
-  let input = TypVar (IdxVar "t") in
+  let input = TypVar (b (IdxVar (b "t"))) in
   let result = process_type input in
   let result_str = core_type_to_string result in
   check string "process_type wrapper"
@@ -272,7 +290,7 @@ let test_process_type_wrapper () =
 (** Test cases for process_exp *)
 
 let test_process_exp_idx () =
-  let input = ExpIdx (IdxIdx "x") in
+  let input = ExpIdx (b (IdxIdx (b "x"))) in
   let result = process_exp input in
   let result_str = expression_to_string result in
   check (bool) "expression from identifier"
@@ -281,8 +299,8 @@ let test_process_exp_idx () =
 
 let test_process_exp_app () =
   let input = ExpApp (
-    ExpIdx (IdxIdx "f"),
-    ExpIdx (IdxIdx "x")
+    b (ExpIdx (b (IdxIdx (b "f")))),
+    b (ExpIdx (b (IdxIdx (b "x"))))
   ) in
   let result = process_exp input in
   check (bool) "function application expression"
@@ -291,9 +309,9 @@ let test_process_exp_app () =
 
 let test_process_exp_infix () =
   let input = InfixApp (
-    ExpIdx (IdxIdx "x"),
-    IdxIdx "+",
-    ExpIdx (IdxIdx "y")
+    b (ExpIdx (b (IdxIdx (b "x")))),
+    b (IdxIdx (b "+")),
+    b (ExpIdx (b (IdxIdx (b "y"))))
   ) in
   let result = process_exp input in
   let result_str = expression_to_string result in
@@ -302,7 +320,7 @@ let test_process_exp_infix () =
     (String.length result_str > 0)
 
 let test_process_exp_constant () =
-  let input = ExpCon (ConInt "42") in
+  let input = ExpCon (b (ConInt (b "42"))) in
   let result = process_exp input in
   let result_str = expression_to_string result in
   check (bool) "constant expression"
@@ -319,8 +337,8 @@ let test_process_exp_tuple_empty () =
 
 let test_process_exp_tuple () =
   let input = TupleExp [
-    ExpCon (ConInt "1");
-    ExpCon (ConInt "2");
+    b (ExpCon (b (ConInt (b "1"))));
+    b (ExpCon (b (ConInt (b "2"))));
   ] in
   let result = process_exp input in
   let result_str = expression_to_string result in
@@ -330,7 +348,7 @@ let test_process_exp_tuple () =
 
 let test_process_exp_record () =
   let input = RecordExp [
-    Row (IdxLab "x", ExpCon (ConInt "1"), None);
+    b (Row (b (IdxLab (b "x")), b (ExpCon (b (ConInt (b "1")))), None));
   ] in
   let result = process_exp input in
   let result_str = expression_to_string result in
@@ -339,7 +357,7 @@ let test_process_exp_record () =
     (String.contains result_str 'x')
 
 let test_process_exp_record_selector () =
-  let input = RecordSelector (IdxLab "name") in
+  let input = RecordSelector (b (IdxLab (b "name"))) in
   let result = process_exp input in
   let result_str = expression_to_string result in
   check (bool) "record selector (#label)"
@@ -356,9 +374,9 @@ let test_process_exp_list_empty () =
 
 let test_process_exp_list () =
   let input = ListExp [
-    ExpCon (ConInt "1");
-    ExpCon (ConInt "2");
-    ExpCon (ConInt "3");
+    b (ExpCon (b (ConInt (b "1"))));
+    b (ExpCon (b (ConInt (b "2"))));
+    b (ExpCon (b (ConInt (b "3"))));
   ] in
   let result = process_exp input in
   let result_str = expression_to_string result in
@@ -368,8 +386,8 @@ let test_process_exp_list () =
 
 let test_process_exp_seq () =
   let input = SeqExp [
-    ExpCon (ConInt "1");
-    ExpCon (ConInt "2");
+    b (ExpCon (b (ConInt (b "1"))));
+    b (ExpCon (b (ConInt (b "2"))));
   ] in
   let result = process_exp input in
   let result_str = expression_to_string result in
@@ -379,8 +397,8 @@ let test_process_exp_seq () =
 
 let test_process_exp_let () =
   let input = LetExp (
-    [ValDec ([], ValBind (PatIdx (WithoutOp (IdxIdx "x")), ExpCon (ConInt "42"), None))],
-    [ExpIdx (IdxIdx "x")]
+    [b (ValDec ([], b (ValBind (b (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))), b (ExpCon (b (ConInt (b "42")))), None))))],
+    [b (ExpIdx (b (IdxIdx (b "x"))))]
   ) in
   let result = process_exp input in
   let result_str = expression_to_string result in
@@ -390,8 +408,8 @@ let test_process_exp_let () =
 
 let test_process_exp_typed () =
   let input = TypedExp (
-    ExpCon (ConInt "42"),
-    TypCon ([], IdxIdx "int")
+    b (ExpCon (b (ConInt (b "42")))),
+    b (TypCon ([], b (IdxIdx (b "int"))))
   ) in
   let result = process_exp input in
   let result_str = expression_to_string result in
@@ -400,7 +418,7 @@ let test_process_exp_typed () =
     (String.length result_str > 0)
 
 let test_process_exp_raise () =
-  let input = RaiseExp (ExpIdx (IdxIdx "Fail")) in
+  let input = RaiseExp (b (ExpIdx (b (IdxIdx (b "Fail"))))) in
   let result = process_exp input in
   let result_str = expression_to_string result in
   check (bool) "raise expression"
@@ -409,8 +427,8 @@ let test_process_exp_raise () =
 
 let test_process_exp_and () =
   let input = AndExp (
-    ExpIdx (IdxIdx "x"),
-    ExpIdx (IdxIdx "y")
+    b (ExpIdx (b (IdxIdx (b "x")))),
+    b (ExpIdx (b (IdxIdx (b "y"))))
   ) in
   let result = process_exp input in
   let result_str = expression_to_string result in
@@ -420,8 +438,8 @@ let test_process_exp_and () =
 
 let test_process_exp_or () =
   let input = OrExp (
-    ExpIdx (IdxIdx "x"),
-    ExpIdx (IdxIdx "y")
+    b (ExpIdx (b (IdxIdx (b "x")))),
+    b (ExpIdx (b (IdxIdx (b "y"))))
   ) in
   let result = process_exp input in
   let result_str = expression_to_string result in
@@ -431,9 +449,9 @@ let test_process_exp_or () =
 
 let test_process_exp_if () =
   let input = IfExp (
-    ExpIdx (IdxIdx "cond"),
-    ExpCon (ConInt "1"),
-    ExpCon (ConInt "2")
+    b (ExpIdx (b (IdxIdx (b "cond")))),
+    b (ExpCon (b (ConInt (b "1")))),
+    b (ExpCon (b (ConInt (b "2"))))
   ) in
   let result = process_exp input in
   let result_str = expression_to_string result in
@@ -443,8 +461,8 @@ let test_process_exp_if () =
 
 let test_process_exp_while () =
   let input = WhileExp (
-    ExpIdx (IdxIdx "cond"),
-    ExpIdx (IdxIdx "body")
+    b (ExpIdx (b (IdxIdx (b "cond")))),
+    b (ExpIdx (b (IdxIdx (b "body"))))
   ) in
   let result = process_exp input in
   let result_str = expression_to_string result in
@@ -454,8 +472,8 @@ let test_process_exp_while () =
 
 let test_process_exp_case () =
   let input = CaseExp (
-    ExpIdx (IdxIdx "x"),
-    Case (PatWildcard, ExpCon (ConInt "0"), None)
+    b (ExpIdx (b (IdxIdx (b "x")))),
+    b (Case (b PatWildcard, b (ExpCon (b (ConInt (b "0")))), None))
   ) in
   let result = process_exp input in
   let result_str = expression_to_string result in
@@ -465,7 +483,7 @@ let test_process_exp_case () =
 
 let test_process_exp_fn () =
   let input = FnExp (
-    Case (PatIdx (WithoutOp (IdxIdx "x")), ExpIdx (IdxIdx "x"), None)
+    b (Case (b (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))), b (ExpIdx (b (IdxIdx (b "x")))), None))
   ) in
   let result = process_exp input in
   let result_str = expression_to_string result in
@@ -476,7 +494,7 @@ let test_process_exp_fn () =
 (** Test cases for process_pat *)
 
 let test_process_pat_constant () =
-  let input = PatCon (ConInt "42") in
+  let input = PatCon (b (ConInt (b "42"))) in
   let result = process_pat input in
   let result_str = pattern_to_string result in
   check (bool) "constant pattern"
@@ -492,7 +510,7 @@ let test_process_pat_wildcard () =
     (String.contains result_str '_')
 
 let test_process_pat_variable () =
-  let input = PatIdx (WithoutOp (IdxIdx "x")) in
+  let input = PatIdx (b (WithoutOp (b (IdxIdx (b "x"))))) in
   let result = process_pat input in
   let result_str = pattern_to_string result in
   check (bool) "variable pattern"
@@ -500,7 +518,7 @@ let test_process_pat_variable () =
     (String.contains result_str 'x')
 
 let test_process_pat_constructor_nullary () =
-  let input = PatIdx (WithoutOp (IdxIdx "NONE")) in
+  let input = PatIdx (b (WithoutOp (b (IdxIdx (b "NONE"))))) in
   let result = process_pat ~is_head:true input in
   let result_str = pattern_to_string result in
   check (bool) "nullary constructor pattern"
@@ -509,8 +527,8 @@ let test_process_pat_constructor_nullary () =
 
 let test_process_pat_constructor_with_arg () =
   let input = PatApp (
-    WithoutOp (IdxIdx "SOME"),
-    PatIdx (WithoutOp (IdxIdx "x"))
+    b (WithoutOp (b (IdxIdx (b "SOME")))),
+    b (PatIdx (b (WithoutOp (b (IdxIdx (b "x"))))))
   ) in
   let result = process_pat input in
   let result_str = pattern_to_string result in
@@ -520,9 +538,9 @@ let test_process_pat_constructor_with_arg () =
 
 let test_process_pat_infix_cons () =
   let input = PatInfix (
-    PatIdx (WithoutOp (IdxIdx "x")),
-    IdxIdx "::",
-    PatIdx (WithoutOp (IdxIdx "xs"))
+    b (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))),
+    b (IdxIdx (b "::")),
+    b (PatIdx (b (WithoutOp (b (IdxIdx (b "xs"))))))
   ) in
   let result = process_pat input in
   let result_str = pattern_to_string result in
@@ -540,8 +558,8 @@ let test_process_pat_tuple_empty () =
 
 let test_process_pat_tuple () =
   let input = PatTuple [
-    PatIdx (WithoutOp (IdxIdx "x"));
-    PatIdx (WithoutOp (IdxIdx "y"));
+    b (PatIdx (b (WithoutOp (b (IdxIdx (b "x"))))));
+    b (PatIdx (b (WithoutOp (b (IdxIdx (b "y"))))));
   ] in
   let result = process_pat input in
   let result_str = pattern_to_string result in
@@ -551,7 +569,7 @@ let test_process_pat_tuple () =
 
 let test_process_pat_record () =
   let input = PatRecord [
-    PatRowSimple (IdxLab "x", PatIdx (WithoutOp (IdxIdx "px")), PatRowPoly);
+    b (PatRowSimple (b (IdxLab (b "x")), b (PatIdx (b (WithoutOp (b (IdxIdx (b "px")))))), b PatRowPoly));
   ] in
   let result = process_pat input in
   let result_str = pattern_to_string result in
@@ -561,7 +579,7 @@ let test_process_pat_record () =
 
 let test_process_pat_record_var_shorthand () =
   let input = PatRecord [
-    PatRowVar (IdxLab "x", None, None, None);
+    b (PatRowVar (b (IdxLab (b "x")), None, None, None));
   ] in
   let result = process_pat input in
   let result_str = pattern_to_string result in
@@ -579,8 +597,8 @@ let test_process_pat_list_empty () =
 
 let test_process_pat_list () =
   let input = PatList [
-    PatIdx (WithoutOp (IdxIdx "x"));
-    PatIdx (WithoutOp (IdxIdx "y"));
+    b (PatIdx (b (WithoutOp (b (IdxIdx (b "x"))))));
+    b (PatIdx (b (WithoutOp (b (IdxIdx (b "y"))))));
   ] in
   let result = process_pat input in
   let result_str = pattern_to_string result in
@@ -590,8 +608,8 @@ let test_process_pat_list () =
 
 let test_process_pat_typed () =
   let input = PatTyp (
-    PatIdx (WithoutOp (IdxIdx "x")),
-    TypCon ([], IdxIdx "int")
+    b (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))),
+    b (TypCon ([], b (IdxIdx (b "int"))))
   ) in
   let result = process_pat input in
   let result_str = pattern_to_string result in
@@ -601,13 +619,13 @@ let test_process_pat_typed () =
 
 let test_process_pat_as () =
   let input = PatAs (
-    WithoutOp (IdxIdx "xs"),
+    b (WithoutOp (b (IdxIdx (b "xs")))),
     None,
-    PatInfix (
-      PatIdx (WithoutOp (IdxIdx "x")),
-      IdxIdx "::",
-      PatIdx (WithoutOp (IdxIdx "rest"))
-    )
+    b (PatInfix (
+      b (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))),
+      b (IdxIdx (b "::")),
+      b (PatIdx (b (WithoutOp (b (IdxIdx (b "rest"))))))
+    ))
   ) in
   let result = process_pat input in
   let result_str = pattern_to_string result in
@@ -619,8 +637,8 @@ let test_process_pat_as () =
 
 let test_process_val_bind_simple () =
   let input = ValBind (
-    PatIdx (WithoutOp (IdxIdx "x")),
-    ExpCon (ConInt "42"),
+    b (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))),
+    b (ExpCon (b (ConInt (b "42")))),
     None
   ) in
   let result = process_val_bind input in
@@ -630,13 +648,13 @@ let test_process_val_bind_simple () =
 
 let test_process_val_bind_multiple () =
   let input = ValBind (
-    PatIdx (WithoutOp (IdxIdx "x")),
-    ExpCon (ConInt "1"),
-    Some (ValBind (
-      PatIdx (WithoutOp (IdxIdx "y")),
-      ExpCon (ConInt "2"),
+    b (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))),
+    b (ExpCon (b (ConInt (b "1")))),
+    Some (b (ValBind (
+      b (PatIdx (b (WithoutOp (b (IdxIdx (b "y")))))),
+      b (ExpCon (b (ConInt (b "2")))),
       None
-    ))
+    )))
   ) in
   let result = process_val_bind input in
   check (int) "multiple value bindings (and)"
@@ -647,13 +665,13 @@ let test_process_val_bind_multiple () =
 
 let test_process_fun_bind_simple () =
   let input = FunBind (
-    FunMatchPrefix (
-      WithoutOp (IdxIdx "f"),
-      [PatIdx (WithoutOp (IdxIdx "x"))],
+    b (FunMatchPrefix (
+      b (WithoutOp (b (IdxIdx (b "f")))),
+      [b (PatIdx (b (WithoutOp (b (IdxIdx (b "x"))))))],
       None,
-      ExpIdx (IdxIdx "x"),
+      b (ExpIdx (b (IdxIdx (b "x")))),
       None
-    ),
+    )),
     None
   ) in
   let result = process_fun_bind input in
@@ -663,19 +681,19 @@ let test_process_fun_bind_simple () =
 
 let test_process_fun_bind_pattern_match () =
   let input = FunBind (
-    FunMatchPrefix (
-      WithoutOp (IdxIdx "factorial"),
-      [PatCon (ConInt "0")],
+    b (FunMatchPrefix (
+      b (WithoutOp (b (IdxIdx (b "factorial")))),
+      [b (PatCon (b (ConInt (b "0"))))],
       None,
-      ExpCon (ConInt "1"),
-      Some (FunMatchPrefix (
-        WithoutOp (IdxIdx "factorial"),
-        [PatIdx (WithoutOp (IdxIdx "n"))],
+      b (ExpCon (b (ConInt (b "1")))),
+      Some (b (FunMatchPrefix (
+        b (WithoutOp (b (IdxIdx (b "factorial")))),
+        [b (PatIdx (b (WithoutOp (b (IdxIdx (b "n"))))))],
         None,
-        ExpIdx (IdxIdx "n"),
+        b (ExpIdx (b (IdxIdx (b "n")))),
         None
-      ))
-    ),
+      )))
+    )),
     None
   ) in
   let result = process_fun_bind input in
@@ -688,8 +706,8 @@ let test_process_fun_bind_pattern_match () =
 let test_process_typ_bind_simple () =
   let input = TypBind (
     [],
-    IdxIdx "myint",
-    TypCon ([], IdxIdx "int"),
+    b (IdxIdx (b "myint")),
+    b (TypCon ([], b (IdxIdx (b "int")))),
     None
   ) in
   let result = process_typ_bind input in
@@ -699,9 +717,9 @@ let test_process_typ_bind_simple () =
 
 let test_process_typ_bind_parametric () =
   let input = TypBind (
-    [IdxVar "a"],
-    IdxIdx "pair",
-    TypTuple [TypVar (IdxVar "a"); TypVar (IdxVar "a")],
+    [b (IdxVar (b "a"))],
+    b (IdxIdx (b "pair")),
+    b (TypTuple [b (TypVar (b (IdxVar (b "a")))); b (TypVar (b (IdxVar (b "a"))))]),
     None
   ) in
   let result = process_typ_bind input in
@@ -714,8 +732,8 @@ let test_process_typ_bind_parametric () =
 let test_process_dat_bind_simple () =
   let input = DatBind (
     [],
-    IdxIdx "bool",
-    ConBind (IdxIdx "True", None, Some (ConBind (IdxIdx "False", None, None))),
+    b (IdxIdx (b "bool")),
+    b (ConBind (b (IdxIdx (b "True")), None, Some (b (ConBind (b (IdxIdx (b "False")), None, None))))),
     None
   ) in
   let result = process_dat_bind input in
@@ -725,17 +743,17 @@ let test_process_dat_bind_simple () =
 
 let test_process_dat_bind_option () =
   let input = DatBind (
-    [IdxVar "a"],
-    IdxIdx "option",
-    ConBind (
-      IdxIdx "NONE",
+    [b (IdxVar (b "a"))],
+    b (IdxIdx (b "option")),
+    b (ConBind (
+      b (IdxIdx (b "NONE")),
       None,
-      Some (ConBind (
-        IdxIdx "SOME",
-        Some (TypVar (IdxVar "a")),
+      Some (b (ConBind (
+        b (IdxIdx (b "SOME")),
+        Some (b (TypVar (b (IdxVar (b "a"))))),
         None
-      ))
-    ),
+      )))
+    )),
     None
   ) in
   let result = process_dat_bind input in
@@ -747,7 +765,7 @@ let test_process_dat_bind_option () =
 
 let test_process_exn_bind_simple () =
   let input = ExnBind (
-    IdxIdx "Overflow",
+    b (IdxIdx (b "Overflow")),
     None,
     None
   ) in
@@ -758,8 +776,8 @@ let test_process_exn_bind_simple () =
 
 let test_process_exn_bind_with_arg () =
   let input = ExnBind (
-    IdxIdx "Fail",
-    Some (TypCon ([], IdxIdx "string")),
+    b (IdxIdx (b "Fail")),
+    Some (b (TypCon ([], b (IdxIdx (b "string"))))),
     None
   ) in
   let result = process_exn_bind input in
@@ -770,52 +788,52 @@ let test_process_exn_bind_with_arg () =
 (** Test cases for process_prog *)
 
 let test_process_prog_simple_val () =
-  let input = ProgDec (
-    ValDec ([], ValBind (
-      PatIdx (WithoutOp (IdxIdx "x")),
-      ExpCon (ConInt "42"),
+  let input = ProgDec (b (
+    ValDec ([], b (ValBind (
+      b (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))),
+      b (ExpCon (b (ConInt (b "42")))),
       None
-    ))
-  ) in
+    )))
+  )) in
   let result = process_prog input in
   check (int) "simple program with value declaration"
     1
     (List.length result)
 
 let test_process_prog_fun () =
-  let input = ProgDec (
-    FunDec (FunBind (
-      FunMatchPrefix (
-        WithoutOp (IdxIdx "id"),
-        [PatIdx (WithoutOp (IdxIdx "x"))],
+  let input = ProgDec (b (
+    FunDec (b (FunBind (
+      b (FunMatchPrefix (
+        b (WithoutOp (b (IdxIdx (b "id")))),
+        [b (PatIdx (b (WithoutOp (b (IdxIdx (b "x"))))))],
         None,
-        ExpIdx (IdxIdx "x"),
+        b (ExpIdx (b (IdxIdx (b "x")))),
         None
-      ),
+      )),
       None
-    ))
-  ) in
+    )))
+  )) in
   let result = process_prog input in
   check (int) "program with function declaration"
     1
     (List.length result)
 
 let test_process_prog_datatype () =
-  let input = ProgDec (
+  let input = ProgDec (b (
     DatDec (
-      DatBind (
+      b (DatBind (
         [],
-        IdxIdx "color",
-        ConBind (
-          IdxIdx "Red",
+        b (IdxIdx (b "color")),
+        b (ConBind (
+          b (IdxIdx (b "Red")),
           None,
-          Some (ConBind (IdxIdx "Green", None, Some (ConBind (IdxIdx "Blue", None, None))))
-        ),
+          Some (b (ConBind (b (IdxIdx (b "Green")), None, Some (b (ConBind (b (IdxIdx (b "Blue")), None, None))))))
+        )),
         None
-      ),
+      )),
       None
     )
-  ) in
+  )) in
   let result = process_prog input in
   check (int) "program with datatype declaration"
     1
@@ -823,8 +841,8 @@ let test_process_prog_datatype () =
 
 let test_process_prog_sequence () =
   let input = ProgSeq (
-    ProgDec (ValDec ([], ValBind (PatIdx (WithoutOp (IdxIdx "x")), ExpCon (ConInt "1"), None))),
-    ProgDec (ValDec ([], ValBind (PatIdx (WithoutOp (IdxIdx "y")), ExpCon (ConInt "2"), None)))
+    b (ProgDec (b (ValDec ([], b (ValBind (b (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))), b (ExpCon (b (ConInt (b "1")))), None)))))),
+    b (ProgDec (b (ValDec ([], b (ValBind (b (PatIdx (b (WithoutOp (b (IdxIdx (b "y")))))), b (ExpCon (b (ConInt (b "2")))), None))))))
   ) in
   let result = process_prog input in
   check (int) "program with sequential declarations"
@@ -836,8 +854,8 @@ let test_process_prog_sequence () =
 let test_process_complex_function_type () =
   (* (int * string) -> bool *)
   let input = TypFun (
-    TypTuple [TypCon ([], IdxIdx "int"); TypCon ([], IdxIdx "string")],
-    TypCon ([], IdxIdx "bool")
+    b (TypTuple [b (TypCon ([], b (IdxIdx (b "int")))); b (TypCon ([], b (IdxIdx (b "string"))))]),
+    b (TypCon ([], b (IdxIdx (b "bool"))))
   ) in
   let result = process_type_value input in
   check (bool) "complex function type"
@@ -847,8 +865,8 @@ let test_process_complex_function_type () =
 let test_process_list_type () =
   (* 'a list -> int list *)
   let input = TypFun (
-    TypCon ([TypVar (IdxVar "a")], IdxIdx "list"),
-    TypCon ([TypCon ([], IdxIdx "int")], IdxIdx "list")
+    b (TypCon ([b (TypVar (b (IdxVar (b "a"))))], b (IdxIdx (b "list")))),
+    b (TypCon ([b (TypCon ([], b (IdxIdx (b "int"))))], b (IdxIdx (b "list"))))
   ) in
   let result = process_type_value input in
   check (bool) "list type transformation"
@@ -858,11 +876,11 @@ let test_process_list_type () =
 let test_process_higher_order_function () =
   (* ('a -> 'b) -> 'a list -> 'b list *)
   let input = TypFun (
-    TypFun (TypVar (IdxVar "a"), TypVar (IdxVar "b")),
-    TypFun (
-      TypCon ([TypVar (IdxVar "a")], IdxIdx "list"),
-      TypCon ([TypVar (IdxVar "b")], IdxIdx "list")
-    )
+    b (TypFun (b (TypVar (b (IdxVar (b "a")))), b (TypVar (b (IdxVar (b "b")))))),
+    b (TypFun (
+      b (TypCon ([b (TypVar (b (IdxVar (b "a"))))], b (IdxIdx (b "list")))),
+      b (TypCon ([b (TypVar (b (IdxVar (b "b"))))], b (IdxIdx (b "list"))))
+    ))
   ) in
   let result = process_type_value input in
   check (bool) "higher-order function type"
