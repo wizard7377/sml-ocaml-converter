@@ -22,7 +22,7 @@ open Process_names
 include Helpers
 open Common 
 module Make(Config : CONFIG) = struct 
-  type res = Parsetree.toplevel_phrase 
+  type res = Parsetree.toplevel_phrase list 
   
   module Config = Config
   module Names = Process_names.Make(Config)
@@ -35,9 +35,9 @@ let ghost (v : 'a) : 'a Location.loc = Location.mkloc v Location.none
 (** Main entry point for converting a complete SML program.
 
     @param prog The SML program to convert
-    @return The converted OCaml representation
-    @raise Assert_failure Currently unimplemented *)
-let process_sml ~(prog:Ast.prog): res = assert false
+    @return The converted OCaml representation as toplevel phrases
+
+    This is implemented after {!process_prog} in the mutually recursive chain. *)
 
 (** {2 Type Processing}
 
@@ -73,7 +73,8 @@ let rec process_type_value (ty : Ast.typ) : Parsetree.core_type = match ty with
   | TypCon (args, head) -> let
     head' = Names.process_name ~context:ValueType head.value in
     let args' = List.map (fun arg -> process_type_value arg.Ast.value) args in
-    Builder.ptyp_constr (ghost (Names.process_longid head')) args'
+    Builder.ptyp_constr (ghost (Names.process_longid head')) args' 
+  
   | TypPar ty -> process_type_value ty.value
   | TypFun (ty1, ty2) -> let ty1', ty2' = process_type_value ty1.value, process_type_value ty2.value in
     Builder.ptyp_arrow Nolabel ty1' ty2'
@@ -1345,6 +1346,12 @@ and process_sign_bind (sb : Ast.sign_bind) : Parsetree.module_type_declaration l
         | Some r -> process_sign_bind r.value
       in
       mtdecl :: rest
+
+(** Main entry point for converting a complete SML program.
+    Wraps the converted structure in a toplevel phrase for output. *)
+and process_sml ~(prog:Ast.prog): res =
+  let structure = process_prog prog in
+  [Parsetree.Ptop_def structure]
 
 let%test_unit "process basic type" = (let _ = process_type (Ast.TypVar (Ast.box_node (Ast.IdxVar (Ast.box_node "a")))) in ())
 

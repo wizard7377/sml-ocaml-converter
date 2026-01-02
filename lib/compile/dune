@@ -1,4 +1,3 @@
-(library 
+(library
  (name compile)
- (libraries ast)
-)
+ (libraries ast))

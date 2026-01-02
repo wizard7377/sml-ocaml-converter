@@ -8,7 +8,11 @@ class process_file cfg_init =
     val mutable cfg = cfg_init
     method set_config (c : config) = 
       cfg <- c
-
+    method private get_fmt = match cfg.output_file with 
+      | Some path -> 
+          let oc = open_out path in
+          Format.formatter_of_out_channel oc
+      | None -> Format.std_formatter
     method run (x : unit) : int = 
         let module Backend = Backend.Make(struct let config = cfg end) in
         let file_content : string = get_file cfg.input_file in
@@ -17,13 +21,7 @@ class process_file cfg_init =
         let () = Printf.printf "Parsed SML program\n" in
         let ocaml_code = Backend.process_sml ~prog:parsed_sml in
         let () = Printf.printf "Processed to OCaml code\n" in
-        let output : Format.formatter = match cfg.output_file with 
-          | Some path -> 
-              let oc = open_out path in
-              Format.formatter_of_out_channel oc
-          | None -> Format.std_formatter
-          in 
-        let () = Pprintast.top_phrase output ocaml_code in
+        let () = List.iter (Pprintast.top_phrase (self#get_fmt)) ocaml_code in
         0
         
   end ;;

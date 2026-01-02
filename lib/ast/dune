@@ -1,5 +1,6 @@
-(library 
+(library
  (name ast)
- (modules ast )
+ (modules ast)
  (libraries ppx_deriving)
- (preprocess (pps ppx_deriving.show)))
+ (preprocess
+  (pps ppx_deriving.show)))

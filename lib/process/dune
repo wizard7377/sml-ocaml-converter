@@ -1,4 +1,3 @@
 (library
  (name process)
- (libraries common backend frontend helpers )
-)
+ (libraries common backend frontend helpers))

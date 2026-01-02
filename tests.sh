@@ -8,4 +8,4 @@ all_files+=$sig_files
 all_files+=$sml_files
 
 echo "Running tests..."
-dune exec sml-ocaml-converter -- "$fun_files"
+dune exec sml-ocaml-converter -- file $fun_files

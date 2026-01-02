@@ -1,6 +1,5 @@
-(library 
+(library
  (name cli)
-
  (libraries cmdliner process sml_ocaml_converter ppx_import)
- 
-  (preprocess (staged_pps ppx_import ppx_deriving.show)))
+ (preprocess
+  (staged_pps ppx_import ppx_deriving.show)))
