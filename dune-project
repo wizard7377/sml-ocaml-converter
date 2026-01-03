@@ -5,20 +5,20 @@
 (generate_opam_files true)
 
 (source
- (github username/reponame))
+ (github wizard7377/sml-ocaml-converter))
 
-(authors "Author Name <author@example.com>")
+(authors "Asher Frost <wizardishlike@gmail.com>")
 
-(maintainers "Maintainer Name <maintainer@example.com>")
+(maintainers "Asher Frost <wizardishlike@gmail.com>")
 
-(license LICENSE)
+(license BSD-2-Clause)
 
 (documentation https://url/to/documentation)
 (using menhir 3.0)
 (package
  (name shibboleth)
- (synopsis "A short synopsis")
- (description "A longer description")
+ (synopsis "A converter between SML and OCaml")
+ (description "A tool that converts Standard ML code to OCaml code and vice versa, facilitating interoperability between the two languages.")
  (depends
   ocaml
   (alcotest :with-test)
@@ -26,8 +26,13 @@
   cmdliner
   menhir 
   ppx_import 
-  ppx_deriving)
+  ppx_deriving
+  ocamlformat
+  odoc 
+  menhir 
+  re 
+  )
  (tags
-  ("add topics" "to describe" your project)))
+  ("ocaml" "sml")))
 
 ; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html

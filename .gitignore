@@ -2,3 +2,7 @@ CLAUDE.md
 _build/
 ./.*/
 examples/
+*.opam
+.github/
+.claude/
+*~ 

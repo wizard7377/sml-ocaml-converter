@@ -1,0 +1,13 @@
+{1 Shibboleth: SML-OCaml Converter}
+
+This is the basic documentation for the Shibboleth library, a tool that converts Standard ML code to OCaml code and vice versa, facilitating interoperability between the two languages.
+
+{2 Overview}
+
+Shibboleth provides functions and modules to parse, translate, and generate code in both Standard ML and OCaml. It aims to bridge the gap between these two functional programming languages by allowing developers to easily convert codebases.
+
+{2 Features}
+- Parsing of Standard ML and OCaml syntax.
+- Conversion functions to translate code between the two languages.
+- Support for common language constructs and idioms.
+- Integration with build systems for seamless usage.
