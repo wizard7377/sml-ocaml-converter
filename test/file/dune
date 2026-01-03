@@ -1,0 +1,4 @@
+(executable
+ (name run)
+ (libraries alcotest shibboleth ast backend helpers compiler-libs.common ppxlib)
+ (modules run test_common file1 file2))

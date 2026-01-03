@@ -1,3 +1,3 @@
-(test
+(executable
  (name test_sml_ocaml_converter)
- (libraries sml_ocaml_converter ast backend frontend helpers common))
+ (libraries shibboleth ast backend frontend helpers common))

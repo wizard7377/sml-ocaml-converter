@@ -992,6 +992,325 @@ let complex_type_tests = [
   "process higher-order function type", `Quick, test_process_higher_order_function;
 ]
 
+(** Pattern matching tests using ppxlib metaquotation *)
+
+(* Test that lambda expressions have the correct structure *)
+let test_lambda_structure () =
+  let input = FnExp (
+    b (Case (b (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))), b (ExpIdx (b (IdxIdx (b "x")))), None))
+  ) in
+  let result = process_exp input in
+  match result.pexp_desc with
+  | Pexp_function _ -> ()  (* FnExp produces Pexp_function, not Pexp_fun *)
+  | _ -> fail "Expected a function expression structure"
+
+(* Test that let bindings produce the correct structure *)
+let test_let_structure () =
+  let input = LetExp (
+    [b (ValDec ([], b (ValBind (b (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))), b (ExpCon (b (ConInt (b "42")))), None))))],
+    [b (ExpIdx (b (IdxIdx (b "x"))))]
+  ) in
+  let result = process_exp input in
+  match result.pexp_desc with
+  | Pexp_let (Nonrecursive, [_], _) -> ()
+  | _ -> fail "Expected a non-recursive let binding structure"
+
+(* Test that function application has correct structure *)
+let test_app_structure () =
+  let input = ExpApp (
+    b (ExpIdx (b (IdxIdx (b "f")))),
+    b (ExpIdx (b (IdxIdx (b "x"))))
+  ) in
+  let result = process_exp input in
+  match result.pexp_desc with
+  | Pexp_apply (_, [_]) -> ()
+  | _ -> fail "Expected a function application with one argument"
+
+(* Test that case expressions produce match structures *)
+let test_case_structure () =
+  let input = CaseExp (
+    b (ExpIdx (b (IdxIdx (b "x")))),
+    b (Case (b PatWildcard, b (ExpCon (b (ConInt (b "0")))), None))
+  ) in
+  let result = process_exp input in
+  match result.pexp_desc with
+  | Pexp_match (_, _::_) -> ()
+  | Pexp_function (_::_) -> () (* Could also be a function with cases *)
+  | _ -> fail "Expected a match or function expression"
+
+(* Test that if expressions have the correct structure *)
+let test_if_structure () =
+  let input = IfExp (
+    b (ExpIdx (b (IdxIdx (b "cond")))),
+    b (ExpCon (b (ConInt (b "1")))),
+    b (ExpCon (b (ConInt (b "2"))))
+  ) in
+  let result = process_exp input in
+  match result.pexp_desc with
+  | Pexp_ifthenelse (_, _, Some _) -> ()
+  | _ -> fail "Expected if-then-else structure"
+
+(* Test that tuple expressions produce tuple structures *)
+let test_tuple_structure () =
+  let input = TupleExp [
+    b (ExpCon (b (ConInt (b "1"))));
+    b (ExpCon (b (ConInt (b "2"))));
+  ] in
+  let result = process_exp input in
+  match result.pexp_desc with
+  | Pexp_tuple [_; _] -> ()
+  | _ -> fail "Expected a 2-element tuple structure"
+
+(* Test that record expressions produce record structures *)
+let test_record_structure () =
+  let input = RecordExp [
+    b (Row (b (IdxLab (b "x")), b (ExpCon (b (ConInt (b "1")))), None));
+  ] in
+  let result = process_exp input in
+  match result.pexp_desc with
+  | Pexp_record (_, None) -> ()  (* Record expressions produce Pexp_record *)
+  | _ -> fail "Expected a record expression structure"
+
+(* Test that list expressions produce list structures *)
+let test_list_structure () =
+  let input = ListExp [
+    b (ExpCon (b (ConInt (b "1"))));
+    b (ExpCon (b (ConInt (b "2"))));
+  ] in
+  let result = process_exp input in
+  match result.pexp_desc with
+  | Pexp_construct ({txt = Lident "::"; _}, Some _) -> ()
+  | _ -> fail "Expected a list cons structure"
+
+(* Test that empty lists produce nil structures *)
+let test_empty_list_structure () =
+  let input = ListExp [] in
+  let result = process_exp input in
+  match result.pexp_desc with
+  | Pexp_construct ({txt = Lident "[]"; _}, None) -> ()
+  | _ -> fail "Expected an empty list constructor"
+
+(* Test that sequential expressions produce sequence structures *)
+let test_seq_structure () =
+  let input = SeqExp [
+    b (ExpCon (b (ConInt (b "1"))));
+    b (ExpCon (b (ConInt (b "2"))));
+  ] in
+  let result = process_exp input in
+  match result.pexp_desc with
+  | Pexp_sequence (_, _) -> ()
+  | _ -> fail "Expected a sequence expression structure"
+
+(* Test that type annotations produce constraint structures *)
+let test_typed_exp_structure () =
+  let input = TypedExp (
+    b (ExpCon (b (ConInt (b "42")))),
+    b (TypCon ([], b (IdxIdx (b "int"))))
+  ) in
+  let result = process_exp input in
+  match result.pexp_desc with
+  | Pexp_constraint (_, _) -> ()
+  | _ -> fail "Expected a type constraint structure"
+
+(* Test pattern structures *)
+
+let test_wildcard_pattern_structure () =
+  let input = PatWildcard in
+  let result = process_pat input in
+  match result.ppat_desc with
+  | Ppat_any -> ()
+  | _ -> fail "Expected wildcard pattern structure"
+
+let test_variable_pattern_structure () =
+  let input = PatIdx (b (WithoutOp (b (IdxIdx (b "x"))))) in
+  let result = process_pat input in
+  match result.ppat_desc with
+  | Ppat_var _ -> ()
+  | _ -> fail "Expected variable pattern structure"
+
+let test_tuple_pattern_structure () =
+  let input = PatTuple [
+    b (PatIdx (b (WithoutOp (b (IdxIdx (b "x"))))));
+    b (PatIdx (b (WithoutOp (b (IdxIdx (b "y"))))));
+  ] in
+  let result = process_pat input in
+  match result.ppat_desc with
+  | Ppat_tuple [_; _] -> ()
+  | _ -> fail "Expected 2-element tuple pattern structure"
+
+let test_list_pattern_structure () =
+  let input = PatList [
+    b (PatIdx (b (WithoutOp (b (IdxIdx (b "x"))))));
+  ] in
+  let result = process_pat input in
+  match result.ppat_desc with
+  | Ppat_construct ({txt = Lident "::"; _}, Some _) -> ()
+  | _ -> fail "Expected list cons pattern structure"
+
+let test_constant_pattern_structure () =
+  let input = PatCon (b (ConInt (b "42"))) in
+  let result = process_pat input in
+  match result.ppat_desc with
+  | Ppat_constant _ -> ()
+  | _ -> fail "Expected constant pattern structure"
+
+let test_constructor_pattern_structure () =
+  let input = PatApp (
+    b (WithoutOp (b (IdxIdx (b "SOME")))),
+    b (PatIdx (b (WithoutOp (b (IdxIdx (b "x"))))))
+  ) in
+  let result = process_pat input in
+  match result.ppat_desc with
+  | Ppat_construct (_, Some _) -> ()
+  | _ -> fail "Expected constructor pattern with argument"
+
+(* Test type structures *)
+
+let test_function_type_structure () =
+  let input = TypFun (
+    b (TypVar (b (IdxVar (b "a")))),
+    b (TypVar (b (IdxVar (b "b"))))
+  ) in
+  let result = process_type_value input in
+  match result.ptyp_desc with
+  | Ptyp_arrow (Nolabel, _, _) -> ()
+  | _ -> fail "Expected arrow type structure"
+
+let test_tuple_type_structure () =
+  let input = TypTuple [
+    b (TypVar (b (IdxVar (b "a"))));
+    b (TypVar (b (IdxVar (b "b"))));
+  ] in
+  let result = process_type_value input in
+  match result.ptyp_desc with
+  | Ptyp_tuple [_; _] -> ()
+  | _ -> fail "Expected 2-element tuple type structure"
+
+let test_type_constructor_structure () =
+  let input = TypCon ([], b (IdxIdx (b "int"))) in
+  let result = process_type_value input in
+  match result.ptyp_desc with
+  | Ptyp_constr ({txt = Lident "int"; _}, []) -> ()
+  | _ -> fail "Expected simple type constructor 'int'"
+
+let test_parametric_type_structure () =
+  let input = TypCon ([b (TypVar (b (IdxVar (b "a"))))], b (IdxIdx (b "list"))) in
+  let result = process_type_value input in
+  match result.ptyp_desc with
+  | Ptyp_constr ({txt = Lident "list"; _}, [_]) -> ()
+  | _ -> fail "Expected parametric type constructor 'list' with one argument"
+
+let test_type_var_structure () =
+  let input = TypVar (b (IdxVar (b "a"))) in
+  let result = process_type_value input in
+  match result.ptyp_desc with
+  | Ptyp_var "a" -> ()
+  | _ -> fail "Expected type variable 'a'"
+
+let test_object_type_structure () =
+  let input = TypRecord [
+    b (TypRow (b (IdxLab (b "x")), b (TypCon ([], b (IdxIdx (b "int")))), None))
+  ] in
+  let result = process_type_value input in
+  match result.ptyp_desc with
+  | Ptyp_object (_, _) -> ()
+  | _ -> fail "Expected object type structure (SML records become OCaml objects)"
+
+(* Test declaration structures *)
+
+let test_val_declaration_structure () =
+  let input = ValBind (
+    b (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))),
+    b (ExpCon (b (ConInt (b "42")))),
+    None
+  ) in
+  let result = process_val_bind input in
+  match result with
+  | [binding] ->
+      (match binding.pvb_expr.pexp_desc with
+       | Pexp_constant _ -> ()
+       | _ -> fail "Expected constant expression in value binding")
+  | _ -> fail "Expected a single value binding"
+
+let test_fun_declaration_structure () =
+  let input = FunBind (
+    b (FunMatchPrefix (
+      b (WithoutOp (b (IdxIdx (b "f")))),
+      [b (PatIdx (b (WithoutOp (b (IdxIdx (b "x"))))))],
+      None,
+      b (ExpIdx (b (IdxIdx (b "x")))),
+      None
+    )),
+    None
+  ) in
+  let result = process_fun_bind input in
+  match result with
+  | [binding] ->
+      (match binding.pvb_expr.pexp_desc with
+       | Pexp_fun _ -> ()
+       | _ -> fail "Expected function expression in binding")
+  | _ -> fail "Expected a single function binding"
+
+let test_datatype_declaration_structure () =
+  let input = DatBind (
+    [],
+    b (IdxIdx (b "bool")),
+    b (ConBind (b (IdxIdx (b "True")), None, Some (b (ConBind (b (IdxIdx (b "False")), None, None))))),
+    None
+  ) in
+  let result = process_dat_bind input in
+  match result with
+  | [decl] ->
+      (match decl.ptype_kind with
+       | Ptype_variant _ -> ()
+       | _ -> fail "Expected variant type declaration")
+  | _ -> fail "Expected a single type declaration"
+
+let test_exception_declaration_structure () =
+  let input = ExnBind (
+    b (IdxIdx (b "Overflow")),
+    None,
+    None
+  ) in
+  let result = process_exn_bind input in
+  match result with
+  | [ext_cons] ->
+      (* Check that we got an extension constructor (for exceptions) *)
+      (match ext_cons.pext_kind with
+       | Pext_decl _ -> ()
+       | _ -> fail "Expected exception declaration constructor")
+  | _ -> fail "Expected a single extension constructor"
+
+let pattern_matching_tests = [
+  "lambda has correct AST structure", `Quick, test_lambda_structure;
+  "let binding has correct AST structure", `Quick, test_let_structure;
+  "function application has correct AST structure", `Quick, test_app_structure;
+  "case expression has correct AST structure", `Quick, test_case_structure;
+  "if expression has correct AST structure", `Quick, test_if_structure;
+  "tuple expression has correct AST structure", `Quick, test_tuple_structure;
+  "record expression has correct AST structure", `Quick, test_record_structure;
+  "list expression has correct AST structure", `Quick, test_list_structure;
+  "empty list has correct AST structure", `Quick, test_empty_list_structure;
+  "sequence expression has correct AST structure", `Quick, test_seq_structure;
+  "typed expression has correct AST structure", `Quick, test_typed_exp_structure;
+  "wildcard pattern has correct AST structure", `Quick, test_wildcard_pattern_structure;
+  "variable pattern has correct AST structure", `Quick, test_variable_pattern_structure;
+  "tuple pattern has correct AST structure", `Quick, test_tuple_pattern_structure;
+  "list pattern has correct AST structure", `Quick, test_list_pattern_structure;
+  "constant pattern has correct AST structure", `Quick, test_constant_pattern_structure;
+  "constructor pattern has correct AST structure", `Quick, test_constructor_pattern_structure;
+  "function type has correct AST structure", `Quick, test_function_type_structure;
+  "tuple type has correct AST structure", `Quick, test_tuple_type_structure;
+  "type constructor has correct AST structure", `Quick, test_type_constructor_structure;
+  "parametric type has correct AST structure", `Quick, test_parametric_type_structure;
+  "type variable has correct AST structure", `Quick, test_type_var_structure;
+  "object type has correct AST structure", `Quick, test_object_type_structure;
+  "val declaration has correct AST structure", `Quick, test_val_declaration_structure;
+  "fun declaration has correct AST structure", `Quick, test_fun_declaration_structure;
+  "datatype declaration has correct AST structure", `Quick, test_datatype_declaration_structure;
+  "exception declaration has correct AST structure", `Quick, test_exception_declaration_structure;
+]
+
 (** Main test runner *)
 
 let () =
@@ -1004,4 +1323,5 @@ let () =
     "Declaration Processing", declaration_tests;
     "Program Processing", program_tests;
     "Complex Type Processing", complex_type_tests;
+    "Pattern Matching (AST Structure)", pattern_matching_tests;
   ]
