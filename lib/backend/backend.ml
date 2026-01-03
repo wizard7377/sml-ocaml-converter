@@ -26,7 +26,7 @@ module Make(Config : CONFIG) = struct
 
   module Config = Config
   module Names = Process_names.Make(Config)
-
+  exception BadAst of string
   let current_names : Names.t ref = ref (Names.init ())
 (** Helper function to create a located value with no source location.
 
@@ -34,6 +34,21 @@ module Make(Config : CONFIG) = struct
     @return The value wrapped in a {!Location.loc} structure *)
 let ghost (v : 'a) : 'a Location.loc = Location.mkloc v Location.none
 
+let comment_str (s:string) : Parsetree.structure = 
+  let attr_desc : Parsetree.structure_item = Builder.pstr_eval (Builder.pexp_constant (Parsetree.Pconst_string (s,Location.none,None (* FIXME ?*) ) )) [] in
+  [attr_desc]
+let comment_str_name : string Location.loc = ghost "sml_comment"
+let process_commented (attach:Parsetree.attributes -> 'a -> 'a) (node:'a Ast.node) : 'a = 
+  let value = node.value in
+  let comment = node.comments in 
+  match comment with
+  | [] -> value
+  | [""] -> value
+  | comments ->
+     let comment_value = List.map (fun s -> comment_str s) comments in
+     let pays = List.map (fun s' -> Parsetree.PStr s') comment_value in
+    let attrs = List.map (fun p -> Builder.attribute ~name:comment_str_name ~payload:p) pays in
+        attach attrs value
 let debug_show (msg:string) : unit = match Config.config.verbosity with
   | None -> ()
   | Some level ->
@@ -294,7 +309,7 @@ let rec process_exp (exp : Ast.exp) : Parsetree.expression = match exp with
       build_seq exps
   | LetExp (decs, exps) ->
       (* let dec1 dec2 ... in exp1; exp2; ... end *)
-      let bindings = List.flatten (List.map (fun d -> process_dec d.Ast.value) decs) in
+      let bindings = List.flatten (List.map (fun d -> process_value_dec d.Ast.value) decs) in
       let body =
         let rec build_seq = function
           | [] -> Builder.pexp_construct (ghost (Longident.Lident "()")) None
@@ -536,7 +551,7 @@ and process_pat_row (row : Ast.pat_row) : (string * Parsetree.pattern) list = ma
 
     @param dec The SML declaration to convert
     @return A list of OCaml value bindings *)
-and process_dec (dec : Ast.dec) : Parsetree.value_binding list = match dec with
+and process_value_dec (dec : Ast.dec) : Parsetree.value_binding list = match dec with
   | ValDec (tvars, vb) ->
       (* Type variables in 'val' are currently ignored in conversion *)
       process_val_bind vb.value
@@ -545,36 +560,36 @@ and process_dec (dec : Ast.dec) : Parsetree.value_binding list = match dec with
   | TypDec tb ->
       (* Type declarations don't produce value bindings *)
       (* They should be handled at the structure level *)
-      []
+      raise (BadAst "TypeDec is not value decleration")
   | DatDec (db, tb_opt) ->
       (* Datatype declarations don't produce value bindings *)
       (* They should be handled at the structure level *)
-      []
+        raise (BadAst "DatDec is not value decleration")
   | DataDecAlias (id1, id2) ->
       (* Datatype alias - no value bindings *)
-      []
+      raise (BadAst "DataDecAlias is not value decleration")
   | AbstractDec (db, tb_opt, decs) ->
       (* Abstract type declarations *)
       (* Process the inner declarations *)
-      List.concat (List.map (fun d -> process_dec d.Ast.value) decs)
+      List.concat (List.map (fun d -> process_value_dec d.Ast.value) decs)
   | ExnDec eb ->
       (* Exception declarations don't produce value bindings *)
-      []
+        raise (BadAst "ExnDec is not value decleration")
   | StrDec sb ->
       (* Structure declarations don't produce value bindings *)
-      []
+     raise (BadAst "StrDec is not value decleration")
   | SeqDec decs ->
       (* Sequential declarations - process each and concatenate *)
-      List.concat (List.map (fun d -> process_dec d.Ast.value) decs)
+      List.concat (List.map (fun d -> process_value_dec d.Ast.value) decs)
   | LocalDec (d1, d2) ->
       (* Local declarations - both parts contribute to bindings *)
-      process_dec d1.value @ process_dec d2.value
+      process_value_dec d1.value @ process_value_dec d2.value
   | OpenDec ids ->
       (* Open declarations don't produce value bindings *)
-      []
+     raise (BadAst "OpenDec is not value decleration")
   | FixityDec (fix, ids) ->
       (* Fixity declarations don't produce value bindings *)
-      []
+     raise (BadAst "FixityDec is not value decleration")
 
 (** Convert SML fixity declarations to string representation.
 

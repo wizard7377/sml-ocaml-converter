@@ -2,6 +2,7 @@ open Common
 open Ast 
 module type BACKEND = sig 
     module Config : CONFIG 
+    exception BadAst of string
     type res = Parsetree.toplevel_phrase list
     val process_sml : prog:Ast.prog -> res
 
@@ -12,7 +13,7 @@ module type BACKEND = sig
     val process_con : Ast.con -> Parsetree.constant
     val process_exp : Ast.exp -> Parsetree.expression
     val process_pat : ?is_head:bool -> Ast.pat -> Parsetree.pattern
-    val process_dec : Ast.dec -> Parsetree.value_binding list
+    val process_value_dec : Ast.dec -> Parsetree.value_binding list
     val process_val_bind : Ast.val_bind -> Parsetree.value_binding list
     val process_fun_bind : Ast.fun_bind -> Parsetree.value_binding list
     val process_typ_bind : Ast.typ_bind -> Parsetree.type_declaration list
