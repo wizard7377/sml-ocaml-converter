@@ -1,6 +1,6 @@
 (lang dune 3.20)
 
-(name sml-ocaml-converter)
+(name shibboleth)
 
 (generate_opam_files true)
 
@@ -16,7 +16,7 @@
 (documentation https://url/to/documentation)
 (using menhir 3.0)
 (package
- (name sml-ocaml-converter)
+ (name shibboleth)
  (synopsis "A short synopsis")
  (description "A longer description")
  (depends

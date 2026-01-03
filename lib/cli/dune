@@ -1,5 +1,5 @@
 (library
  (name cli)
- (libraries cmdliner process sml_ocaml_converter ppx_import)
+ (libraries re cmdliner process shibboleth ppx_import)
  (preprocess
   (staged_pps ppx_import ppx_deriving.show)))

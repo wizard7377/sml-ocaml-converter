@@ -2,8 +2,9 @@ open Cmdliner
 open Cmdliner.Term.Syntax
 include Cmd_common_options
 include Process 
+
 let convert_file ~(input_files:string list) ?(output_file:string option) ~(common_options:common_options) : int =  
-  let input_files' = List.flatten (List.map (String.split_on_char ' ') input_files) in
+  let input_files' = List.flatten (List.map (Re.split (Re.compile (Re.rep1 Re.space))) input_files) in
 List.iter (fun input_file -> ( 
     let common_options = common_options in
     let cfg : Common.config = {

@@ -1,6 +1,6 @@
 (library
- (name sml_ocaml_converter)
+ (name shibboleth)
  (libraries frontend backend ppx_deriving common helpers)
  (preprocess
   (pps ppx_deriving.show))
- (modules sml_ocaml_converter))
+ (modules shibboleth))

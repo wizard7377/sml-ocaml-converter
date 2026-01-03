@@ -10,9 +10,13 @@ module TestConfig : Common.CONFIG = struct
     Common.input_file = "";
     output_file = None;
     verbosity = None;
-    guess_names = true;
-    curry_functions = true;
-    no_comments = false;
+    conversions = {
+      pattern_names = Common.Do_convert;
+      constructor_names_values = Common.Do_convert;
+      function_names = Common.Do_convert;
+      uncurry_types = Common.Do_convert;
+      uncurry_values = Common.Do_convert;
+    };
   }
 end
 

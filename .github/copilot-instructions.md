@@ -60,7 +60,7 @@ Key backend functions (mostly complete):
 ```bash
 dune build                # Build entire project
 dune test                 # Run tests
-dune exec sml-ocaml-converter -- <file>  # Run converter on SML file
+dune exec shibboleth -- <file>  # Run converter on SML file
 dune build --watch       # Watch mode
 dune clean               # Clean artifacts
 ```

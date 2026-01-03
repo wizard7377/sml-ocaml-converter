@@ -1,4 +1,4 @@
 (executable
- (public_name sml-ocaml-converter)
+ (public_name shibboleth)
  (name main)
- (libraries sml_ocaml_converter cmdliner cli))
+ (libraries shibboleth cmdliner cli))
