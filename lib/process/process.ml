@@ -46,4 +46,4 @@ class process_file cfg_init =
           Printf.eprintf "Error processing file: %s\n" self#get_config.input_file ;
           Printexc.print_backtrace stderr ;
           Printexc.to_string e |> Printf.eprintf "%s\n" ;
-          1
+          raise e 

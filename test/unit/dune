@@ -1,4 +1,0 @@
-(executable
- (name backend)
- (libraries alcotest ast backend helpers compiler-libs.common ppxlib)
- (modules backend))

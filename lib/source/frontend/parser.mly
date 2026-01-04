@@ -20,6 +20,12 @@
       match opt with
       | None -> cont
       | Some v -> Some v
+
+    (* Flatten nested specification sequences into a list for SignSig. *)
+    let rec flatten_spec_node (spec : Ast.spec Ast.node) : Ast.spec Ast.node list =
+      match spec.value with
+      | SpecSeq (s1, s2) -> flatten_spec_node s1 @ flatten_spec_node s2
+      | _ -> [spec]
 %}
 
 (* ========================================================================= *)
@@ -730,14 +736,18 @@ atomic_str:
 (* ========================================================================= *)
 
 sig_expr:
-  | SIG spec END { SignSig (b (SignIdx (b (IdxIdx (b "")))), b $2) }
+  | SIG spec END { SignSig (flatten_spec_node (b $2)) }
   | sigid { SignIdx (b $1) }
   | sig_expr WHERE TYPE typrefin { SignWhere (b $1, b $4) }
   | FUNCTOR LPAREN modid COLON sig_expr RPAREN ARROW sig_expr {
-      SignSig (b (SignIdx (b (IdxIdx (b "functor")))), b (SpecStr (b (StrDesc (b $3, b $5, None)))))
+      let param_spec = b (SpecStr (b (StrDesc (b $3, b $5, None)))) in
+      let result_spec = b (SpecInclude (b $8)) in
+      SignSig (flatten_spec_node (b (SpecSeq (param_spec, result_spec))))
     }
   | FUNCTOR modid COLON sig_expr ARROW sig_expr {
-      SignSig (b (SignIdx (b (IdxIdx (b "functor")))), b (SpecStr (b (StrDesc (b $2, b $4, None)))))
+      let param_spec = b (SpecStr (b (StrDesc (b $2, b $4, None)))) in
+      let result_spec = b (SpecInclude (b $6)) in
+      SignSig (flatten_spec_node (b (SpecSeq (param_spec, result_spec))))
     }
 ;
 
@@ -770,8 +780,6 @@ spec:
   | spec SHARING TYPE longid_eq_seq { SpecSharingTyp (b $1, $4) }
   | spec SHARING longid_eq_seq { SpecSharingStr (b $1, $3) }
   | spec SEMICOLON { $1 }
-  | { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
-              b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None))))) } (* empty *)
 ;
 
 longid_eq_seq:
@@ -903,8 +911,16 @@ fundesc:
 
 fundesctail:
   | COLON sig_expr { $2 }
-  | LPAREN modid COLON sig_expr RPAREN fundesctail { SignSig (b $4, b (SpecStr (b (StrDesc (b $2, b $6, None))))) }
-  | modid COLON sig_expr fundesctail { SignSig (b $3, b (SpecStr (b (StrDesc (b $1, b $4, None))))) }
+  | LPAREN modid COLON sig_expr RPAREN fundesctail {
+      let param_spec = b (SpecStr (b (StrDesc (b $2, b $4, None)))) in
+      let result_spec = b (SpecInclude (b $6)) in
+      SignSig (flatten_spec_node (b (SpecSeq (param_spec, result_spec))))
+    }
+  | modid COLON sig_expr fundesctail {
+      let param_spec = b (SpecStr (b (StrDesc (b $1, b $3, None)))) in
+      let result_spec = b (SpecInclude (b $4)) in
+      SignSig (flatten_spec_node (b (SpecSeq (param_spec, result_spec))))
+    }
 ;
 
 and_fundesc_opt:

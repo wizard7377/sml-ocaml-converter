@@ -1313,8 +1313,8 @@ let pattern_matching_tests = [
 
 (** Main test runner *)
 
-let () =
-  run "Backend" [
+let run_unit_tests () : unit =
+  Alcotest.run "Backend" [
     "Constant Processing", constant_tests;
     "Type Processing", type_tests;
     "Object Field Processing", object_field_tests;
@@ -1325,3 +1325,6 @@ let () =
     "Complex Type Processing", complex_type_tests;
     "Pattern Matching (AST Structure)", pattern_matching_tests;
   ]
+
+let () =
+  run_unit_tests ()

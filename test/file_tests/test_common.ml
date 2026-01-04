@@ -17,7 +17,7 @@ end
 let test_config = {
     Common.input_file = "";
     output_file = None;
-    verbosity = None;
+    verbosity = Some 2;
     conversions = {
       pattern_names = Common.Do_convert;
       constructor_names_values = Common.Do_convert;
