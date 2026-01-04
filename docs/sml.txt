@@ -10,10 +10,10 @@ See [below](#notation) for explanation of the notation.
 
 ## [Core Language]{#core}
 
-### [Constants]{#con}
+### [Constants]{#constant}
 
   ------------ ------- -------------------------------------- --------------------------------------------------------------
-  *con*        ::=     *int*                                  integer
+  *constant*        ::=     *int*                                  integer
                        *word*                                 word
                        *float*                                floating point
                        *char*                                 character
@@ -43,39 +43,39 @@ See [below](#notation) for explanation of the notation.
                         *num*                                                                                                                                                  number (may not start with `0`)
   ------------- ------- ------------------------------------------------------------------------------------------------------------------------------------------------------ --------------------------------------------------------------------------
 
-### [Expressions]{#exp}
+### [Expressions]{#expression}
 
   ------------- ------- ------------------------------------------------------------ ---------------------------------
-  *exp*         ::=     *con*                                                        constant
+  *expression*         ::=     *constant*                                                        constant
                         ⟨`op`⟩ *longid*                                              value or constructor identifier
-                        *exp*~1~ *exp*~2~                                            application
-                        *exp*~1~ *id* *exp*~2~                                       infix application
-                        `(` *exp* `)`                                                parentheses
-                        `(` *exp*~1~ `,` \... `,` *exp*~*n*~ `)`                     tuple (*n* ≠ 1)
+                        *expression*~1~ *expression*~2~                                            application
+                        *expression*~1~ *id* *expression*~2~                                       infix application
+                        `(` *expression* `)`                                                parentheses
+                        `(` *expression*~1~ `,` \... `,` *expression*~*n*~ `)`                     tuple (*n* ≠ 1)
                         `{` ⟨*exprow*⟩ `}`                                           record
                         `#` *lab*                                                    record selector
-                        `[` *exp*~1~ `,` \... `,` *exp*~*n*~ `]`                     list (*n* ≥ 0)
-                        `(` *exp*~1~ `;` \... `;` *exp*~*n*~ `)`                     sequence (*n* ≥ 2)
-                        `let` *dec* `in` *exp*~1~ `;` \... `;` *exp*~*n*~ `end`      local declaration (*n* ≥ 1)
-                        *exp* `:` *typ*                                              type annotation
-                        `raise` *exp*                                                exception raising
-                        *exp* `handle` *match*                                       exception handling
-                        *exp*~1~ `andalso` *exp*~2~                                  conjunction
-                        *exp*~1~ `orelse` *exp*~2~                                   disjunction
-                        `if` *exp*~1~ `then` *exp*~2~ `else` *exp*~3~                conditional
-                        `while` *exp*~1~ `do` *exp*~2~                               iteration
-                        `case` *exp* `of` *match*                                    case analysis
+                        `[` *expression*~1~ `,` \... `,` *expression*~*n*~ `]`                     list (*n* ≥ 0)
+                        `(` *expression*~1~ `;` \... `;` *expression*~*n*~ `)`                     sequence (*n* ≥ 2)
+                        `let` *declaration* `in` *expression*~1~ `;` \... `;` *expression*~*n*~ `end`      local declaration (*n* ≥ 1)
+                        *expression* `:` *typ*                                              type annotation
+                        `raise` *expression*                                                exception raising
+                        *expression* `handle` *match*                                       exception handling
+                        *expression*~1~ `andalso` *expression*~2~                                  conjunction
+                        *expression*~1~ `orelse` *expression*~2~                                   disjunction
+                        `if` *expression*~1~ `then` *expression*~2~ `else` *expression*~3~                conditional
+                        `while` *expression*~1~ `do` *expression*~2~                               iteration
+                        `case` *expression* `of` *match*                                    case analysis
                         `fn` *match*                                                 function
                                                                                      
-  *exprow*      ::=     *lab* `=` *exp* ⟨`,` *exprow*⟩                               expression row
+  *exprow*      ::=     *lab* `=` *expression* ⟨`,` *exprow*⟩                               expression row
                                                                                      
-  *match*       ::=     *pat* `=>` *exp* ⟨`|` *match*⟩                               match
+  *match*       ::=     *pat* `=>` *expression* ⟨`|` *match*⟩                               match
   ------------- ------- ------------------------------------------------------------ ---------------------------------
 
 ### [Patterns]{#pat}
 
   ------------- ------- ------------------------------------------------- --------------------
-  *pat*         ::=     *con*                                             constant
+  *pat*         ::=     *constant*                                             constant
                         `_`                                               wildcard
                         ⟨`op`⟩ *id*                                       variable
                         ⟨`op`⟩ *longid* ⟨*pat*⟩                           construction
@@ -105,33 +105,33 @@ See [below](#notation) for explanation of the notation.
   *typrow*      ::=     *lab* `:` *typ* ⟨`,` *typrow*⟩      type row
   ------------- ------- ----------------------------------- -----------------
 
-### [Declarations]{#dec}
+### [Declarations]{#declaration}
 
   ------------- ------- ------------------------------------------------------------------------------------------------------- --------------------------------------------
-  *dec*         ::=     `val` ⟨*var*⟩^(,)^ *valbind*                                                                            value
+  *declaration*         ::=     `val` ⟨*var*⟩^(,)^ *valbind*                                                                            value
                         `fun` ⟨*var*⟩^(,)^ *funbind*                                                                            function
                         `type` *typbind*                                                                                        type
                         `datatype` *datbind* ⟨`withtype` *typbind*⟩                                                             data type
                         `datatype` *id* `=` `datatype` *longid*                                                                 data type replication
-                        `abstype` *datbind* ⟨`withtype` *typbind*⟩ `with` *dec* `end`                                           abstract type
+                        `abstype` *datbind* ⟨`withtype` *typbind*⟩ `with` *declaration* `end`                                           abstract type
                         `exception` *exnbind*                                                                                   exception
                         `structure` *strbind*                                                                                   structure (not allowed inside expressions)
                                                                                                                                 empty
-                        *dec*~1~ ⟨`;`⟩ *dec*~2~                                                                                 sequence
-                        `local` *dec*~1~ `in` *dec*~2~ `end`                                                                    local
+                        *declaration*~1~ ⟨`;`⟩ *declaration*~2~                                                                                 sequence
+                        `local` *declaration*~1~ `in` *declaration*~2~ `end`                                                                    local
                         `open` *longid*~1~ \... *longid*~*n*~                                                                   inclusion (*n* ≥ 1)
                         `nonfix` *id*~1~ \... *id*~*n*~                                                                         nonfix (*n* ≥ 1)
                         `infix` ⟨*digit*⟩ *id*~1~ \... *id*~*n*~                                                                left-associative infix (*n* ≥ 1)
                         `infixr` ⟨*digit*⟩ *id*~1~ \... *id*~*n*~                                                               right-associative infix (*n* ≥ 1)
                                                                                                                                 
-  *valbind*     ::=     *pat* `=` *exp* ⟨`and` *valbind*⟩                                                                       destructuring
+  *valbind*     ::=     *pat* `=` *expression* ⟨`and` *valbind*⟩                                                                       destructuring
                         `rec` *valbind*                                                                                         recursive
                                                                                                                                 
   *funbind*     ::=     *funmatch* ⟨`and` *funbind*⟩                                                                            clausal function
                                                                                                                                 
-  *funmatch*    ::=     ⟨`op`⟩ *id* *pat*~1~ \... *pat*~*n*~ ⟨`:` *typ*⟩ `=` *exp* ⟨`|` *funmatch*⟩                             nonfix (*n* ≥ 1)
-                        *pat*~1~ *id* *pat*~2~ ⟨`:` *typ*⟩ `=` *exp* ⟨`|` *funmatch*⟩                                           infix
-                        `(` *pat*~1~ *id* *pat*~2~ `)` *pat\'*~1~ \... *pat\'*~*n*~ ⟨`:` *typ*⟩ `=` *exp* ⟨`|` *funmatch*⟩      infix (*n* ≥ 0)
+  *funmatch*    ::=     ⟨`op`⟩ *id* *pat*~1~ \... *pat*~*n*~ ⟨`:` *typ*⟩ `=` *expression* ⟨`|` *funmatch*⟩                             nonfix (*n* ≥ 1)
+                        *pat*~1~ *id* *pat*~2~ ⟨`:` *typ*⟩ `=` *expression* ⟨`|` *funmatch*⟩                                           infix
+                        `(` *pat*~1~ *id* *pat*~2~ `)` *pat\'*~1~ \... *pat\'*~*n*~ ⟨`:` *typ*⟩ `=` *expression* ⟨`|` *funmatch*⟩      infix (*n* ≥ 0)
                                                                                                                                 
   *typbind*     ::=     ⟨*var*⟩^(,)^ *id* `=` *typ* ⟨`and` *typbind*⟩                                                           abbreviation
                                                                                                                                 
@@ -147,30 +147,30 @@ See [below](#notation) for explanation of the notation.
 
 ## [Module Language]{#module}
 
-### [Structures]{#str}
+### [Structures]{#structure}
 
   ------------- ------- ------------------------------------------------------ ------------------------
-  *str*         ::=     *longid*                                               identifier
-                        `struct` *dec* `end`                                   structure
-                        *str* `:` *sig*                                        transparent annotation
-                        *str* `:>` *sig*                                       opaque annotation
-                        *id* `(` *str* `)`                                     functor application
-                        *id* `(` *dec* `)`                                     functor application
-                        `let` *dec* `in` *str* `end`                           local declaration
+  *structure*         ::=     *longid*                                               identifier
+                        `struct` *declaration* `end`                                   structure
+                        *structure* `:` *sig*                                        transparent annotation
+                        *structure* `:>` *sig*                                       opaque annotation
+                        *id* `(` *structure* `)`                                     functor application
+                        *id* `(` *declaration* `)`                                     functor application
+                        `let` *declaration* `in` *structure* `end`                           local declaration
                                                                                
-  *strbind*     ::=     *id* ⟨`:`⟨`>`⟩ *sig*⟩ `=` *str* ⟨`and` *strbind*⟩      structure
+  *strbind*     ::=     *id* ⟨`:`⟨`>`⟩ *sig*⟩ `=` *structure* ⟨`and` *strbind*⟩      structure
   ------------- ------- ------------------------------------------------------ ------------------------
 
 ### [Signatures]{#sig}
 
   ------------- ------- ------------------------------------------------------------------- -----------------------------
   *sig*         ::=     *id*                                                                identifier
-                        `sig` *spec* `end`                                                  signature
+                        `sig` *specification* `end`                                                  signature
                         *sig* `where` `type` *typrefin*                                     refinement
                                                                                             
   *typrefin*    ::=     ⟨*var*⟩^(,)^ *longid* `=` *typ* ⟨`and` `type` *typrefin*⟩           type refinement
                                                                                             
-  *spec*        ::=     `val` *valdesc*                                                     value
+  *specification*        ::=     `val` *valdesc*                                                     value
                         `type` *typdesc*                                                    type
                         `eqtype` *typdesc*                                                  equality type
                         `type` *typbind*                                                    type abbreviation
@@ -179,11 +179,11 @@ See [below](#notation) for explanation of the notation.
                         `exception` *exndesc*                                               exception
                         `structure` *strdesc*                                               structure
                                                                                             empty
-                        *spec*~1~ ⟨`;`⟩ *spec*~2~                                           sequence
+                        *specification*~1~ ⟨`;`⟩ *specification*~2~                                           sequence
                         `include` *sig*                                                     inclusion
                         `include` *id*~1~ \... *id*~*n*~                                    inclusion (*n* ≥ 1)
-                        *spec* `sharing` `type` *longid*~1~ `=` \... `=` *longid*~*n*~      type sharing (*n* ≥ 2)
-                        *spec* `sharing` *longid*~1~ `=` \... `=` *longid*~*n*~             structure sharing (*n* ≥ 2)
+                        *specification* `sharing` `type` *longid*~1~ `=` \... `=` *longid*~*n*~      type sharing (*n* ≥ 2)
+                        *specification* `sharing` *longid*~1~ `=` \... `=` *longid*~*n*~             structure sharing (*n* ≥ 2)
                                                                                             
   *valdesc*     ::=     *id* `:` *typ* ⟨`and` *valdesc*⟩                                    value
                                                                                             
@@ -201,19 +201,19 @@ See [below](#notation) for explanation of the notation.
 ### [Programs]{#prog}
 
   -------------- ------- ----------------------------------------------------------------------------------- -----------------------
-  *prog*         ::=     *dec*                                                                               core declaration
+  *prog*         ::=     *declaration*                                                                               core declaration
                          `functor` *fctbind*                                                                 functor declaration
                          `signature` *sigbind*                                                               signature declaration
                                                                                                              empty
                          *prog*~1~ ⟨`;`⟩ *prog*~2~                                                           sequence
                                                                                                              
-  *fctbind*      ::=     *id*~1~ `(` *id*~2~ `:` *sig* `)` ⟨`:`⟨`>`⟩ *sig*⟩ `=` *str* ⟨`and` *fctbind*⟩      plain
-                         *id* `(` *spec* `)` ⟨`:`⟨`>`⟩ *sig*⟩ `=` *str* ⟨`and` *fctbind*⟩                    opened
+  *fctbind*      ::=     *id*~1~ `(` *id*~2~ `:` *sig* `)` ⟨`:`⟨`>`⟩ *sig*⟩ `=` *structure* ⟨`and` *fctbind*⟩      plain
+                         *id* `(` *specification* `)` ⟨`:`⟨`>`⟩ *sig*⟩ `=` *structure* ⟨`and` *fctbind*⟩                    opened
                                                                                                              
   *sigbind*      ::=     *id* `=` *sig* ⟨`and` *sigbind*⟩                                                    signature
   -------------- ------- ----------------------------------------------------------------------------------- -----------------------
 
-~Note:\ Omitted\ *exp*`;`\ derived\ form\ for\ interactive\ toplevel.~
+~Note:\ Omitted\ *expression*`;`\ derived\ form\ for\ interactive\ toplevel.~
 
 ## [Notation]{#notation}
 

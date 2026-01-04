@@ -1,2 +1,2 @@
-open Backend_sig
-module Make (C : Common.CONFIG) : BACKEND
+
+module Make (Config : Common.CONFIG) : Backend_sig.BACKEND

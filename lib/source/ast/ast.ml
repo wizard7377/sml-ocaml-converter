@@ -18,8 +18,8 @@
       let open Ast in
       let x_id = box_node (IdxIdx (box_node "x")) in
       let forty_two = box_node (ExpCon (box_node (ConInt (box_node "42")))) in
-      let val_bind = box_node (ValBind (box_node (PatIdx (box_node (WithoutOp x_id))), forty_two, None)) in
-      let val_dec = box_node (ValDec ([], val_bind)) in
+      let value_binding = box_node (ValBind (box_node (PatIdx (box_node (WithoutOp x_id))), forty_two, None)) in
+      let val_dec = box_node (ValDec ([], value_binding)) in
       let body = box_node (ExpIdx x_id) in
       LetExp ([val_dec], [body])
     ]}
@@ -76,13 +76,13 @@ type 'a node = {
     {3 Example}
     {[
       (* Wrapping a constant *)
-      let int_const : con node = box_node (ConInt (box_node "42"))
+      let int_const : constant node = box_node (ConInt (box_node "42"))
 
       (* Wrapping an identifier *)
       let var_id : idx node = box_node (IdxIdx (box_node "x"))
 
       (* Wrapping an expression *)
-      let exp_node : exp node = box_node (ExpCon int_const)
+      let exp_node : expression node = box_node (ExpCon int_const)
     ]}
 
     @param v The value to wrap
@@ -136,34 +136,34 @@ let unbox_node (n : 'a node) : 'a = n.value
 (** Top-level program constructs.
 
     {[
-    prog ::= dec                           (* core declaration *)
+    prog ::= declaration                           (* core declaration *)
            | functor fctbind               (* functor declaration *)
            | signature sigbind             (* signature declaration *)
            |                               (* empty *)
            | prog1 [;] prog2               (* sequence *)
     ]}
 
-    @see 'dec' Core language declarations
-    @see 'fct_bind' Functor bindings
-    @see 'sign_bind' Signature bindings *)
+    @see 'declaration' Core language declarations
+    @see 'functor_binding' Functor bindings
+    @see 'signature_binding' Signature bindings *)
 type prog =
-  | ProgDec of dec node
+  | ProgDec of declaration node
       (** Core declaration at the top level.
 
           Example: [val x = 42] or [structure S = struct end]
           {[
             ProgDec (box_node (ValDec ([], box_node (ValBind (...)))))
           ]} *)
-  | ProgFun of fct_bind node
+  | ProgFun of functor_binding node
       (** Functor declaration: [functor fctbind].
 
           Example: [functor F(X : S) = struct end]
-          @see 'fct_bind' Functor binding details *)
-  | ProgStr of sign_bind node
+          @see 'functor_binding' Functor binding details *)
+  | ProgStr of signature_binding node
       (** Signature declaration: [signature sigbind].
 
           Example: [signature S = sig type t end]
-          @see 'sign_bind' Signature binding details *)
+          @see 'signature_binding' Signature binding details *)
   | ProgSeq of prog node * prog node
       (** Sequence of programs: [prog1 ; prog2].
 
@@ -186,8 +186,8 @@ type prog =
 (** Functor bindings.
 
     {[
-    fctbind ::= id1 ( id2 : sig ) [:[:>] sig] = str [and fctbind]    (* plain *)
-              | id ( spec ) [:[:>] sig] = str [and fctbind]          (* opened *)
+    fctbind ::= id1 ( id2 : sig ) [:[:>] sig] = structure [and fctbind]    (* plain *)
+              | id ( specification ) [:[:>] sig] = structure [and fctbind]          (* opened *)
     ]}
 
     Functors are parameterized modules that take a structure matching a signature
@@ -206,11 +206,11 @@ type prog =
       )
     ]}
 
-    @see 'sign' Signature types for parameter and result constraints
-    @see 'str' Structure expressions for functor bodies *)
-and fct_bind =
-  | FctBind of idx node * idx node * sign node * (anotate node * sign node) option * str node * fct_bind node option
-      (** Plain functor: [id1 ( id2 : sig ) [:[:>] sig] = str].
+    @see 'signature' Signature types for parameter and result constraints
+    @see 'structure' Structure expressions for functor bodies *)
+and functor_binding =
+  | FctBind of idx node * idx node * signature node * (anotate node * signature node) option * structure node * functor_binding node option
+      (** Plain functor: [id1 ( id2 : sig ) [:[:>] sig] = structure].
 
           Components:
           - Functor name
@@ -221,8 +221,8 @@ and fct_bind =
           - Optional additional bindings ([and ...])
 
           @see 'anotate' Transparent vs opaque sealing *)
-  | FctBindOpen of idx node * spec node * (anotate node * sign node) option * str node * fct_bind node option
-      (** Opened functor: [id ( spec ) [:[:>] sig] = str].
+  | FctBindOpen of idx node * specification node * (anotate node * signature node) option * structure node * functor_binding node option
+      (** Opened functor: [id ( specification ) [:[:>] sig] = structure].
 
           The specification components are directly visible in the functor body
           without requiring qualification through a parameter name. This is
@@ -249,8 +249,8 @@ and fct_bind =
         None
       )
     ]} *)
-and sign_bind =
-  | SignBind of idx node * sign node * sign_bind node option
+and signature_binding =
+  | SignBind of idx node * signature node * signature_binding node option
       (** Signature binding: [id = sig].
 
           Components:
@@ -264,17 +264,17 @@ and sign_bind =
     types, and declarations. These form the computational heart of SML programs.
 
     The core language is stratified into:
-    - {!con} - Literal constants (integers, strings, etc.)
+    - {!constant} - Literal constants (integers, strings, etc.)
     - {!idx} - Identifiers and qualified names
-    - {!exp} - Expressions (computation)
+    - {!expression} - Expressions (computation)
     - {!pat} - Patterns (destructuring)
     - {!typ} - Type expressions
-    - {!dec} - Declarations (bindings) *)
+    - {!declaration} - Declarations (bindings) *)
 
 (** {2 Constants}
 
     {[
-    con ::= int       (* integer *)
+    constant ::= int       (* integer *)
           | word      (* word *)
           | float     (* floating point *)
           | char      (* character *)
@@ -310,7 +310,7 @@ and sign_bind =
       (* String: "hello" *)
       let hello = box_node (ConString (box_node "hello"))
     ]} *)
-and con =
+and constant =
   | ConInt of string node
       (** Integer constant.
 
@@ -387,7 +387,7 @@ and con =
       let label_1 = box_node (IdxNum (box_node "1"))
     ]}
 
-    @see 'exp' Expressions that use identifiers
+    @see 'expression' Expressions that use identifiers
     @see 'pat' Patterns that bind identifiers *)
 and idx =
   | IdxIdx of string node
@@ -429,25 +429,25 @@ and idx =
 (** {2 Expressions}
 
     {[
-    exp ::= con                                    (* constant *)
+    expression ::= constant                                    (* constant *)
           | [op] longid                            (* value or constructor identifier *)
           | exp1 exp2                              (* application *)
           | exp1 id exp2                           (* infix application *)
-          | ( exp )                                (* parentheses *)
+          | ( expression )                                (* parentheses *)
           | ( exp1 , ... , expn )                  (* tuple, n != 1 *)
           | { [exprow] }                           (* record *)
           | # lab                                  (* record selector *)
           | [ exp1 , ... , expn ]                  (* list, n >= 0 *)
           | ( exp1 ; ... ; expn )                  (* sequence, n >= 2 *)
-          | let dec in exp1 ; ... ; expn end       (* local declaration, n >= 1 *)
-          | exp : typ                              (* type annotation *)
-          | raise exp                              (* exception raising *)
-          | exp handle match                       (* exception handling *)
+          | let declaration in exp1 ; ... ; expn end       (* local declaration, n >= 1 *)
+          | expression : typ                              (* type annotation *)
+          | raise expression                              (* exception raising *)
+          | expression handle match                       (* exception handling *)
           | exp1 andalso exp2                      (* conjunction *)
           | exp1 orelse exp2                       (* disjunction *)
           | if exp1 then exp2 else exp3            (* conditional *)
           | while exp1 do exp2                     (* iteration *)
-          | case exp of match                      (* case analysis *)
+          | case expression of match                      (* case analysis *)
           | fn match                               (* function *)
     ]}
 
@@ -456,9 +456,9 @@ and idx =
 
     @see 'pat' Patterns used in function arguments and case branches
     @see 'matching' Match clauses for case/handle/fn
-    @see 'dec' Declarations used in let expressions *)
-and exp =
-  | ExpCon of con node
+    @see 'declaration' Declarations used in let expressions *)
+and expression =
+  | ExpCon of constant node
       (** Constant expression.
 
           {[
@@ -469,7 +469,7 @@ and exp =
             ExpCon (box_node (ConString (box_node "hello")))
           ]}
 
-          @see 'con' Constant types *)
+          @see 'constant' Constant types *)
   | ExpIdx of idx node
       (** Value or constructor identifier, optionally prefixed with [op].
 
@@ -483,7 +483,7 @@ and exp =
             (* SML: op + (to use infix as prefix) *)
             ExpIdx (box_node (IdxIdx (box_node "+")))
           ]} *)
-  | ExpApp of exp node * exp node
+  | ExpApp of expression node * expression node
       (** Function application: [exp1 exp2]. Left-associative.
 
           {[
@@ -499,7 +499,7 @@ and exp =
               y_node
             )
           ]} *)
-  | InfixApp of exp node * idx node * exp node
+  | InfixApp of expression node * idx node * expression node
       (** Infix operator application: [exp1 id exp2].
 
           The operator [id] must be declared infix. The parser resolves
@@ -516,12 +516,12 @@ and exp =
             (* SML: x :: xs *)
             InfixApp (x_node, box_node (IdxIdx (box_node "::")), xs_node)
           ]} *)
-  | ParenExp of exp node
-      (** Parenthesized expression: [( exp )].
+  | ParenExp of expression node
+      (** Parenthesized expression: [( expression )].
 
           Preserved in the AST for pretty-printing fidelity.
           Semantically equivalent to the inner expression. *)
-  | TupleExp of exp node list
+  | TupleExp of expression node list
       (** Tuple expression: [( exp1 , ... , expn )] where n != 1.
 
           The unit value [()] is represented as an empty list.
@@ -559,7 +559,7 @@ and exp =
             (* SML: #1 (for tuple access) *)
             RecordSelector (box_node (IdxNum (box_node "1")))
           ]} *)
-  | ListExp of exp node list
+  | ListExp of expression node list
       (** List expression: [\[ exp1 , ... , expn \]] where n >= 0.
 
           Syntactic sugar for nested cons cells.
@@ -572,7 +572,7 @@ and exp =
             (* SML: [1, 2, 3] *)
             ListExp [int_1; int_2; int_3]
           ]} *)
-  | SeqExp of exp node list
+  | SeqExp of expression node list
       (** Sequential expression: [( exp1 ; ... ; expn )] where n >= 2.
 
           Evaluates expressions left-to-right, returning the last value.
@@ -582,8 +582,8 @@ and exp =
             (* SML: (print "hi"; 42) *)
             SeqExp [print_hi; int_42]
           ]} *)
-  | LetExp of dec node list * exp node list
-      (** Local declaration: [let dec in exp1 ; ... ; expn end].
+  | LetExp of declaration node list * expression node list
+      (** Local declaration: [let declaration in exp1 ; ... ; expn end].
 
           Declarations are visible only within the body expressions.
           Multiple body expressions form an implicit sequence.
@@ -596,9 +596,9 @@ and exp =
             )
           ]}
 
-          @see 'dec' Declaration types *)
-  | TypedExp of exp node * typ node
-      (** Type-annotated expression: [exp : typ].
+          @see 'declaration' Declaration types *)
+  | TypedExp of expression node * typ node
+      (** Type-annotated expression: [expression : typ].
 
           Constrains the type of the expression. Useful for
           resolving overloading or documenting intent.
@@ -607,8 +607,8 @@ and exp =
             (* SML: ([] : int list) *)
             TypedExp (box_node (ListExp []), box_node (TypCon ([int_typ], list_id)))
           ]} *)
-  | RaiseExp of exp node
-      (** Exception raising: [raise exp].
+  | RaiseExp of expression node
+      (** Exception raising: [raise expression].
 
           The expression must evaluate to an exception value
           (a value of type [exn]).
@@ -619,10 +619,10 @@ and exp =
           ]}
 
           @see 'HandleExp' Exception handling *)
-  | HandleExp of exp node * matching node
-      (** Exception handling: [exp handle match].
+  | HandleExp of expression node * matching node
+      (** Exception handling: [expression handle match].
 
-          If [exp] raises an exception, it is matched against [match].
+          If [expression] raises an exception, it is matched against [match].
           If no pattern matches, the exception propagates.
 
           {[
@@ -634,7 +634,7 @@ and exp =
           ]}
 
           @see 'matching' Match clause structure *)
-  | AndExp of exp node * exp node
+  | AndExp of expression node * expression node
       (** Short-circuit conjunction: [exp1 andalso exp2].
 
           [exp2] is evaluated only if [exp1] is [true].
@@ -644,7 +644,7 @@ and exp =
             (* SML: x > 0 andalso y > 0 *)
             AndExp (x_positive, y_positive)
           ]} *)
-  | OrExp of exp node * exp node
+  | OrExp of expression node * expression node
       (** Short-circuit disjunction: [exp1 orelse exp2].
 
           [exp2] is evaluated only if [exp1] is [false].
@@ -654,7 +654,7 @@ and exp =
             (* SML: x < 0 orelse x > 10 *)
             OrExp (x_negative, x_large)
           ]} *)
-  | IfExp of exp node * exp node * exp node
+  | IfExp of expression node * expression node * expression node
       (** Conditional: [if exp1 then exp2 else exp3].
 
           Both branches must have the same type.
@@ -663,7 +663,7 @@ and exp =
             (* SML: if n = 0 then 1 else n * fact(n-1) *)
             IfExp (n_is_zero, int_1, n_times_fact)
           ]} *)
-  | WhileExp of exp node * exp node
+  | WhileExp of expression node * expression node
       (** While loop: [while exp1 do exp2].
 
           Repeatedly evaluates [exp2] while [exp1] is [true].
@@ -673,10 +673,10 @@ and exp =
             (* SML: while !r > 0 do r := !r - 1 *)
             WhileExp (r_positive, decr_r)
           ]} *)
-  | CaseExp of exp node * matching node
-      (** Case analysis: [case exp of match].
+  | CaseExp of expression node * matching node
+      (** Case analysis: [case expression of match].
 
-          Pattern matches [exp] against the cases in [match].
+          Pattern matches [expression] against the cases in [match].
           The first matching pattern's expression is evaluated.
 
           {[
@@ -710,15 +710,15 @@ and exp =
 (** {2 Expression Rows}
 
     {[
-    exprow ::= lab = exp [, exprow]
+    exprow ::= lab = expression [, exprow]
     ]}
 
     Record rows bind labels to expressions in record literals.
 
     @see 'RecordExp' Record expression using rows *)
 and row =
-  | Row of idx node * exp node * row node option
-      (** Expression row: [lab = exp].
+  | Row of idx node * expression node * row node option
+      (** Expression row: [lab = expression].
 
           The optional third component allows chaining for parser
           convenience, though {!RecordExp} stores rows as a list.
@@ -735,7 +735,7 @@ and row =
 (** {2 Match Clauses}
 
     {[
-    match ::= pat => exp [| match]
+    match ::= pat => expression [| match]
     ]}
 
     Matches are used in {!CaseExp}, {!HandleExp}, and {!FnExp} expressions.
@@ -756,27 +756,27 @@ and row =
     ]}
 
     @see 'pat' Pattern syntax
-    @see 'exp' Expression syntax *)
+    @see 'expression' Expression syntax *)
 and matching =
-  | Case of pat node * exp node * matching node option
-      (** Match clause: [pat => exp].
+  | Case of pat node * expression node * matching node option
+      (** Match clause: [pat => expression].
 
           Components:
           - Pattern to match against
           - Expression to evaluate if pattern matches
           - Optional next clause ([| pat2 => exp2])
 
-          Pattern variables bound in [pat] are visible in [exp]. *)
+          Pattern variables bound in [pat] are visible in [expression]. *)
 
 (** {2 Declarations}
 
     {[
-    dec ::= val [var,] valbind                                  (* value *)
+    declaration ::= val [var,] valbind                                  (* value *)
           | fun [var,] funbind                                  (* function *)
           | type typbind                                        (* type *)
           | datatype datbind [withtype typbind]                 (* data type *)
           | datatype id = datatype longid                       (* data type replication *)
-          | abstype datbind [withtype typbind] with dec end     (* abstract type *)
+          | abstype datbind [withtype typbind] with declaration end     (* abstract type *)
           | exception exnbind                                   (* exception *)
           | structure strbind                                   (* structure, not in expressions *)
           |                                                     (* empty *)
@@ -791,12 +791,12 @@ and matching =
     Declarations introduce new bindings into scope. They appear at the
     top level, in [let] expressions, and in structures.
 
-    @see 'val_bind' Value binding details
-    @see 'fun_bind' Function binding details
-    @see 'typ_bind' Type binding details
-    @see 'dat_bind' Datatype binding details *)
-and dec =
-  | ValDec of idx node list * val_bind node
+    @see 'value_binding' Value binding details
+    @see 'function_binding' Function binding details
+    @see 'type_binding' Type binding details
+    @see 'data_binding' Datatype binding details *)
+and declaration =
+  | ValDec of idx node list * value_binding node
       (** Value declaration: [val \[var,\] valbind].
 
           The [idx list] contains explicit type variables for polymorphism.
@@ -809,7 +809,7 @@ and dec =
             (* SML: val 'a id : 'a -> 'a = fn x => x *)
             ValDec ([alpha], box_node (ValBind (id_pat, fn_x_x, None)))
           ]} *)
-  | FunDec of fun_bind node
+  | FunDec of function_binding node
       (** Function declaration: [fun \[var,\] funbind].
 
           Syntactic sugar for recursive function definitions.
@@ -823,9 +823,9 @@ and dec =
             )))
           ]}
 
-          @see 'fun_bind' Function binding structure
+          @see 'function_binding' Function binding structure
           @see 'fun_match' Individual clauses *)
-  | TypDec of typ_bind node
+  | TypDec of type_binding node
       (** Type abbreviation: [type typbind].
 
           Introduces type synonyms without creating new types.
@@ -835,8 +835,8 @@ and dec =
             TypDec (box_node (TypBind ([alpha], pair_id, pair_typ, None)))
           ]}
 
-          @see 'typ_bind' Type binding structure *)
-  | DatDec of dat_bind node * typ_bind node option
+          @see 'type_binding' Type binding structure *)
+  | DatDec of data_binding node * type_binding node option
       (** Datatype declaration: [datatype datbind \[withtype typbind\]].
 
           Creates new algebraic data types with constructors.
@@ -853,8 +853,8 @@ and dec =
             )), None)
           ]}
 
-          @see 'dat_bind' Datatype binding structure
-          @see 'con_bind' Constructor binding structure *)
+          @see 'data_binding' Datatype binding structure
+          @see 'constructor_binding' Constructor binding structure *)
   | DataDecAlias of idx node * idx node
       (** Datatype replication: [datatype id = datatype longid].
 
@@ -868,11 +868,11 @@ and dec =
               box_node (IdxIdx (box_node "bool"))
             )
           ]} *)
-  | AbstractDec of dat_bind node * typ_bind node option * dec node list
-      (** Abstract type: [abstype datbind \[withtype typbind\] with dec end].
+  | AbstractDec of data_binding node * type_binding node option * declaration node list
+      (** Abstract type: [abstype datbind \[withtype typbind\] with declaration end].
 
           The datatype constructors are hidden outside the [with] block.
-          Only the type name and functions defined in [dec] are visible.
+          Only the type name and functions defined in [declaration] are visible.
 
           {[
             (* SML: abstype 'a set = Set of 'a list with val empty = Set [] end *)
@@ -892,7 +892,7 @@ and dec =
           ]}
 
           @see 'exn_bind' Exception binding structure *)
-  | StrDec of str_bind node
+  | StrDec of structure_binding node
       (** Structure declaration: [structure strbind].
 
           Not allowed inside [let] expressions (only at top level).
@@ -902,9 +902,9 @@ and dec =
             StrDec (box_node (StrBind (s_id, None, None)))
           ]}
 
-          @see 'str_bind' Structure binding structure
-          @see 'str' Structure expressions *)
-  | SeqDec of dec node list
+          @see 'structure_binding' Structure binding structure
+          @see 'structure' Structure expressions *)
+  | SeqDec of declaration node list
       (** Sequence of declarations: [dec1 ; dec2 ; ...].
 
           Declarations are processed left-to-right, with each
@@ -914,7 +914,7 @@ and dec =
             (* SML: val x = 1; val y = x + 1 *)
             SeqDec [val_x_dec; val_y_dec]
           ]} *)
-  | LocalDec of dec node * dec node
+  | LocalDec of declaration node * declaration node
       (** Local declaration: [local dec1 in dec2 end].
 
           [dec1] is visible only within [dec2]. The bindings from
@@ -985,14 +985,14 @@ and fixity =
 (** Value bindings.
 
     {[
-    valbind ::= pat = exp [and valbind]     (* destructuring *)
+    valbind ::= pat = expression [and valbind]     (* destructuring *)
               | rec valbind                 (* recursive *)
     ]}
 
     @see 'ValDec' Value declarations using these bindings *)
-and val_bind =
-  | ValBind of pat node * exp node * val_bind node option
-      (** Destructuring binding: [pat = exp].
+and value_binding =
+  | ValBind of pat node * expression node * value_binding node option
+      (** Destructuring binding: [pat = expression].
 
           Pattern variables are bound to corresponding parts of the value.
           Multiple bindings with [and] are simultaneous (not sequential).
@@ -1004,7 +1004,7 @@ and val_bind =
             (* SML: val x = 1 and y = 2 *)
             ValBind (x_pat, int_1, Some (box_node (ValBind (y_pat, int_2, None))))
           ]} *)
-  | ValBindRec of val_bind node
+  | ValBindRec of value_binding node
       (** Recursive binding: [rec valbind].
 
           Allows the bound names to be used in the expressions.
@@ -1023,8 +1023,8 @@ and val_bind =
 
     @see 'FunDec' Function declarations
     @see 'fun_match' Individual function clauses *)
-and fun_bind =
-  | FunBind of fun_match node * fun_bind node option
+and function_binding =
+  | FunBind of fun_match node * function_binding node option
       (** Function binding with clauses.
 
           Additional bindings ([and ...]) define mutually recursive functions.
@@ -1038,9 +1038,9 @@ and fun_bind =
 (** Function match clauses.
 
     {[
-    funmatch ::= [op] id pat1 ... patn [: typ] = exp [| funmatch]    (* nonfix, n >= 1 *)
-               | pat1 id pat2 [: typ] = exp [| funmatch]             (* infix *)
-               | ( pat1 id pat2 ) pat'1 ... pat'n [: typ] = exp [| funmatch]  (* infix, n >= 0 *)
+    funmatch ::= [op] id pat1 ... patn [: typ] = expression [| funmatch]    (* nonfix, n >= 1 *)
+               | pat1 id pat2 [: typ] = expression [| funmatch]             (* infix *)
+               | ( pat1 id pat2 ) pat'1 ... pat'n [: typ] = expression [| funmatch]  (* infix, n >= 0 *)
     ]}
 
     Multiple clauses define pattern matching on function arguments.
@@ -1048,8 +1048,8 @@ and fun_bind =
 
     @see 'pat' Pattern syntax for function parameters *)
 and fun_match =
-  | FunMatchPrefix of with_op node * pat node list * typ node option * exp node * fun_match node option
-      (** Prefix (nonfix) function clause: [\[op\] id pat1 ... patn \[: typ\] = exp].
+  | FunMatchPrefix of with_op node * pat node list * typ node option * expression node * fun_match node option
+      (** Prefix (nonfix) function clause: [\[op\] id pat1 ... patn \[: typ\] = expression].
 
           The {!with_op} contains the function name (with optional [op] prefix).
 
@@ -1069,8 +1069,8 @@ and fun_match =
               )))
             )
           ]} *)
-  | FunMatchInfix of pat node * idx node * pat node * typ node option * exp node * fun_match node option
-      (** Infix function clause: [pat1 id pat2 \[: typ\] = exp].
+  | FunMatchInfix of pat node * idx node * pat node * typ node option * expression node * fun_match node option
+      (** Infix function clause: [pat1 id pat2 \[: typ\] = expression].
 
           The identifier [id] must be declared infix.
 
@@ -1078,8 +1078,8 @@ and fun_match =
             (* SML: fun x ++ y = x @ y *)
             FunMatchInfix (x_pat, plusplus_id, y_pat, None, append_exp, None)
           ]} *)
-  | FunMatchLow of pat node * idx node * pat node * pat node list * typ node option * exp node * fun_match node option
-      (** Curried infix clause: [( pat1 id pat2 ) pat'1 ... pat'n \[: typ\] = exp].
+  | FunMatchLow of pat node * idx node * pat node * pat node list * typ node option * expression node * fun_match node option
+      (** Curried infix clause: [( pat1 id pat2 ) pat'1 ... pat'n \[: typ\] = expression].
 
           An infix operator with additional curried arguments.
 
@@ -1097,8 +1097,8 @@ and fun_match =
     Introduces type abbreviations (synonyms).
 
     @see 'TypDec' Type declarations *)
-and typ_bind =
-  | TypBind of idx node list * idx node * typ node * typ_bind node option
+and type_binding =
+  | TypBind of idx node list * idx node * typ node * type_binding node option
       (** Type abbreviation: [\[var,\] id = typ].
 
           Components:
@@ -1124,9 +1124,9 @@ and typ_bind =
     Introduces new algebraic data types with constructors.
 
     @see 'DatDec' Datatype declarations
-    @see 'con_bind' Constructor bindings *)
-and dat_bind =
-  | DatBind of idx node list * idx node * con_bind node * dat_bind node option
+    @see 'constructor_binding' Constructor bindings *)
+and data_binding =
+  | DatBind of idx node list * idx node * constructor_binding node * data_binding node option
       (** Datatype binding: [\[var,\] id = conbind].
 
           Components:
@@ -1154,9 +1154,9 @@ and dat_bind =
 
     Defines data constructors for a datatype.
 
-    @see 'dat_bind' Datatype bindings using constructors *)
-and con_bind =
-  | ConBind of idx node * typ node option * con_bind node option
+    @see 'data_binding' Datatype bindings using constructors *)
+and constructor_binding =
+  | ConBind of idx node * typ node option * constructor_binding node option
       (** Constructor: [id \[of typ\]].
 
           Components:
@@ -1215,28 +1215,28 @@ and exn_bind =
     - Generic programming via functors
     - Information hiding via opaque signatures
 
-    @see 'str' Structure expressions
-    @see 'sign' Signature expressions
-    @see 'fct_bind' Functor definitions *)
+    @see 'structure' Structure expressions
+    @see 'signature' Signature expressions
+    @see 'functor_binding' Functor definitions *)
 
 (** {2 Structures}
 
     {[
-    str ::= longid                        (* identifier *)
-          | struct dec end                (* structure *)
-          | str : sig                     (* transparent annotation *)
-          | str :> sig                    (* opaque annotation *)
-          | id ( str )                    (* functor application *)
-          | id ( dec )                    (* functor application *)
-          | let dec in str end            (* local declaration *)
+    structure ::= longid                        (* identifier *)
+          | struct declaration end                (* structure *)
+          | structure : sig                     (* transparent annotation *)
+          | structure :> sig                    (* opaque annotation *)
+          | id ( structure )                    (* functor application *)
+          | id ( declaration )                    (* functor application *)
+          | let declaration in structure end            (* local declaration *)
     ]}
 
     Structures are the values of the module language. They contain
     types, values, exceptions, and nested structures.
 
-    @see 'dec' Declarations within structures
+    @see 'declaration' Declarations within structures
     @see 'anotate' Transparent vs opaque sealing *)
-and str =
+and structure =
   | StrIdx of idx node
       (** Structure identifier (possibly qualified).
 
@@ -1247,15 +1247,15 @@ and str =
             (* SML: Outer.Inner *)
             StrIdx (box_node (IdxLong [outer_id; inner_id]))
           ]} *)
-  | StructStr of dec node
-      (** Structure expression: [struct dec end].
+  | StructStr of declaration node
+      (** Structure expression: [struct declaration end].
 
           {[
             (* SML: struct val x = 1 type t = int end *)
             StructStr (box_node (SeqDec [val_x; type_t]))
           ]} *)
-  | AnotateStr of idx node * anotate node * str node
-      (** Annotated structure: [str : sig] or [str :> sig].
+  | AnotateStr of idx node * anotate node * structure node
+      (** Annotated structure: [structure : sig] or [structure :> sig].
 
           Note: The first component is the structure name for binding context.
 
@@ -1268,15 +1268,15 @@ and str =
           ]}
 
           @see 'anotate' Transparent vs opaque semantics *)
-  | FunctorApp of idx node * str node
-      (** Functor application: [id ( str )].
+  | FunctorApp of idx node * structure node
+      (** Functor application: [id ( structure )].
 
           {[
             (* SML: MkSet(IntOrd) *)
             FunctorApp (mkset_id, box_node (StrIdx intord_id))
           ]} *)
-  | FunctorAppAnonymous of idx node * dec node
-      (** Functor application with anonymous argument: [id ( dec )].
+  | FunctorAppAnonymous of idx node * declaration node
+      (** Functor application with anonymous argument: [id ( declaration )].
 
           The declarations form an anonymous structure.
 
@@ -1284,8 +1284,8 @@ and str =
             (* SML: MkSet(type t = int val compare = Int.compare) *)
             FunctorAppAnonymous (mkset_id, box_node (SeqDec [type_t; val_compare]))
           ]} *)
-  | LocalDec of dec node * str node
-      (** Local declaration in structure: [let dec in str end].
+  | LocalDec of declaration node * structure node
+      (** Local declaration in structure: [let declaration in structure end].
 
           {[
             (* SML: let val helper = ... in struct ... end end *)
@@ -1307,12 +1307,12 @@ and str =
     ]} *)
 and anotate =
   | Transparent
-      (** Transparent annotation: [str : sig].
+      (** Transparent annotation: [structure : sig].
 
           Type equalities are visible outside the structure.
           If [type t = int] inside, then [t = int] is known outside. *)
   | Opaque
-      (** Opaque annotation: [str :> sig].
+      (** Opaque annotation: [structure :> sig].
 
           Abstract types hide their implementations.
           If [type t = int] inside, outside only knows [type t] exists. *)
@@ -1320,13 +1320,13 @@ and anotate =
 (** Structure bindings.
 
     {[
-    strbind ::= id [:[:>] sig] = str [and strbind]
+    strbind ::= id [:[:>] sig] = structure [and strbind]
     ]}
 
     @see 'StrDec' Structure declarations *)
-and str_bind =
-  | StrBind of idx node * (anotate node * sign node) option * str_bind node option
-      (** Structure binding: [id \[:\[\:>\] sig\] = str].
+and structure_binding =
+  | StrBind of idx node * (anotate node * signature node) option * structure_binding node option
+      (** Structure binding: [id \[:\[\:>\] sig\] = structure].
 
           Note: This representation stores just the binding metadata.
           The structure name and constraint are here; the body is
@@ -1336,16 +1336,16 @@ and str_bind =
 
     {[
     sig ::= id                                   (* identifier *)
-          | sig spec end                         (* signature *)
+          | sig specification end                         (* signature *)
           | sig where type typrefin              (* refinement *)
     ]}
 
     Signatures are the types of structures. They specify what
     types and values a structure must provide.
 
-    @see 'spec' Specifications within signatures
+    @see 'specification' Specifications within signatures
     @see 'typ_refine' Type refinements *)
-and sign =
+and signature =
   | SignIdx of idx node
       (** Signature identifier.
 
@@ -1353,8 +1353,8 @@ and sign =
             (* SML: ORDERED (reference to signature) *)
             SignIdx (box_node (IdxIdx (box_node "ORDERED")))
           ]} *)
-  | SignSig of spec node list
-      (** Signature expression: [sig spec end].
+  | SignSig of specification node list
+      (** Signature expression: [sig specification end].
 
           Contains a list of specifications that structures
           matching this signature must fulfill.
@@ -1363,7 +1363,7 @@ and sign =
             (* SML: sig val x : int type t end *)
             SignSig [val_x_spec; type_t_spec]
           ]} *)
-  | SignWhere of sign node * typ_refine node
+  | SignWhere of signature node * typ_refine node
       (** Signature with type refinement: [sig where type typrefin].
 
           {[
@@ -1404,7 +1404,7 @@ and typ_refine =
 (** {2 Specifications}
 
     {[
-    spec ::= val valdesc                                          (* value *)
+    specification ::= val valdesc                                          (* value *)
            | type typdesc                                         (* type *)
            | eqtype typdesc                                       (* equality type *)
            | type typbind                                         (* type abbreviation *)
@@ -1416,25 +1416,25 @@ and typ_refine =
            | spec1 [;] spec2                                      (* sequence *)
            | include sig                                          (* inclusion *)
            | include id1 ... idn                                  (* inclusion, n >= 1 *)
-           | spec sharing type longid1 = ... = longidn            (* type sharing, n >= 2 *)
-           | spec sharing longid1 = ... = longidn                 (* structure sharing, n >= 2 *)
+           | specification sharing type longid1 = ... = longidn            (* type sharing, n >= 2 *)
+           | specification sharing longid1 = ... = longidn                 (* structure sharing, n >= 2 *)
     ]}
 
     Specifications describe the required contents of a structure.
     They appear within signature expressions.
 
-    @see 'sign' Signatures containing specifications
-    @see 'val_desc' Value descriptions
-    @see 'typ_desc' Type descriptions *)
-and spec =
-  | SpecVal of val_desc node
+    @see 'signature' Signatures containing specifications
+    @see 'val_specification' Value descriptions
+    @see 'typ_specification' Type descriptions *)
+and specification =
+  | SpecVal of val_specification node
       (** Value specification: [val valdesc].
 
           {[
             (* SML: val length : 'a list -> int *)
             SpecVal (box_node (ValDesc (length_id, list_to_int_typ, None)))
           ]} *)
-  | SpecTyp of typ_desc node
+  | SpecTyp of typ_specification node
       (** Abstract type specification: [type typdesc].
 
           Declares a type without revealing its implementation.
@@ -1446,7 +1446,7 @@ and spec =
             (* SML: type 'a container *)
             SpecTyp (box_node (TypDesc ([alpha], container_id, None)))
           ]} *)
-  | SpecEqtyp of typ_desc node
+  | SpecEqtyp of typ_specification node
       (** Equality type specification: [eqtype typdesc].
 
           Specifies types that admit equality ([=] and [<>]).
@@ -1455,7 +1455,7 @@ and spec =
             (* SML: eqtype key *)
             SpecEqtyp (box_node (TypDesc ([], key_id, None)))
           ]} *)
-  | SpecTypBind of typ_bind node
+  | SpecTypBind of type_binding node
       (** Type abbreviation in signature: [type typbind].
 
           Reveals the type definition, unlike abstract [type].
@@ -1464,7 +1464,7 @@ and spec =
             (* SML: type pair = int * int *)
             SpecTypBind (box_node (TypBind ([], pair_id, int_times_int, None)))
           ]} *)
-  | SpecDat of dat_desc node
+  | SpecDat of dat_specification node
       (** Datatype specification: [datatype datdesc].
 
           {[
@@ -1472,10 +1472,10 @@ and spec =
             SpecDat (box_node (DatDesc ([alpha], option_id, constructors, None)))
           ]}
 
-          @see 'dat_desc' Datatype description structure *)
+          @see 'dat_specification' Datatype description structure *)
   | SpecDatAlias of idx node * idx node
       (** Datatype replication: [datatype id = datatype longid]. *)
-  | SpecExn of exn_desc node
+  | SpecExn of exn_specification node
       (** Exception specification: [exception exndesc].
 
           {[
@@ -1483,8 +1483,8 @@ and spec =
             SpecExn (box_node (ExnDesc (not_found_id, None, None)))
           ]}
 
-          @see 'exn_desc' Exception description structure *)
-  | SpecStr of str_desc node
+          @see 'exn_specification' Exception description structure *)
+  | SpecStr of str_specification node
       (** Structure specification: [structure strdesc].
 
           {[
@@ -1492,10 +1492,10 @@ and spec =
             SpecStr (box_node (StrDesc (sub_id, sig_node, None)))
           ]}
 
-          @see 'str_desc' Structure description structure *)
-  | SpecSeq of spec node * spec node
+          @see 'str_specification' Structure description structure *)
+  | SpecSeq of specification node * specification node
       (** Sequence of specifications: [spec1 ; spec2]. *)
-  | SpecInclude of sign node
+  | SpecInclude of signature node
       (** Include signature: [include sig].
 
           Incorporates all specifications from another signature.
@@ -1511,8 +1511,8 @@ and spec =
             (* SML: include ORD EQ *)
             SpecIncludeIdx [ord_id; eq_id]
           ]} *)
-  | SpecSharingTyp of spec node * idx node list
-      (** Type sharing constraint: [spec sharing type longid1 = ... = longidn].
+  | SpecSharingTyp of specification node * idx node list
+      (** Type sharing constraint: [specification sharing type longid1 = ... = longidn].
 
           Asserts that the named types are the same type.
 
@@ -1520,8 +1520,8 @@ and spec =
             (* SML: ... sharing type A.t = B.t *)
             SpecSharingTyp (base_spec, [a_t_id; b_t_id])
           ]} *)
-  | SpecSharingStr of spec node * idx node list
-      (** Structure sharing constraint: [spec sharing longid1 = ... = longidn].
+  | SpecSharingStr of specification node * idx node list
+      (** Structure sharing constraint: [specification sharing longid1 = ... = longidn].
 
           Asserts that the named structures share all type components. *)
 
@@ -1530,8 +1530,8 @@ and spec =
     {[
     valdesc ::= id : typ [and valdesc]
     ]} *)
-and val_desc =
-  | ValDesc of idx node * typ node * val_desc node option
+and val_specification =
+  | ValDesc of idx node * typ node * val_specification node option
       (** Value description: [id : typ].
 
           {[
@@ -1544,8 +1544,8 @@ and val_desc =
     {[
     typdesc ::= [var,] id [and typdesc]
     ]} *)
-and typ_desc =
-  | TypDesc of idx node list * idx node * typ_desc node option
+and typ_specification =
+  | TypDesc of idx node list * idx node * typ_specification node option
       (** Type description: [\[var,\] id].
 
           Declares an abstract type with given arity (number of parameters).
@@ -1563,32 +1563,32 @@ and typ_desc =
     {[
     datdesc ::= [var,] id = condesc [and datdesc]
     ]} *)
-and dat_desc =
-  | DatDesc of idx node list * idx node * con_desc node * dat_desc node option
+and dat_specification =
+  | DatDesc of idx node list * idx node * con_specification node * dat_specification node option
       (** Datatype description with constructors.
 
-          Like {!dat_bind} but in signature context.
+          Like {!data_binding} but in signature context.
 
-          @see 'con_desc' Constructor descriptions *)
+          @see 'con_specification' Constructor descriptions *)
 
 (** Constructor descriptions in signatures.
 
     {[
     condesc ::= id [of typ] [| condesc]
     ]} *)
-and con_desc =
-  | ConDesc of idx node * typ node option * con_desc node option
+and con_specification =
+  | ConDesc of idx node * typ node option * con_specification node option
       (** Constructor description: [id \[of typ\]].
 
-          Like {!con_bind} but in signature context. *)
+          Like {!constructor_binding} but in signature context. *)
 
 (** Exception descriptions in signatures.
 
     {[
     exndesc ::= id [of typ] [and exndesc]
     ]} *)
-and exn_desc =
-  | ExnDesc of idx node * typ node option * exn_desc node option
+and exn_specification =
+  | ExnDesc of idx node * typ node option * exn_specification node option
       (** Exception description: [id \[of typ\]].
 
           Like {!exn_bind} but in signature context. *)
@@ -1598,8 +1598,8 @@ and exn_desc =
     {[
     strdesc ::= id : sig [and strdesc]
     ]} *)
-and str_desc =
-  | StrDesc of idx node * sign node * str_desc node option
+and str_specification =
+  | StrDesc of idx node * signature node * str_specification node option
       (** Structure description: [id : sig].
 
           {[
@@ -1730,7 +1730,7 @@ and with_op =
 (** {2 Patterns}
 
     {[
-    pat ::= con                               (* constant *)
+    pat ::= constant                               (* constant *)
           | _                                 (* wildcard *)
           | [op] id                           (* variable *)
           | [op] longid [pat]                 (* construction *)
@@ -1747,11 +1747,11 @@ and with_op =
     value bindings, function arguments, case expressions, and
     exception handlers.
 
-    @see 'exp' Expressions that patterns match against
+    @see 'expression' Expressions that patterns match against
     @see 'matching' Match clauses using patterns
     @see 'pat_row' Record pattern rows *)
 and pat =
-  | PatCon of con node
+  | PatCon of constant node
       (** Constant pattern: matches a specific constant value.
 
           {[
@@ -1762,7 +1762,7 @@ and pat =
             PatCon (box_node (ConString (box_node "hello")))
           ]}
 
-          @see 'con' Constant types *)
+          @see 'constant' Constant types *)
   | PatWildcard
       (** Wildcard pattern: [_]. Matches any value without binding.
 

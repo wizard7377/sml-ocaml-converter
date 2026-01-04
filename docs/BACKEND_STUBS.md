@@ -40,7 +40,7 @@ Converts SML match clauses to OCaml case expressions.
 
 ## Declaration Processing (10 functions)
 
-### `process_dec : Ast.dec -> Parsetree.value_binding list`
+### `process_dec : Ast.declaration -> Parsetree.value_binding list`
 Converts SML declarations to OCaml value bindings. Handles:
 - Value declarations (`ValDec`)
 - Function declarations (`FunDec`)
@@ -58,22 +58,22 @@ Converts SML declarations to OCaml value bindings. Handles:
 ### `process_fixity : Ast.fixity -> string`
 Converts SML fixity specifications.
 
-### `process_val_bind : Ast.val_bind -> Parsetree.value_binding list`
+### `process_val_bind : Ast.value_binding -> Parsetree.value_binding list`
 Converts SML value bindings (pattern = expression).
 
-### `process_fun_bind : Ast.fun_bind -> Parsetree.value_binding list`
+### `process_fun_bind : Ast.function_binding -> Parsetree.value_binding list`
 Converts SML function bindings.
 
 ### `process_fun_match : Ast.fun_match -> (Parsetree.pattern list * Parsetree.expression) list`
 Converts SML function match clauses.
 
-### `process_typ_bind : Ast.typ_bind -> Parsetree.type_declaration list`
+### `process_typ_bind : Ast.type_binding -> Parsetree.type_declaration list`
 Converts SML type abbreviations.
 
-### `process_dat_bind : Ast.dat_bind -> Parsetree.type_declaration list`
+### `process_dat_bind : Ast.data_binding -> Parsetree.type_declaration list`
 Converts SML datatype declarations.
 
-### `process_con_bind : Ast.con_bind -> Parsetree.constructor_declaration list`
+### `process_con_bind : Ast.constructor_binding -> Parsetree.constructor_declaration list`
 Converts SML constructor bindings.
 
 ### `process_exn_bind : Ast.exn_bind -> Parsetree.extension_constructor list`
@@ -84,7 +84,7 @@ Extracts identifier from optional `op` prefix.
 
 ## Structure Processing (3 functions)
 
-### `process_str : Ast.str -> Parsetree.structure_item list`
+### `process_str : Ast.structure -> Parsetree.structure_item list`
 Converts SML structures to OCaml structures. Handles:
 - Structure identifiers (`StrIdx`)
 - Structure expressions (`StructStr`)
@@ -95,18 +95,18 @@ Converts SML structures to OCaml structures. Handles:
 ### `process_anotate : Ast.anotate -> string`
 Converts signature annotations (transparent/opaque).
 
-### `process_str_bind : Ast.str_bind -> Parsetree.module_binding list`
+### `process_str_bind : Ast.structure_binding -> Parsetree.module_binding list`
 Converts SML structure bindings.
 
 ## Signature Processing (9 functions)
 
-### `process_sign : Ast.sign -> Parsetree.signature_item list`
+### `process_sign : Ast.signature -> Parsetree.signature_item list`
 Converts SML signatures to OCaml signatures.
 
 ### `process_typ_refine : Ast.typ_refine -> (Longident.t * Parsetree.core_type) list`
 Converts SML type refinements (where clauses).
 
-### `process_spec : Ast.spec -> Parsetree.signature_item list`
+### `process_spec : Ast.specification -> Parsetree.signature_item list`
 Converts SML specifications to OCaml signature items. Handles:
 - Value specifications (`SpecVal`)
 - Type specifications (`SpecTyp`, `SpecEqtyp`)
@@ -118,22 +118,22 @@ Converts SML specifications to OCaml signature items. Handles:
 - Include directives (`SpecInclude`, `SpecIncludeIdx`)
 - Sharing constraints (`SpecSharingTyp`, `SpecSharingStr`)
 
-### `process_val_desc : Ast.val_desc -> Parsetree.value_description list`
+### `process_val_specification : Ast.val_specification -> Parsetree.value_description list`
 Converts SML value descriptions in signatures.
 
-### `process_typ_desc : Ast.typ_desc -> Parsetree.type_declaration list`
+### `process_typ_specification : Ast.typ_specification -> Parsetree.type_declaration list`
 Converts SML abstract type descriptions.
 
-### `process_dat_desc : Ast.dat_desc -> Parsetree.type_declaration list`
+### `process_dat_specification : Ast.dat_specification -> Parsetree.type_declaration list`
 Converts SML datatype descriptions in signatures.
 
-### `process_con_desc : Ast.con_desc -> Parsetree.constructor_declaration list`
+### `process_con_specification : Ast.con_specification -> Parsetree.constructor_declaration list`
 Converts SML constructor descriptions.
 
-### `process_exn_desc : Ast.exn_desc -> Parsetree.extension_constructor list`
+### `process_exn_specification : Ast.exn_specification -> Parsetree.extension_constructor list`
 Converts SML exception descriptions.
 
-### `process_str_desc : Ast.str_desc -> Parsetree.module_declaration list`
+### `process_str_specification : Ast.str_specification -> Parsetree.module_declaration list`
 Converts SML structure descriptions in signatures.
 
 ## Program Processing (3 functions)
@@ -146,10 +146,10 @@ Converts top-level SML programs to OCaml structures. Handles:
 - Sequential programs (`ProgSeq`)
 - Empty programs (`ProgEmpty`)
 
-### `process_fct_bind : Ast.fct_bind -> Parsetree.module_binding list`
+### `process_functor_binding : Ast.functor_binding -> Parsetree.module_binding list`
 Converts SML functor bindings.
 
-### `process_sign_bind : Ast.sign_bind -> Parsetree.module_type_declaration list`
+### `process_signature_binding : Ast.signature_binding -> Parsetree.module_type_declaration list`
 Converts SML signature bindings.
 
 ## Implementation Status

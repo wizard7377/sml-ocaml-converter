@@ -5,20 +5,19 @@ include Process
 
 let convert_file ~(input_files:string list) ?(output_file:string option) ~(common_options:common_options) : int =  
   let input_files' = List.flatten (List.map (Re.split (Re.compile (Re.rep1 Re.space))) input_files) in
-List.iter (fun input_file -> ( 
     let common_options = common_options in
     let cfg : Common.config = {
-      input_file = input_file ;
+      input_file = String.concat " " input_files' ;
       output_file = output_file ;
       verbosity = common_options.verbose ;
       conversions = common_options.conversions 
     } in
-    let process = new process_file cfg in
-    let res = process#run () in 
-    let _ = res in ()
-  ); ()) input_files' ; 0
+    let process = new process cfg in
+    let res = process#run (File input_files') in
+    let _ = res in (); 0
 
 
+    
 let output : string option Term.t = 
   let doc = "Output path for converted files" in
   Arg.(value & opt (some string) None & info ["o"; "output"] ~doc)

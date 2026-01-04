@@ -75,7 +75,7 @@ Comprehensive pattern conversion:
 All declaration types implemented:
 - `process_dec` - Main declaration dispatcher
 - `process_fixity` - Fixity declarations (returns string representation)
-- `process_val_bind` - Value bindings (val x = exp)
+- `process_val_bind` - Value bindings (val x = expression)
 - `process_fun_bind` - Function bindings with pattern matching
 - `process_fun_match` - Function match clauses
 - `process_typ_bind` - Type abbreviations
@@ -112,19 +112,19 @@ Full signature conversion support:
 - `process_sign` - Main signature processor
 - `process_typ_refine` - Where-type clauses
 - `process_spec` - Specification dispatcher
-- `process_val_desc` - Value specifications
-- `process_typ_desc` - Abstract type descriptions
-- `process_dat_desc` - Datatype descriptions
-- `process_con_desc` - Constructor descriptions
-- `process_exn_desc` - Exception descriptions
-- `process_str_desc` - Structure descriptions
+- `process_val_specification` - Value specifications
+- `process_typ_specification` - Abstract type descriptions
+- `process_dat_specification` - Datatype descriptions
+- `process_con_specification` - Constructor descriptions
+- `process_exn_specification` - Exception descriptions
+- `process_str_specification` - Structure descriptions
 
 ### 9. Functor and Module Type Bindings
 **Status**: Complete ✅
 
 Module system support:
-- `process_fct_bind` - Functor bindings (both plain and opened forms)
-- `process_sign_bind` - Signature bindings (module type declarations)
+- `process_functor_binding` - Functor bindings (both plain and opened forms)
+- `process_signature_binding` - Signature bindings (module type declarations)
 
 ## ⚠️ Limitations and Simplifications
 
@@ -252,8 +252,8 @@ let result = process_type_value input
 (* → OCaml type: 'a -> 'b *)
 
 (* Successfully converts: *)
-let exp = ExpApp (ExpIdx (IdxIdx "f"), ExpIdx (IdxIdx "x"))
-let result = process_exp exp
+let expression = ExpApp (ExpIdx (IdxIdx "f"), ExpIdx (IdxIdx "x"))
+let result = process_exp expression
 (* → OCaml expression: f x *)
 
 (* Successfully converts: *)

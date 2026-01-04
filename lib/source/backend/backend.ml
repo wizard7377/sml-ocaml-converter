@@ -18,15 +18,14 @@ open Process_names
 (** Result type for the complete conversion.
     Currently unspecified; will contain the final OCaml structure/signature. *)
 
-type res = Parsetree.toplevel_phrase list
 include Helpers
 open Common
 module Debug = Ppxlib.Pprintast
-class process_ocaml =  
-  object (self)
+module Make (Config : CONFIG) = struct
   
+type res = Parsetree.toplevel_phrase list
 
-
+module Config = Config 
   module Names = Process_names.Make(Config)
   exception BadAst of string
   let current_names : Names.t ref = ref (Names.init ())
@@ -38,8 +37,8 @@ let ghost (v : 'a) : 'a Location.loc = Location.mkloc v Location.none
 
 let depth : int ref = ref 0
 let comment_str (s:string) : Parsetree.structure = 
-  let attr_desc : Parsetree.structure_item = Builder.pstr_eval (Builder.pexp_constant (Parsetree.Pconst_string (s,Location.none,None (* FIXME ?*) ) )) [] in
-  [attr_desc]
+  let attr_specification : Parsetree.structure_item = Builder.pstr_eval (Builder.pexp_constant (Parsetree.Pconst_string (s,Location.none,None (* FIXME ?*) ) )) [] in
+  [attr_specification]
 let comment_str_name : string Location.loc = ghost "sml_comment"
 let process_commented (attach:Parsetree.attributes -> 'a -> 'a) (node:'a Ast.node) : 'a = 
   let value = node.value in
@@ -54,7 +53,7 @@ let process_commented (attach:Parsetree.attributes -> 'a -> 'a) (node:'a Ast.nod
         attach attrs value
 
 let trace_part ?(level = 2) ?(ast = "") ?(msg = "") ~value : 'a =
-  match config.verbosity with
+  match Config.config.verbosity with
     Some v when v >= level -> begin (* TODO use level *)
       let indent = !depth in 
       depth := indent + 1;
@@ -64,7 +63,7 @@ let trace_part ?(level = 2) ?(ast = "") ?(msg = "") ~value : 'a =
       res
     end
     | _ -> value ()
-let debug_ocaml ~(format:Format.formatter -> 'a -> unit) (node:'a) : unit = match config.verbosity with
+let debug_ocaml ~(format:Format.formatter -> 'a -> unit) (node:'a) : unit = match Config.config.verbosity with
     Some v when v > 1 -> format Format.err_formatter node 
    | _ -> ()
 (** Convert a string identifier to a Longident.t.
@@ -194,7 +193,7 @@ and process_object_field_type (field : Ast.typ_row) : Parsetree.object_field lis
 
     @param ty The SML type to convert
     @return The corresponding OCaml core type *)
-let rec process_type (ty : Ast.typ) : Parsetree.core_type = trace_part ~level:2 ~ast:"typ" ~msg:(Ast.show_typ ty) ~value:(fun () -> process_type_value ty)
+let rec process_type (ty : Ast.typ) : Parsetree.core_type = trace_part ~level:2 ~ast:"typ" ~msg:"" (* ~msg:(Ast.show_typ ty) *) ~value:(fun () -> process_type_value ty)
 
 (** {2 Constant Processing}
 
@@ -214,10 +213,10 @@ let rec process_type (ty : Ast.typ) : Parsetree.core_type = trace_part ~level:2 
     - Character constants ([#"a"] → ['a'])
     - String constants
 
-    @param con The SML constant to convert
+    @param constant The SML constant to convert
     @return The corresponding OCaml {!Parsetree.constant}
     @raise Assert_failure For word constants (not supported in OCaml) *)
-let rec process_con (con : Ast.con) : Parsetree.constant = match con with
+let rec process_con (constant : Ast.constant) : Parsetree.constant = match constant with
   | ConInt i ->
       (* SML uses ~ for negation, OCaml uses - *)
       let i' = String.map (function '~' -> '-' | c -> c) i.value in
@@ -261,7 +260,7 @@ let rec process_con (con : Ast.con) : Parsetree.constant = match con with
     - Function application ([f x])
     - Infix operators ([x + y])
 
-    @param exp The SML expression to convert
+    @param expression The SML expression to convert
     @return The corresponding OCaml {!Parsetree.expression}
     @raise Assert_failure For unimplemented expression forms
 
@@ -275,7 +274,7 @@ let rec process_con (con : Ast.con) : Parsetree.constant = match con with
       process_exp (InfixApp (ExpIdx "x", "+", ExpIdx "y"))
       (* → OCaml Parsetree for: (+) x y *)
     ]} *)
-let rec process_exp (exp : Ast.exp) : Parsetree.expression = match exp with
+let rec process_exp (expression : Ast.expression) : Parsetree.expression = match expression with
   | ExpCon c -> Builder.pexp_constant (process_con c.value)
   | ExpApp (e1, e2) ->
       let e1' = process_exp e1.value in
@@ -292,9 +291,9 @@ let rec process_exp (exp : Ast.exp) : Parsetree.expression = match exp with
   | TupleExp [] -> Builder.pexp_construct (ghost (Longident.Lident "()")) None
   | TupleExp exps -> Builder.pexp_tuple (List.map (fun e -> process_exp e.Ast.value) exps)
   | RecordExp rows ->
-      let fields = List.map (fun r -> match r.Ast.value with Ast.Row (lab, exp, _) ->
+      let fields = List.map (fun r -> match r.Ast.value with Ast.Row (lab, expression, _) ->
         let lab' = process_with_state (idx_to_string lab.value) in
-        (ghost (string_to_longident lab'), process_exp exp.value)
+        (ghost (string_to_longident lab'), process_exp expression.value)
       ) rows in
       Builder.pexp_record fields None
   | RecordSelector lab ->
@@ -371,9 +370,9 @@ let rec process_exp (exp : Ast.exp) : Parsetree.expression = match exp with
     @param row The expression row (field binding)
     @return A pair of field identifier and expression *)
 and process_row (row : Ast.row) : (Longident.t Location.loc * Parsetree.expression) = match row with
-  | Row (lab, exp, rest_opt) ->
+  | Row (lab, expression, rest_opt) ->
       let lab' = process_with_state (idx_to_string lab.value) in
-      (ghost (string_to_longident lab'), process_exp exp.value)
+      (ghost (string_to_longident lab'), process_exp expression.value)
 
 (** Convert SML match clauses to OCaml case list.
 
@@ -385,8 +384,8 @@ and process_row (row : Ast.row) : (Longident.t Location.loc * Parsetree.expressi
     @param m The match clause(s)
     @return A list of OCaml case expressions *)
 and process_matching (m : Ast.matching) : Parsetree.case list = match m with
-  | Case (pat, exp, rest_opt) ->
-      let case_here = Builder.case ~lhs:(process_pat pat.value) ~guard:None ~rhs:(process_exp exp.value) in
+  | Case (pat, expression, rest_opt) ->
+      let case_here = Builder.case ~lhs:(process_pat pat.value) ~guard:None ~rhs:(process_exp expression.value) in
       begin match rest_opt with
       | None -> [case_here]
       | Some rest -> case_here :: process_matching rest.value
@@ -561,9 +560,9 @@ and process_pat_row (row : Ast.pat_row) : (string * Parsetree.pattern) list = ma
     (like type declarations) don't produce value bindings. Those return empty lists.
     For full program conversion, use process_prog which returns structure items.
 
-    @param dec The SML declaration to convert
+    @param declaration The SML declaration to convert
     @return A list of OCaml value bindings *)
-and process_value_dec (dec : Ast.dec) : Parsetree.value_binding list = match dec with
+and process_value_dec (declaration : Ast.declaration) : Parsetree.value_binding list = match declaration with
   | ValDec (tvars, vb) ->
       (* Type variables in 'val' are currently ignored in conversion *)
       process_val_bind vb.value
@@ -621,11 +620,11 @@ and process_fixity (fix : Ast.fixity) : string = match fix with
 
     @param vb The value binding(s)
     @return List of OCaml value bindings *)
-and process_val_bind (vb : Ast.val_bind) : Parsetree.value_binding list = match vb with
-  | ValBind (pat, exp, rest_opt) ->
+and process_val_bind (vb : Ast.value_binding) : Parsetree.value_binding list = match vb with
+  | ValBind (pat, expression, rest_opt) ->
       let pat' = process_pat pat.value in
-      let exp' = process_exp exp.value in
-      let binding = Builder.value_binding ~pat:pat' ~expr:exp' in
+      let expression' = process_exp expression.value in
+      let binding = Builder.value_binding ~pat:pat' ~expr:expression' in
       let rest = match rest_opt with
         | None -> []
         | Some r -> process_val_bind r.value
@@ -642,7 +641,7 @@ and process_val_bind (vb : Ast.val_bind) : Parsetree.value_binding list = match 
 
     @param fb The function binding(s)
     @return List of OCaml value bindings *)
-and process_fun_bind (fb : Ast.fun_bind) : Parsetree.value_binding list = match fb with
+and process_fun_bind (fb : Ast.function_binding) : Parsetree.value_binding list = match fb with
   | FunBind (fm, rest_opt) ->
       (* Get the function name from the first match *)
       let fname_str = match fm.value with
@@ -657,11 +656,11 @@ and process_fun_bind (fb : Ast.fun_bind) : Parsetree.value_binding list = match 
       (* Build the function body *)
       let body = match clauses with
         | [] -> failwith "Function with no clauses"
-        | [(pats, exp)] ->
+        | [(pats, expression)] ->
             (* Single clause - build nested lambdas *)
             List.fold_right (fun pat acc ->
               Builder.pexp_fun Nolabel None pat acc
-            ) pats exp
+            ) pats expression
         | _ ->
             (* Multiple clauses - need pattern matching *)
             (* All clauses should have same number of parameters *)
@@ -683,9 +682,9 @@ and process_fun_bind (fb : Ast.fun_bind) : Parsetree.value_binding list = match 
                   Builder.pexp_ident (ghost (Longident.Lident (Printf.sprintf "arg%d" i)))
                 )
               ) in
-              let cases = List.map (fun (pats, exp) ->
+              let cases = List.map (fun (pats, expression) ->
                 let pat = Builder.ppat_tuple pats in
-                Builder.case ~lhs:pat ~guard:None ~rhs:exp
+                Builder.case ~lhs:pat ~guard:None ~rhs:expression
               ) clauses in
               Builder.pexp_match match_exp cases
             )
@@ -707,13 +706,13 @@ and process_fun_bind (fb : Ast.fun_bind) : Parsetree.value_binding list = match 
     @param fm The function match clause(s)
     @return List of pattern-expression pairs *)
 and process_fun_match (fm : Ast.fun_match) : (Parsetree.pattern list * Parsetree.expression) list = match fm with
-  | FunMatchPrefix (wo, pats, ty_opt, exp, rest_opt) ->
-      (* fun f pat1 pat2 ... = exp *)
+  | FunMatchPrefix (wo, pats, ty_opt, expression, rest_opt) ->
+      (* fun f pat1 pat2 ... = expression *)
       let pats' = List.map (fun p -> process_pat p.Ast.value) pats in
-      let exp' = process_exp exp.value in
+      let expression' = process_exp expression.value in
       let exp_with_type = match ty_opt with
-        | None -> exp'
-        | Some ty -> Builder.pexp_constraint exp' (process_type ty.value)
+        | None -> expression'
+        | Some ty -> Builder.pexp_constraint expression' (process_type ty.value)
       in
       let here = (pats', exp_with_type) in
       let rest = match rest_opt with
@@ -721,14 +720,14 @@ and process_fun_match (fm : Ast.fun_match) : (Parsetree.pattern list * Parsetree
         | Some r -> process_fun_match r.value
       in
       here :: rest
-  | FunMatchInfix (p1, id, p2, ty_opt, exp, rest_opt) ->
-      (* fun p1 op p2 = exp - infix function *)
+  | FunMatchInfix (p1, id, p2, ty_opt, expression, rest_opt) ->
+      (* fun p1 op p2 = expression - infix function *)
       let p1' = process_pat p1.value in
       let p2' = process_pat p2.value in
-      let exp' = process_exp exp.value in
+      let expression' = process_exp expression.value in
       let exp_with_type = match ty_opt with
-        | None -> exp'
-        | Some ty -> Builder.pexp_constraint exp' (process_type ty.value)
+        | None -> expression'
+        | Some ty -> Builder.pexp_constraint expression' (process_type ty.value)
       in
       let here = ([p1'; p2'], exp_with_type) in
       let rest = match rest_opt with
@@ -736,16 +735,16 @@ and process_fun_match (fm : Ast.fun_match) : (Parsetree.pattern list * Parsetree
         | Some r -> process_fun_match r.value
       in
       here :: rest
-  | FunMatchLow (p1, id, p2, pats, ty_opt, exp, rest_opt) ->
-      (* fun (p1 op p2) pat3 ... = exp - curried infix *)
+  | FunMatchLow (p1, id, p2, pats, ty_opt, expression, rest_opt) ->
+      (* fun (p1 op p2) pat3 ... = expression - curried infix *)
       let p1' = process_pat p1.value in
       let p2' = process_pat p2.value in
       let pats' = List.map (fun p -> process_pat p.Ast.value) pats in
       let all_pats = p1' :: p2' :: pats' in
-      let exp' = process_exp exp.value in
+      let expression' = process_exp expression.value in
       let exp_with_type = match ty_opt with
-        | None -> exp'
-        | Some ty -> Builder.pexp_constraint exp' (process_type ty.value)
+        | None -> expression'
+        | Some ty -> Builder.pexp_constraint expression' (process_type ty.value)
       in
       let here = (all_pats, exp_with_type) in
       let rest = match rest_opt with
@@ -761,7 +760,7 @@ and process_fun_match (fm : Ast.fun_match) : (Parsetree.pattern list * Parsetree
 
     @param tb The type binding(s)
     @return List of OCaml type declarations *)
-and process_typ_bind (tb : Ast.typ_bind) : Parsetree.type_declaration list = match tb with
+and process_typ_bind (tb : Ast.type_binding) : Parsetree.type_declaration list = match tb with
   | TypBind (tvars, id, ty, rest_opt) ->
       let name_str = process_with_state (idx_to_string id.value) in
       let params = List.map (fun (tv : Ast.idx Ast.node) ->
@@ -797,7 +796,7 @@ and process_typ_bind (tb : Ast.typ_bind) : Parsetree.type_declaration list = mat
 
     @param db The datatype binding(s)
     @return List of OCaml type declarations *)
-and process_dat_bind (db : Ast.dat_bind) : Parsetree.type_declaration list = match db with
+and process_dat_bind (db : Ast.data_binding) : Parsetree.type_declaration list = match db with
   | DatBind (tvars, id, cb, rest_opt) ->
       let name_str = process_with_state (idx_to_string id.value) in
       let params = List.map (fun (tv : Ast.idx Ast.node) ->
@@ -830,7 +829,7 @@ and process_dat_bind (db : Ast.dat_bind) : Parsetree.type_declaration list = mat
 
     @param cb The constructor binding(s)
     @return List of OCaml constructor declarations *)
-and process_con_bind (cb : Ast.con_bind) : Parsetree.constructor_declaration list = match cb with
+and process_con_bind (cb : Ast.constructor_binding) : Parsetree.constructor_declaration list = match cb with
   | ConBind (id, ty_opt, rest_opt) ->
       let name_str = process_with_state (idx_to_string id.value) in
       let args = match ty_opt with
@@ -911,17 +910,17 @@ and process_with_op (wo : Ast.with_op) : string = match wo with
     where the structure can be inlined. For structure references and functor
     applications, this may not be fully accurate.
 
-    @param str The SML structure to convert
+    @param structure The SML structure to convert
     @return List of OCaml structure items *)
-and process_str (str : Ast.str) : Parsetree.structure_item list = match str with
+and process_str (structure : Ast.structure) : Parsetree.structure_item list = match structure with
   | StrIdx id ->
       (* Structure reference - can't inline, needs module expression context *)
       (* This case should ideally return a module expression instead *)
       raise (BadAst (Printf.sprintf "Structure reference '%s' cannot be converted to structure items - requires module expression context"
         (idx_to_string id.value)))
-  | StructStr dec ->
-      (* struct dec end - convert declarations to structure items *)
-      dec_to_structure_items dec.value
+  | StructStr declaration ->
+      (* struct declaration end - convert declarations to structure items *)
+      dec_to_structure_items declaration.value
   | AnotateStr (_id, _annot, s) ->
       (* Annotated structure - just process the inner structure *)
       (* The annotation would be handled at binding site *)
@@ -930,12 +929,12 @@ and process_str (str : Ast.str) : Parsetree.structure_item list = match str with
       (* Functor application - can't inline *)
       raise (BadAst (Printf.sprintf "Functor application '%s(...)' cannot be converted to structure items - requires module expression context"
         (idx_to_string id.value))) 
-  | FunctorAppAnonymous (_id, dec) ->
+  | FunctorAppAnonymous (_id, declaration) ->
       (* Functor applied to anonymous struct *)
-      dec_to_structure_items dec.value
-  | LocalDec (dec, s) ->
+      dec_to_structure_items declaration.value
+  | LocalDec (declaration, s) ->
       (* Local declarations in structure *)
-      dec_to_structure_items dec.value @ process_str s.value
+      dec_to_structure_items declaration.value @ process_str s.value
 
 (** Convert SML signature annotation type.
 
@@ -958,15 +957,15 @@ and process_anotate (a : Ast.anotate) : string = match a with
 
     @param sb The structure binding(s)
     @return List of OCaml module bindings *)
-and process_str_bind (sb : Ast.str_bind) : Parsetree.module_binding list = trace_part ~level:2 ~ast:"str_bind" ~msg:(Ast.show_str_bind sb) ~value:(fun () -> match sb with
+and process_str_bind (sb : Ast.structure_binding) : Parsetree.module_binding list = trace_part ~level:2 ~ast:"structure_binding" ~msg:"" (* ~msg:(Ast.show_str_bind sb) *) ~value:(fun () -> match sb with
   | StrBind (id, annot_opt, rest_opt) ->
       let name_str = process_with_state (idx_to_string id.value) in
       (* Create empty module since AST doesn't include structure body *)
       let module_expr = Builder.pmod_structure [] in
       let module_expr_with_sig = match annot_opt with
         | None -> module_expr
-        | Some (annot, sign) ->
-            let module_type = process_sign sign.value in
+        | Some (annot, signature) ->
+            let module_type = process_sign signature.value in
             match annot.value with
             | Transparent -> Builder.pmod_constraint module_expr module_type
             | Opaque -> Builder.pmod_constraint module_expr module_type
@@ -992,19 +991,19 @@ and process_str_bind (sb : Ast.str_bind) : Parsetree.module_binding list = trace
 
 (** Convert an SML signature to OCaml signature items.
 
-    @param sign The SML signature to convert
+    @param signature The SML signature to convert
     @return List of OCaml signature items *)
-and process_sign (sign : Ast.sign) : Parsetree.module_type = trace_part ~level:2 ~ast:"sign" ~msg:(Ast.show_sign sign) ~value:(fun () -> match sign with
+and process_sign (signature : Ast.signature) : Parsetree.module_type = trace_part ~level:2 ~ast:"signature" ~msg:"" (* ~msg:(Ast.show_sign signature) *) ~value:(fun () -> match signature with
   | SignIdx id ->
       (* Signature identifier - can't inline, needs module type context *)
       (* This should ideally be handled at module type level *)
       raise (BadAst (Printf.sprintf "Signature reference '%s' cannot be converted to signature items - requires module type expression context"
         (idx_to_string id.value)))
      
-  | SignSig spec ->
-      (* sig spec end - process specifications *)
-      let spec' = List.flatten (List.map process_spec spec) in
-      Builder.pmty_signature spec'
+  | SignSig specification ->
+      (* sig specification end - process specifications *)
+      let specification' = List.flatten (List.map process_spec specification) in
+      Builder.pmty_signature specification'
 
   | SignWhere (s, _tr) ->
       (* Signature with where clauses *)
@@ -1034,25 +1033,25 @@ and process_typ_refine (tr : Ast.typ_refine) : (Longident.t * Parsetree.core_typ
 
 (** Convert SML specifications within signatures.
 
-    @param spec The specification to convert
+    @param specification The specification to convert
     @return List of OCaml signature items *)
-and process_spec (spec' : Ast.spec Ast.node) : Parsetree.signature_item list = trace_part ~level:2 ~ast:"spec" ~msg:(let _ = Ast.show_spec spec'.value in "") ~value:(fun () ->
-  match spec'.value with
+and process_spec (specification' : Ast.specification Ast.node) : Parsetree.signature_item list = trace_part ~level:2 ~ast:"specification" ~msg:"" (* ~msg:(let _ = Ast.show_spec specification'.value in "") *) ~value:(fun () ->
+  match specification'.value with
   | SpecVal vd ->
-      let vdescs = process_val_desc vd.value in
+      let vdescs = process_val_specification vd.value in
       List.map (fun vd -> Builder.psig_value vd) vdescs
   | SpecTyp td ->
-      let tdecls = process_typ_desc td.value in
+      let tdecls = process_typ_specification td.value in
       [Builder.psig_type Asttypes.Nonrecursive tdecls]
   | SpecEqtyp td ->
       (* Equality types - in OCaml just abstract types *)
-      let tdecls = process_typ_desc td.value in
+      let tdecls = process_typ_specification td.value in
       [Builder.psig_type Asttypes.Nonrecursive tdecls]
   | SpecTypBind tb ->
       let tdecls = process_typ_bind tb.value in
       [Builder.psig_type Asttypes.Nonrecursive tdecls]
   | SpecDat dd ->
-      let tdecls = process_dat_desc dd.value in
+      let tdecls = process_dat_specification dd.value in
       [Builder.psig_type Asttypes.Nonrecursive tdecls]
   | SpecDatAlias (id1, id2) ->
       (* Datatype alias in signature *)
@@ -1070,13 +1069,13 @@ and process_spec (spec' : Ast.spec Ast.node) : Parsetree.signature_item list = t
       in
       [Builder.psig_type Asttypes.Nonrecursive [tdecl]]
   | SpecExn ed ->
-      let ext_constrs = process_exn_desc ed.value in
+      let ext_constrs = process_exn_specification ed.value in
       List.map (fun ec ->
         let type_exn = Builder.type_exception ec in
         Builder.psig_exception type_exn
       ) ext_constrs
   | SpecStr sd ->
-      let mdecls = process_str_desc sd.value in
+      let mdecls = process_str_specification sd.value in
       List.map (fun md -> Builder.psig_module md) mdecls
   | SpecSeq (s1, s2) ->
       List.append (process_spec s1) (process_spec s2)
@@ -1101,7 +1100,7 @@ and process_spec (spec' : Ast.spec Ast.node) : Parsetree.signature_item list = t
 
     @param vd The value description(s)
     @return List of OCaml value descriptions *)
-and process_val_desc (vd : Ast.val_desc) : Parsetree.value_description list = trace_part ~level:2 ~ast:"val_desc" ~msg:(Ast.show_val_desc vd) ~value:(fun () ->
+and process_val_specification (vd : Ast.val_specification) : Parsetree.value_description list = trace_part ~level:2 ~ast:"val_specification" ~msg:"" (* ~msg:(Ast.show_val_specification vd) *) ~value:(fun () ->
   match vd with
   | ValDesc (id, ty, rest_opt) ->
       let name_str = process_with_state (idx_to_string id.value) in
@@ -1113,7 +1112,7 @@ and process_val_desc (vd : Ast.val_desc) : Parsetree.value_description list = tr
       in
       let rest = match rest_opt with
         | None -> []
-        | Some r -> process_val_desc r.value
+        | Some r -> process_val_specification r.value
       in
       vdesc :: rest
 )
@@ -1121,7 +1120,7 @@ and process_val_desc (vd : Ast.val_desc) : Parsetree.value_description list = tr
 
     @param td The type description(s)
     @return List of OCaml type declarations *)
-and process_typ_desc (td : Ast.typ_desc) : Parsetree.type_declaration list = trace_part ~level:2 ~ast:"typ_desc" ~msg:(Ast.show_typ_desc td) ~value:(fun () -> match td with
+and process_typ_specification (td : Ast.typ_specification) : Parsetree.type_declaration list = trace_part ~level:2 ~ast:"typ_specification" ~msg:"" (* ~msg:(Ast.show_typ_specification td) *) ~value:(fun () -> match td with
   | TypDesc (tvars, id, rest_opt) ->
       let name_str = process_with_state (idx_to_string id.value) in
       let params = List.map (fun (tv : Ast.idx Ast.node) ->
@@ -1145,7 +1144,7 @@ and process_typ_desc (td : Ast.typ_desc) : Parsetree.type_declaration list = tra
       in
       let rest = match rest_opt with
         | None -> []
-        | Some r -> process_typ_desc r.value
+        | Some r -> process_typ_specification r.value
       in
       tdecl :: rest
 )
@@ -1153,7 +1152,7 @@ and process_typ_desc (td : Ast.typ_desc) : Parsetree.type_declaration list = tra
 
     @param dd The datatype description(s)
     @return List of OCaml type declarations *)
-and process_dat_desc (dd : Ast.dat_desc) : Parsetree.type_declaration list = trace_part ~level:2 ~ast:"dat_desc" ~msg:(Ast.show_dat_desc dd) ~value:(fun () -> match dd with
+and process_dat_specification (dd : Ast.dat_specification) : Parsetree.type_declaration list = trace_part ~level:2 ~ast:"dat_specification" ~msg:"" (* ~msg:(Ast.show_dat_specification dd) *) ~value:(fun () -> match dd with
   | DatDesc (tvars, id, cd, rest_opt) ->
       let name_str = process_with_state (idx_to_string id.value) in
       let params = List.map (fun (tv : Ast.idx Ast.node) ->
@@ -1167,7 +1166,7 @@ and process_dat_desc (dd : Ast.dat_desc) : Parsetree.type_declaration list = tra
         in
         (Builder.ptyp_var var_name, (Asttypes.NoVariance, Asttypes.NoInjectivity))
       ) tvars in
-      let constructors = process_con_desc cd.value in
+      let constructors = process_con_specification cd.value in
       let tdecl = Builder.type_declaration
         ~name:(ghost name_str)
         ~params
@@ -1178,7 +1177,7 @@ and process_dat_desc (dd : Ast.dat_desc) : Parsetree.type_declaration list = tra
       in
       let rest = match rest_opt with
         | None -> []
-        | Some r -> process_dat_desc r.value
+        | Some r -> process_dat_specification r.value
       in
       tdecl :: rest
 )
@@ -1186,7 +1185,7 @@ and process_dat_desc (dd : Ast.dat_desc) : Parsetree.type_declaration list = tra
 
     @param cd The constructor description(s)
     @return List of OCaml constructor declarations *)
-and process_con_desc (cd : Ast.con_desc) : Parsetree.constructor_declaration list = trace_part ~level:2 ~ast:"con_desc" ~msg:(Ast.show_con_desc cd) ~value:(fun () -> match cd with
+and process_con_specification (cd : Ast.con_specification) : Parsetree.constructor_declaration list = trace_part ~level:2 ~ast:"con_specification" ~msg:"" (* ~msg:(Ast.show_con_specification cd) *) ~value:(fun () -> match cd with
   | ConDesc (id, ty_opt, rest_opt) ->
       (* Same as process_con_bind *)
       let name_str = process_with_state (idx_to_string id.value) in
@@ -1201,7 +1200,7 @@ and process_con_desc (cd : Ast.con_desc) : Parsetree.constructor_declaration lis
       in
       let rest = match rest_opt with
         | None -> []
-        | Some r -> process_con_desc r.value
+        | Some r -> process_con_specification r.value
       in
       cdecl :: rest
 )
@@ -1209,7 +1208,7 @@ and process_con_desc (cd : Ast.con_desc) : Parsetree.constructor_declaration lis
 
     @param ed The exception description(s)
     @return List of OCaml extension constructors *)
-and process_exn_desc (ed : Ast.exn_desc) : Parsetree.extension_constructor list = trace_part ~level:2 ~ast:"exn_desc" ~msg:(Ast.show_exn_desc ed) ~value:(fun () -> match ed with
+and process_exn_specification (ed : Ast.exn_specification) : Parsetree.extension_constructor list = trace_part ~level:2 ~ast:"exn_specification" ~msg:"" (* ~msg:(Ast.show_exn_specification ed) *) ~value:(fun () -> match ed with
   | ExnDesc (id, ty_opt, rest_opt) ->
       (* Similar to process_exn_bind but for signatures *)
       let name_str = process_with_state (idx_to_string id.value) in
@@ -1223,7 +1222,7 @@ and process_exn_desc (ed : Ast.exn_desc) : Parsetree.extension_constructor list 
       in
       let rest = match rest_opt with
         | None -> []
-        | Some r -> process_exn_desc r.value
+        | Some r -> process_exn_specification r.value
       in
       ext_constr :: rest
 )
@@ -1231,14 +1230,14 @@ and process_exn_desc (ed : Ast.exn_desc) : Parsetree.extension_constructor list 
 
     @param sd The structure description(s)
     @return List of OCaml module declarations *)
-and process_str_desc (sd : Ast.str_desc) : Parsetree.module_declaration list = trace_part ~level:2 ~ast:"str_desc" ~msg:(Ast.show_str_desc sd) ~value:(fun () -> match sd with
+and process_str_specification (sd : Ast.str_specification) : Parsetree.module_declaration list = trace_part ~level:2 ~ast:"str_specification" ~msg:"" (* ~msg:(Ast.show_str_specification sd) *) ~value:(fun () -> match sd with
   | StrDesc (id, s, rest_opt) ->
       let name_str = process_with_state (idx_to_string id.value) in
       let module_type = process_sign s.value in
       let mdecl = Builder.module_declaration ~name:(ghost (Some name_str)) ~type_:module_type in
       let rest = match rest_opt with
         | None -> []
-        | Some r -> process_str_desc r.value
+        | Some r -> process_str_specification r.value
       in
       mdecl :: rest
 )
@@ -1253,7 +1252,7 @@ and process_str_desc (sd : Ast.str_desc) : Parsetree.module_declaration list = t
 
 (** Convert a declaration to structure items.
     Helper function for process_prog. *)
-and dec_to_structure_items (dec : Ast.dec) : Parsetree.structure_item list = trace_part ~level:5 ~ast:"dec" ~msg:(Ast.show_dec dec) ~value:(fun () -> match dec with
+and dec_to_structure_items (declaration : Ast.declaration) : Parsetree.structure_item list = trace_part ~level:5 ~ast:"declaration" ~msg:"" (* ~msg:(Ast.show_dec declaration) *) ~value:(fun () -> match declaration with
   | ValDec (tvars, vb) ->
       let bindings = process_val_bind vb.value in
       List.map (fun binding ->
@@ -1329,15 +1328,15 @@ and dec_to_structure_items (dec : Ast.dec) : Parsetree.structure_item list = tra
     @param prog The SML program to convert
     @return An OCaml structure (list of structure items) *)
 and process_prog (prog : Ast.prog) : Parsetree.structure = trace_part ~level:5 ~ast:"prog" ~msg:"" ~value:(fun () -> match prog with
-  | ProgDec dec ->
-      dec_to_structure_items dec.value
+  | ProgDec declaration ->
+      dec_to_structure_items declaration.value
   | ProgFun fb ->
-      let module_bindings = process_fct_bind fb.value in
+      let module_bindings = process_functor_binding fb.value in
       List.map (fun mb ->
         Builder.pstr_module mb
       ) module_bindings
   | ProgStr sb ->
-      let mtdecls = process_sign_bind sb.value in
+      let mtdecls = process_signature_binding sb.value in
       List.map (fun mtd ->
         Builder.pstr_modtype mtd
       ) mtdecls
@@ -1353,7 +1352,7 @@ and process_prog (prog : Ast.prog) : Parsetree.structure = trace_part ~level:5 ~
 
     @param fb The functor binding(s)
     @return List of OCaml module bindings *)
-and process_fct_bind (fb : Ast.fct_bind) : Parsetree.module_binding list = trace_part ~level:2 ~ast:"fct_bind" ~msg:(Ast.show_fct_bind fb) ~value:(fun () -> let res = match fb with
+and process_functor_binding (fb : Ast.functor_binding) : Parsetree.module_binding list = trace_part ~level:2 ~ast:"functor_binding" ~msg:"" (* ~msg:(Ast.show_functor_binding fb) *) ~value:(fun () -> let res = match fb with
   | FctBind (name, param, sig1, annot_opt, body, rest_opt) ->
       let fname_str = process_with_state (idx_to_string name.value) in
       let pname_str = process_with_state (idx_to_string param.value) in
@@ -1384,15 +1383,15 @@ and process_fct_bind (fb : Ast.fct_bind) : Parsetree.module_binding list = trace
 
       let rest = match rest_opt with
         | None -> []
-        | Some r -> process_fct_bind r.value
+        | Some r -> process_functor_binding r.value
       in
       binding :: rest
-  | FctBindOpen (name, spec, annot_opt, body, rest_opt) ->
-      (* Opened functor - parameter spec is directly visible *)
+  | FctBindOpen (name, specification, annot_opt, body, rest_opt) ->
+      (* Opened functor - parameter specification is directly visible *)
       let fname_str = process_with_state (idx_to_string name.value) in
 
-      (* Process parameter spec *)
-      let param_module_spec = process_spec spec in
+      (* Process parameter specification *)
+      let param_module_spec = process_spec specification in
       let param_module_type = Builder.pmty_signature param_module_spec in
 
       (* Process functor body *)
@@ -1418,7 +1417,7 @@ and process_fct_bind (fb : Ast.fct_bind) : Parsetree.module_binding list = trace
 
       let rest = match rest_opt with
         | None -> []
-        | Some r -> process_fct_bind r.value
+        | Some r -> process_functor_binding r.value
       in
       binding :: rest
 in res
@@ -1430,7 +1429,7 @@ in res
 
     @param sb The signature binding(s)
     @return List of OCaml module type declarations *)
-and process_sign_bind (sb : Ast.sign_bind) : Parsetree.module_type_declaration list = trace_part ~level:2 ~ast:"sign_bind" ~msg:(Ast.show_sign_bind sb) ~value:(fun () -> match sb with
+and process_signature_binding (sb : Ast.signature_binding) : Parsetree.module_type_declaration list = trace_part ~level:2 ~ast:"signature_binding" ~msg:"" (* ~msg:(Ast.show_signature_binding sb) *) ~value:(fun () -> match sb with
   | SignBind (id, s, rest_opt) ->
       let name_str = process_with_state (idx_to_string id.value) in
       let module_type = process_sign s.value in
@@ -1440,7 +1439,7 @@ and process_sign_bind (sb : Ast.sign_bind) : Parsetree.module_type_declaration l
       in
       let rest = match rest_opt with
         | None -> []
-        | Some r -> process_sign_bind r.value
+        | Some r -> process_signature_binding r.value
       in
       mtdecl :: rest
 )

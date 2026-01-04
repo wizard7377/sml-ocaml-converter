@@ -33,14 +33,14 @@ end
 (** Instantiate Backend with test config *)
 module TestBackend = Backend.Make(TestConfig)
 open TestBackend
-let process_file (before:string) : string =
+let process (before:string) : string =
   let middle = Re.replace ~all:true (Re.compile (Re.rep1 Re.space)) ~f:(fun s -> " ") before in 
   let after = Re.replace ~all:true (Re.compile (Re.str ";;")) ~f:(fun s -> "") middle in
   String.trim after
 
 let compare_files (actual:string) (expected:string) : bool =
-  let processed_actual = process_file actual in
-  let processed_expected = process_file expected in
+  let processed_actual = process actual in
+  let processed_expected = process expected in
   (actual == expected)
 let test_files = Alcotest.testable Fmt.string compare_files
 module Make (Files : TEST_FILES) : TEST_CASE = struct

@@ -83,8 +83,8 @@ Comprehensive OCamldoc documentation has been added to `lib/backend/backend.ml`.
 
 #### 8. Program Processing (3 functions)
 - `process_prog` - Top-level program converter
-- `process_fct_bind` - Functor bindings
-- `process_sign_bind` - Signature bindings
+- `process_functor_binding` - Functor bindings
+- `process_signature_binding` - Signature bindings
 
 **Documentation includes:**
 - Program structure overview

@@ -22,10 +22,10 @@
       | Some v -> Some v
 
     (* Flatten nested specification sequences into a list for SignSig. *)
-    let rec flatten_spec_node (spec : Ast.spec Ast.node) : Ast.spec Ast.node list =
-      match spec.value with
+    let rec flatten_spec_node (specification : Ast.specification Ast.node) : Ast.specification Ast.node list =
+      match specification.value with
       | SpecSeq (s1, s2) -> flatten_spec_node s1 @ flatten_spec_node s2
-      | _ -> [spec]
+      | _ -> [specification]
 %}
 
 (* ========================================================================= *)
@@ -134,10 +134,10 @@
 
 %type <Ast.prog * string list> file
 %type <Ast.prog> program
-%type <Ast.dec> dec_seq kwdec kwcoredec kwmoduledec
-%type <Ast.dec node list> kwdec_seq kwcoredec_seq
-%type <Ast.exp> exp atomic_exp
-%type <Ast.exp node list> exp_comma_seq0 exp_comma_seq1 exp_comma_seq2 exp_semicolon_seq2 atomic_exp_seq1
+%type <Ast.declaration> dec_seq kwdec kwcoredec kwmoduledec
+%type <Ast.declaration node list> kwdec_seq kwcoredec_seq
+%type <Ast.expression> expression atomic_exp
+%type <Ast.expression node list> exp_comma_seq0 exp_comma_seq1 exp_comma_seq2 exp_semicolon_seq2 atomic_exp_seq1
 %type <Ast.pat> pat atomic_pat
 %type <Ast.pat node list> pat_comma_seq0 pat_comma_seq1 pat_comma_seq2 atomic_pat_seq1
 %type <Ast.typ> typ typ_sans_star atomic_typ
@@ -148,51 +148,51 @@
 %type <Ast.row node list> exprow_opt
 %type <Ast.pat_row node list> patrow patrow_opt
 %type <Ast.typ_row node list> typrow typrow_opt
-%type <Ast.val_bind> valbind
-%type <Ast.val_bind node option> and_valbind_opt
-%type <Ast.fun_bind> funbind
-%type <Ast.fun_bind node option> and_funbind_opt
+%type <Ast.value_binding> valbind
+%type <Ast.value_binding node option> and_valbind_opt
+%type <Ast.function_binding> funbind
+%type <Ast.function_binding node option> and_funbind_opt
 %type <Ast.fun_match> funmatch
 %type <Ast.fun_match node option> bar_funmatch_opt
-%type <Ast.typ_bind> typbind
-%type <Ast.typ_bind node option> typbind_opt and_typbind_opt
-%type <Ast.dat_bind> datbind datbind_0 datbind_n
-%type <Ast.dat_bind node option> and_datbind_opt
-%type <Ast.con_bind> conbind
-%type <Ast.con_bind node option> bar_conbind_opt
+%type <Ast.type_binding> typbind
+%type <Ast.type_binding node option> typbind_opt and_typbind_opt
+%type <Ast.data_binding> datbind datbind_0 datbind_n
+%type <Ast.data_binding node option> and_datbind_opt
+%type <Ast.constructor_binding> conbind
+%type <Ast.constructor_binding node option> bar_conbind_opt
 %type <Ast.exn_bind> exnbind
 %type <Ast.exn_bind node option> and_exnbind_opt
-%type <Ast.str_bind> strbind
-%type <Ast.str_bind node option> and_strbind_opt
-%type <Ast.str> str atomic_str
-%type <Ast.str node list> atomic_str_seq1
-%type <Ast.sign> sig_expr
-%type <Ast.sign_bind> sigbind
-%type <Ast.sign_bind node option> and_sigbind_opt
-%type <Ast.fct_bind> fctbind
-%type <Ast.fct_bind node option> and_fctbind_opt
-%type <Ast.spec> spec kwspec kwcorespec kwmodulespec
-%type <Ast.spec node list> spec_seq corespec_seq
-%type <Ast.val_desc> valdesc
-%type <Ast.val_desc node option> and_valdesc_opt
-%type <Ast.typ_desc> typdesc
-%type <Ast.typ_desc node option> and_typdesc_opt
-%type <Ast.dat_desc> datdesc datdesc_0 datdesc_n
-%type <Ast.dat_desc node option> and_datdesc_opt
-%type <Ast.con_desc> condesc
-%type <Ast.con_desc node option> bar_condesc_opt
-%type <Ast.exn_desc> exndesc
-%type <Ast.exn_desc node option> and_exndesc_opt
-%type <Ast.str_desc> strdesc
-%type <Ast.str_desc node option> and_strdesc_opt
+%type <Ast.structure_binding> strbind
+%type <Ast.structure_binding node option> and_strbind_opt
+%type <Ast.structure> structure atomic_str
+%type <Ast.structure node list> atomic_str_seq1
+%type <Ast.signature> sig_expr
+%type <Ast.signature_binding> sigbind
+%type <Ast.signature_binding node option> and_sigbind_opt
+%type <Ast.functor_binding> fctbind
+%type <Ast.functor_binding node option> and_fctbind_opt
+%type <Ast.specification> specification kwspec kwcorespec kwmodulespec
+%type <Ast.specification node list> spec_seq corespec_seq
+%type <Ast.val_specification> valdesc
+%type <Ast.val_specification node option> and_valdesc_opt
+%type <Ast.typ_specification> typdesc
+%type <Ast.typ_specification node option> and_typdesc_opt
+%type <Ast.dat_specification> datdesc datdesc_0 datdesc_n
+%type <Ast.dat_specification node option> and_datdesc_opt
+%type <Ast.con_specification> condesc
+%type <Ast.con_specification node option> bar_condesc_opt
+%type <Ast.exn_specification> exndesc
+%type <Ast.exn_specification node option> and_exndesc_opt
+%type <Ast.str_specification> strdesc
+%type <Ast.str_specification node option> and_strdesc_opt
 %type <Ast.typ_refine> typrefin
 %type <Ast.typ_refine node option> and_typrefin_opt
 %type <Ast.idx> ident longid tyvar tycon lab modid sigid
 %type <Ast.idx node list> tyvarseq tyvarseq1 tyvar_comma_seq1 longid_seq1 eq_ident_seq1 sigid_seq2
-%type <Ast.con> scon
+%type <Ast.constant> scon
 %type <Ast.with_op> op_ident op_longid op_eq_ident
 %type <Ast.anotate> anotate
-%type <(Ast.anotate node * Ast.sign node) option> sigconstraint_opt
+%type <(Ast.anotate node * Ast.signature node) option> sigconstraint_opt
 %type <Ast.typ node option> of_typ_opt colon_typ_opt
 %type <int> digit_opt
 %type <Ast.pat node option> as_pat_opt
@@ -364,21 +364,21 @@ comma_typrow_opt:
 (* Expressions                                                               *)
 (* ========================================================================= *)
 
-exp:
+expression:
   | atomic_exp_seq1 {
       match $1 with
       | [e] -> e.value
       | f :: args -> List.fold_left (fun acc arg -> ExpApp (b acc, arg)) f.value args
-      | [] -> failwith "impossible: empty exp sequence"
+      | [] -> failwith "impossible: empty expression sequence"
     }
-  | exp COLON typ { TypedExp (b $1, b $3) }
-  | exp ANDALSO exp { AndExp (b $1, b $3) }
-  | exp ORELSE exp { OrExp (b $1, b $3) }
-  | e=exp HANDLE m=match_clause { HandleExp (b e, b m) }
-  | RAISE e=exp { RaiseExp (b e) }
-  | IF c=exp THEN t=exp ELSE f=exp { IfExp (b c, b t, b f) }
-  | WHILE c=exp DO bdy=exp { WhileExp (b c, b bdy) }
-  | CASE e=exp OF m=match_clause { CaseExp (b e, b m) }
+  | expression COLON typ { TypedExp (b $1, b $3) }
+  | expression ANDALSO expression { AndExp (b $1, b $3) }
+  | expression ORELSE expression { OrExp (b $1, b $3) }
+  | e=expression HANDLE m=match_clause { HandleExp (b e, b m) }
+  | RAISE e=expression { RaiseExp (b e) }
+  | IF c=expression THEN t=expression ELSE f=expression { IfExp (b c, b t, b f) }
+  | WHILE c=expression DO bdy=expression { WhileExp (b c, b bdy) }
+  | CASE e=expression OF m=match_clause { CaseExp (b e, b m) }
   | FN m=match_clause { FnExp (b m) }
 ;
 
@@ -392,7 +392,7 @@ atomic_exp:
   | op_eq_ident { ExpIdx (match $1 with WithOp i | WithoutOp i -> i) }
   | LET dec_seq IN exp_semicolon_exp END { LetExp ([b $2], $4) }
   | HASH lab { RecordSelector (b $2) }
-  | LPAREN exp RPAREN { ParenExp (b $2) }
+  | LPAREN expression RPAREN { ParenExp (b $2) }
   | LPAREN RPAREN { TupleExp [] }
   | LPAREN exp_comma_seq2 RPAREN { TupleExp $2 }
   | LPAREN exp_semicolon_seq2 RPAREN { SeqExp $2 }
@@ -401,8 +401,8 @@ atomic_exp:
 ;
 
 exp_semicolon_exp:
-  | exp { [b $1] }
-  | exp SEMICOLON exp_semicolon_exp { b $1 :: $3 }
+  | expression { [b $1] }
+  | expression SEMICOLON exp_semicolon_exp { b $1 :: $3 }
 ;
 
 exp_comma_seq0:
@@ -411,17 +411,17 @@ exp_comma_seq0:
 ;
 
 exp_comma_seq1:
-  | exp COMMA exp_comma_seq1 { b $1 :: $3 }
-  | exp { [b $1] }
+  | expression COMMA exp_comma_seq1 { b $1 :: $3 }
+  | expression { [b $1] }
 ;
 
 exp_comma_seq2:
-  | exp COMMA exp_comma_seq1 { b $1 :: $3 }
+  | expression COMMA exp_comma_seq1 { b $1 :: $3 }
 ;
 
 exp_semicolon_seq2:
-  | exp SEMICOLON exp_semicolon_seq2 { b $1 :: $3 }
-  | exp SEMICOLON exp { [b $1; b $3] }
+  | expression SEMICOLON exp_semicolon_seq2 { b $1 :: $3 }
+  | expression SEMICOLON expression { [b $1; b $3] }
 ;
 
 exprow_opt:
@@ -434,7 +434,7 @@ exprow_list:
 ;
 
 exprow:
-  | lab EQUAL exp { Row (b $1, b $3, None) }
+  | lab EQUAL expression { Row (b $1, b $3, None) }
 ;
 
 comma_exprow_opt:
@@ -443,8 +443,8 @@ comma_exprow_opt:
 ;
 
 match_clause:
-  | p=pat BIGARROW e=exp BAR rest=match_clause { Case (b p, b e, Some (b rest)) }
-  | p=pat BIGARROW e=exp { Case (b p, b e, None) }
+  | p=pat BIGARROW e=expression BAR rest=match_clause { Case (b p, b e, Some (b rest)) }
+  | p=pat BIGARROW e=expression { Case (b p, b e, None) }
 ;
 
 (* ========================================================================= *)
@@ -581,7 +581,7 @@ typbind_opt:
 ;
 
 valbind:
-  | pat EQUAL exp and_valbind_opt { ValBind (b $1, b $3, $4) }
+  | pat EQUAL expression and_valbind_opt { ValBind (b $1, b $3, $4) }
   | REC valbind { ValBindRec (b $2) }
 ;
 
@@ -600,13 +600,13 @@ and_funbind_opt:
 ;
 
 funmatch:
-  | op_ident atomic_pat_seq1 colon_typ_opt EQUAL exp bar_funmatch_opt {
+  | op_ident atomic_pat_seq1 colon_typ_opt EQUAL expression bar_funmatch_opt {
       FunMatchPrefix (b $1, $2, $3, b $5, $6)
     }
-  | atomic_pat ident atomic_pat colon_typ_opt EQUAL exp bar_funmatch_opt {
+  | atomic_pat ident atomic_pat colon_typ_opt EQUAL expression bar_funmatch_opt {
       FunMatchInfix (b $1, b $2, b $3, $4, b $6, $7)
     }
-  | LPAREN atomic_pat ident atomic_pat RPAREN atomic_pat_seq1 colon_typ_opt EQUAL exp bar_funmatch_opt {
+  | LPAREN atomic_pat ident atomic_pat RPAREN atomic_pat_seq1 colon_typ_opt EQUAL expression bar_funmatch_opt {
       FunMatchLow (b $2, b $3, b $4, $6, $7, b $9, $10)
     }
 ;
@@ -686,7 +686,7 @@ and_exnbind_opt:
 (* ========================================================================= *)
 
 strbind:
-  | modid sigconstraint_opt EQUAL str and_strbind_opt {
+  | modid sigconstraint_opt EQUAL structure and_strbind_opt {
       StrBind (b $1, $2, $5)
     }
 ;
@@ -706,16 +706,16 @@ anotate:
   | COLON_GT { Opaque }
 ;
 
-str:
+structure:
   | atomic_str_seq1 {
       match $1 with
       | [s] -> s.value
       | f :: args -> List.fold_left (fun acc arg -> FunctorApp (
           (match acc with StrIdx i -> i | _ -> b (IdxIdx (b "?"))), arg)) f.value args
-      | [] -> failwith "impossible: empty str sequence"
+      | [] -> failwith "impossible: empty structure sequence"
     }
-  | str COLON sig_expr { AnotateStr (b (IdxIdx (b "?")), b Transparent, b $1) }
-  | str COLON_GT sig_expr { AnotateStr (b (IdxIdx (b "?")), b Opaque, b $1) }
+  | structure COLON sig_expr { AnotateStr (b (IdxIdx (b "?")), b Transparent, b $1) }
+  | structure COLON_GT sig_expr { AnotateStr (b (IdxIdx (b "?")), b Opaque, b $1) }
 ;
 
 atomic_str_seq1:
@@ -726,8 +726,8 @@ atomic_str_seq1:
 atomic_str:
   | STRUCT dec_seq END { StructStr (b $2) }
   | longid { StrIdx (b $1) }
-  | LET dec_seq IN str END { Ast.LocalDec (b $2, b $4) }
-  | LPAREN str RPAREN { $2 }
+  | LET dec_seq IN structure END { Ast.LocalDec (b $2, b $4) }
+  | LPAREN structure RPAREN { $2 }
   | LPAREN dec_seq RPAREN { StructStr (b $2) }
 ;
 
@@ -736,7 +736,7 @@ atomic_str:
 (* ========================================================================= *)
 
 sig_expr:
-  | SIG spec END { SignSig (flatten_spec_node (b $2)) }
+  | SIG specification END { SignSig (flatten_spec_node (b $2)) }
   | sigid { SignIdx (b $1) }
   | sig_expr WHERE TYPE typrefin { SignWhere (b $1, b $4) }
   | FUNCTOR LPAREN modid COLON sig_expr RPAREN ARROW sig_expr {
@@ -775,11 +775,11 @@ and_sigbind_opt:
 (* Specifications                                                            *)
 (* ========================================================================= *)
 
-spec:
-  | spec kwspec { SpecSeq (b $1, b $2) }
-  | spec SHARING TYPE longid_eq_seq { SpecSharingTyp (b $1, $4) }
-  | spec SHARING longid_eq_seq { SpecSharingStr (b $1, $3) }
-  | spec SEMICOLON { $1 }
+specification:
+  | specification kwspec { SpecSeq (b $1, b $2) }
+  | specification SHARING TYPE longid_eq_seq { SpecSharingTyp (b $1, $4) }
+  | specification SHARING longid_eq_seq { SpecSharingStr (b $1, $3) }
+  | specification SEMICOLON { $1 }
 ;
 
 longid_eq_seq:
@@ -813,7 +813,7 @@ kwcorespec:
   | DATATYPE datdesc_n typbind_opt { SpecDat (b $2) }
   | DATATYPE tycon EQUAL DATATYPE long_tycon { SpecDatAlias (b $2, b $5) }
   | EXCEPTION exndesc { SpecExn (b $2) }
-  | LOCAL spec IN spec END { SpecSeq (b $2, b $4) }
+  | LOCAL specification IN specification END { SpecSeq (b $2, b $4) }
   | OPEN longid_seq1 { SpecIncludeIdx $2 }
   | INFIX digit_opt eq_ident_seq1 { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
                                              b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None))))) }
@@ -933,10 +933,10 @@ and_fundesc_opt:
 (* ========================================================================= *)
 
 fctbind:
-  | modid LPAREN modid COLON sig_expr RPAREN sigconstraint_opt EQUAL str and_fctbind_opt {
+  | modid LPAREN modid COLON sig_expr RPAREN sigconstraint_opt EQUAL structure and_fctbind_opt {
       FctBind (b $1, b $3, b $5, $7, b $9, $10)
     }
-  | modid LPAREN spec RPAREN sigconstraint_opt EQUAL str and_fctbind_opt {
+  | modid LPAREN specification RPAREN sigconstraint_opt EQUAL structure and_fctbind_opt {
       FctBindOpen (b $1, b $3, $5, b $7, $8)
     }
 ;
