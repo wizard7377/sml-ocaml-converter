@@ -1,5 +1,6 @@
 
 (library
+ (public_name shibboleth.names)
  (name names)
  (libraries ast common)
- (modules names name store get_names))
+ (modules names query name store get_names))

@@ -30,8 +30,11 @@ module TestConfig : Common.CONFIG = struct
   let config = test_config 
 end
 
+module TestStore (* TODO *) = struct 
+  let store = Names.Store.create []
+end
 (** Instantiate Backend with test config *)
-module TestBackend = Backend.Make(TestConfig)
+module TestBackend = Backend.Make(TestStore)(TestConfig)
 open TestBackend
 let process (before:string) : string =
   let middle = Re.replace ~all:true (Re.compile (Re.rep1 Re.space)) ~f:(fun s -> " ") before in 
@@ -48,8 +51,7 @@ module Make (Files : TEST_FILES) : TEST_CASE = struct
 
   let run_test : unit test_case = test_case test_name `Quick (fun () ->
     let parsed_sml = Frontend.parse input in
-    let module Backend = Backend.Make(struct let config = test_config end) in
-    let ocaml_ast = Backend.process_sml ~prog:parsed_sml in
+    let ocaml_ast = TestBackend.process_sml ~prog:parsed_sml in
     let buffer = Buffer.create 256 in
     let fmt = Format.formatter_of_buffer buffer in
     List.iter (Astlib.Pprintast.top_phrase fmt) ocaml_ast;

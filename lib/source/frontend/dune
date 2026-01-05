@@ -1,6 +1,7 @@
 (ocamllex lexer)
 
 (library
+ (public_name shibboleth.frontend)
  (name frontend)
  (libraries ast common menhirLib)
  (modules frontend tokens utils lexer parser))

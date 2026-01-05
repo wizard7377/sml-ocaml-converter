@@ -6,3 +6,4 @@ examples/
 .github/
 .claude/
 *~ 
+.temp/

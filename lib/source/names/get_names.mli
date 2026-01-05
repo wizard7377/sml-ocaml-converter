@@ -34,4 +34,4 @@
 
     @param prog The parsed SML program AST
     @return A list of name stores, one per scope level *)
-val get_names : Ast.prog -> Store.t list
+val get_names : Ast.prog -> Store.t

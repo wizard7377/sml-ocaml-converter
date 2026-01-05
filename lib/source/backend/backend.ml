@@ -21,14 +21,18 @@ open Process_names
 include Helpers
 open Common
 module Debug = Ppxlib.Pprintast
-module Make (Config : CONFIG) = struct
-  
+module Make (Store : Backend_sig.STORE) (Config : CONFIG) = struct  
+  let namer : Process_names.process_names = 
+    new Process_names.process_names (Local "") Store.store 
 type res = Parsetree.toplevel_phrase list
-
+include Names
 module Config = Config 
-  module Names = Process_names.Make(Config)
+  
+  let current_path : Name.path ref = ref []
+  let process_names_state : Store.name_context list -> Names.Name.name -> Name.t =
+    fun ctx name -> namer#process_name ~ctx (!current_path , name)
   exception BadAst of string
-  let current_names : Names.t ref = ref (Names.init ())
+
 (** Helper function to create a located value with no source location.
 
     @param v The value to wrap with a phantom location
@@ -95,10 +99,7 @@ let rec idx_to_string (idx : Ast.idx) : string =
       (* Convert long identifier to dot-separated string *)
       String.concat "." (List.map (fun (p : Ast.idx Ast.node) -> idx_to_string p.value) parts)
 
-let process_with_state ?(ctx:context=Empty) (s:string) : string =
-  let (new_name, updated_names) = Names.process_name ~ctx !current_names s in
-  current_names := updated_names;
-  new_name
+
 (** Process a type variable name, preserving the ' prefix *)
 let process_type_var_name (s : string) : Parsetree.core_type =
   (* Type variables in SML can be 'a or ''a (equality type vars) *)
@@ -154,9 +155,9 @@ let rec process_type_value (ty : Ast.typ) : Parsetree.core_type = match ty with
     | _ -> failwith "Expected type variable")
   | TypCon (args, head) ->
     let head_str = idx_to_string head.value in
-    let head' = process_with_state head_str in
+    let head' = process_names_state (assert false) head_str in
     let args' = List.map (fun arg -> process_type_value arg.Ast.value) args in
-    Builder.ptyp_constr (ghost (string_to_longident head')) args' 
+    Builder.ptyp_constr (ghost (string_to_longident @@ Name.name_to_string head')) args' 
   
   | TypPar ty -> process_type_value ty.value
   | TypFun (ty1, ty2) -> let ty1', ty2' = process_type_value ty1.value, process_type_value ty2.value in
@@ -182,8 +183,8 @@ let rec process_type_value (ty : Ast.typ) : Parsetree.core_type = match ty with
     ]} *)
 and process_object_field_type (field : Ast.typ_row) : Parsetree.object_field list = match field with
   | Ast.TypRow (name, ty, rest) ->
-    let label_name = process_with_state (idx_to_string name.value) in
-    let here : Parsetree.object_field = Builder.otag (ghost label_name) (process_type_value ty.value) in
+    let label_name = process_names_state (assert false) (idx_to_string name.value) in
+    let here : Parsetree.object_field = Builder.otag (ghost @@ Name.name_to_string label_name) (process_type_value ty.value) in
     begin match rest with
     | Some rest' -> here :: (process_object_field_type rest'.value)
     | None -> [here]
@@ -281,27 +282,27 @@ let rec process_exp (expression : Ast.expression) : Parsetree.expression = match
       let e2' = process_exp e2.value in
       Builder.pexp_apply e1' [(Nolabel, e2')]
   | ExpIdx idx ->
-      let name = process_with_state (idx_to_string idx.value) in
-      Builder.pexp_ident (ghost (string_to_longident name))
+      let name = process_names_state (assert false) (idx_to_string idx.value) in
+      Builder.pexp_ident (ghost (string_to_longident @@ Name.name_to_string name))
   | InfixApp (e1, op, e2) ->
-      let op' = process_with_state (idx_to_string op.value) in
-      Builder.pexp_apply (Builder.pexp_ident (ghost (string_to_longident op')))
+      let op' = process_names_state (assert false) (idx_to_string op.value) in
+      Builder.pexp_apply (Builder.pexp_ident (ghost (string_to_longident @@ Name.name_to_string op')))
         [(Nolabel, process_exp e1.value); (Nolabel, process_exp e2.value)]
   | ParenExp e -> process_exp e.value
   | TupleExp [] -> Builder.pexp_construct (ghost (Longident.Lident "()")) None
   | TupleExp exps -> Builder.pexp_tuple (List.map (fun e -> process_exp e.Ast.value) exps)
   | RecordExp rows ->
       let fields = List.map (fun r -> match r.Ast.value with Ast.Row (lab, expression, _) ->
-        let lab' = process_with_state (idx_to_string lab.value) in
-        (ghost (string_to_longident lab'), process_exp expression.value)
+        let lab' = process_names_state (assert false) (idx_to_string lab.value) in
+        (ghost (string_to_longident @@ Name.name_to_string lab'), process_exp expression.value)
       ) rows in
       Builder.pexp_record fields None
   | RecordSelector lab ->
       (* #label -> fun r -> r.label *)
-      let lab_str = process_with_state (idx_to_string lab.value) in
+      let lab_str = process_names_state (assert false) (idx_to_string lab.value) in
       let r_pat = Builder.ppat_var (ghost "r") in
       let r_exp = Builder.pexp_ident (ghost (Longident.Lident "r")) in
-      let field_exp = Builder.pexp_field r_exp (ghost (Longident.Lident lab_str)) in
+      let field_exp = Builder.pexp_field r_exp (ghost (Longident.Lident (Name.name_to_string lab_str))) in
       Builder.pexp_fun Nolabel None r_pat field_exp
   | ListExp exps ->
       (* Build list from right to left using :: *)
@@ -371,8 +372,8 @@ let rec process_exp (expression : Ast.expression) : Parsetree.expression = match
     @return A pair of field identifier and expression *)
 and process_row (row : Ast.row) : (Longident.t Location.loc * Parsetree.expression) = match row with
   | Row (lab, expression, rest_opt) ->
-      let lab' = process_with_state (idx_to_string lab.value) in
-      (ghost (string_to_longident lab'), process_exp expression.value)
+      let lab' = process_names_state (assert false) (idx_to_string lab.value) in
+      (ghost (string_to_longident @@ Name.name_to_string lab'), process_exp expression.value)
 
 (** Convert SML match clauses to OCaml case list.
 
@@ -440,26 +441,27 @@ and process_pat ?(is_head=false) (pat : Ast.pat) : Parsetree.pattern = match pat
           let op_str = idx_to_string op.value in
           if is_head || (not (is_variable_identifier op_str)) then
             let name = if is_head then
-              process_with_state op_str
+              process_names_state (assert false) op_str
             else
-              process_with_state op_str
+              process_names_state (assert false) op_str
             in
-            Builder.ppat_construct (ghost (string_to_longident name)) None
+            Builder.ppat_construct (ghost (string_to_longident @@ Name.name_to_string name)) None
           else
-            let name = process_with_state op_str in
-            Builder.ppat_var (ghost name)
+            let name = process_names_state (assert false) op_str in
+            Builder.ppat_var (ghost @@ Name.name_to_string name)
       | WithoutOp id ->
           let id_str = idx_to_string id.value in
           if is_head || (not (is_variable_identifier id_str)) then
             let name = if is_head then
-              process_with_state id_str
+              process_names_state (assert false) id_str
             else
-              process_with_state id_str
+              process_names_state (assert false) id_str
             in
-            Builder.ppat_construct (ghost (string_to_longident name)) None
+            Builder.ppat_construct (ghost (string_to_longident @@ Name.name_to_string name)) None
           else
-            let name = process_with_state id_str in
-            Builder.ppat_var (ghost name))
+            let name = process_names_state (assert false) id_str in
+            Builder.ppat_var (ghost @@ Name.name_to_string name))
+          
   | PatApp (wo, p) ->
       (* Constructor application: SOME x *)
       let const_name = process_with_op wo.value in
@@ -467,10 +469,10 @@ and process_pat ?(is_head=false) (pat : Ast.pat) : Parsetree.pattern = match pat
       Builder.ppat_construct (ghost (string_to_longident const_name)) (Some arg_pat)
   | PatInfix (p1, id, p2) ->
       (* Infix constructor pattern: x :: xs *)
-      let op_name = process_with_state (idx_to_string id.value) in
+      let op_name = process_names_state (assert false) (idx_to_string id.value) in
       let p1' = process_pat p1.value in
       let p2' = process_pat p2.value in
-      Builder.ppat_construct (ghost (string_to_longident op_name))
+      Builder.ppat_construct (ghost (string_to_longident @@ Name.name_to_string op_name))
         (Some (Builder.ppat_tuple [p1'; p2']))
   | PatParen p -> process_pat p.value
   | PatTuple [] -> Builder.ppat_construct (ghost (Longident.Lident "()")) None
@@ -514,17 +516,17 @@ and process_pat_row (row : Ast.pat_row) : (string * Parsetree.pattern) list = ma
       (* No explicit field bindings for wildcard, return empty list *)
       []
   | PatRowSimple (lab, pat, rest) ->
-      let lab_str = process_with_state (idx_to_string lab.value) in
+      let lab_str = process_names_state (assert false) (idx_to_string lab.value) in
       let pat' = process_pat pat.value in
-      let here = (lab_str, pat') in
+      let here = (Name.name_to_string lab_str, pat') in
       begin match rest.value with
       | PatRowPoly -> [here]
       | other -> here :: process_pat_row other
       end
   | PatRowVar (id, ty_opt, as_opt, rest_opt) ->
       (* {x, y} is shorthand for {x = x, y = y} *)
-      let id_str = process_with_state (idx_to_string id.value) in
-      let var_pat = Builder.ppat_var (ghost id_str) in
+      let id_str = process_names_state (assert false) (idx_to_string id.value) in
+      let var_pat = Builder.ppat_var (ghost @@ Name.name_to_string id_str) in
       let pat_with_type = match ty_opt with
         | None -> var_pat
         | Some ty -> Builder.ppat_constraint var_pat (process_type ty.value)
@@ -532,10 +534,10 @@ and process_pat_row (row : Ast.pat_row) : (string * Parsetree.pattern) list = ma
       let final_pat = match as_opt with
         | None -> pat_with_type
         | Some as_id ->
-            let as_name = process_with_state (idx_to_string as_id.value) in
-            Builder.ppat_alias pat_with_type (ghost as_name)
+            let as_name = process_names_state (assert false) (idx_to_string as_id.value) in
+            Builder.ppat_alias pat_with_type (ghost @@ Name.name_to_string as_name)
       in
-      let here = (id_str, final_pat) in
+      let here = (Name.name_to_string id_str, final_pat) in
       begin match rest_opt with
       | None -> [here]
       | Some rest -> here :: process_pat_row rest.value
@@ -646,8 +648,8 @@ and process_fun_bind (fb : Ast.function_binding) : Parsetree.value_binding list 
       (* Get the function name from the first match *)
       let fname_str = match fm.value with
         | FunMatchPrefix (wo, _, _, _, _) -> process_with_op wo.value
-        | FunMatchInfix (_, id, _, _, _, _) -> process_with_state (idx_to_string id.value)
-        | FunMatchLow (_, id, _, _, _, _, _) -> process_with_state (idx_to_string id.value)
+        | FunMatchInfix (_, id, _, _, _, _) -> Name.name_to_string ( process_names_state (assert false) (idx_to_string id.value))
+        | FunMatchLow (_, id, _, _, _, _, _) -> Name.name_to_string (process_names_state (assert false) (idx_to_string id.value))
       in
 
       (* Process all match clauses *)
@@ -762,7 +764,7 @@ and process_fun_match (fm : Ast.fun_match) : (Parsetree.pattern list * Parsetree
     @return List of OCaml type declarations *)
 and process_typ_bind (tb : Ast.type_binding) : Parsetree.type_declaration list = match tb with
   | TypBind (tvars, id, ty, rest_opt) ->
-      let name_str = process_with_state (idx_to_string id.value) in
+      let name_str = process_names_state (assert false) (idx_to_string id.value) in
       let params = List.map (fun (tv : Ast.idx Ast.node) ->
         (* Type variables already have the ' prefix, just strip it *)
         let tv_str = idx_to_string tv.value in
@@ -776,7 +778,7 @@ and process_typ_bind (tb : Ast.type_binding) : Parsetree.type_declaration list =
       ) tvars in
       let manifest = Some (process_type ty.value) in
       let tdecl = Builder.type_declaration
-        ~name:(ghost name_str)
+        ~name:(ghost @@ Name.name_to_string name_str)
         ~params
         ~cstrs:[]
         ~kind:Parsetree.Ptype_abstract
@@ -798,7 +800,7 @@ and process_typ_bind (tb : Ast.type_binding) : Parsetree.type_declaration list =
     @return List of OCaml type declarations *)
 and process_dat_bind (db : Ast.data_binding) : Parsetree.type_declaration list = match db with
   | DatBind (tvars, id, cb, rest_opt) ->
-      let name_str = process_with_state (idx_to_string id.value) in
+      let name_str = process_names_state (assert false) (idx_to_string id.value) in
       let params = List.map (fun (tv : Ast.idx Ast.node) ->
         (* Type variables already have the ' prefix, just strip it *)
         let tv_str = idx_to_string tv.value in
@@ -812,7 +814,7 @@ and process_dat_bind (db : Ast.data_binding) : Parsetree.type_declaration list =
       ) tvars in
       let constructors = process_con_bind cb.value in
       let tdecl = Builder.type_declaration
-        ~name:(ghost name_str)
+        ~name:(ghost @@ Name.name_to_string name_str)
         ~params
         ~cstrs:[]
         ~kind:(Parsetree.Ptype_variant constructors)
@@ -831,13 +833,13 @@ and process_dat_bind (db : Ast.data_binding) : Parsetree.type_declaration list =
     @return List of OCaml constructor declarations *)
 and process_con_bind (cb : Ast.constructor_binding) : Parsetree.constructor_declaration list = match cb with
   | ConBind (id, ty_opt, rest_opt) ->
-      let name_str = process_with_state (idx_to_string id.value) in
+      let name_str = process_names_state (assert false) (idx_to_string id.value) in
       let args = match ty_opt with
         | None -> Parsetree.Pcstr_tuple []
         | Some ty -> Parsetree.Pcstr_tuple [process_type ty.value]
       in
       let cdecl = Builder.constructor_declaration
-        ~name:(ghost name_str)
+        ~name:(ghost @@ Name.name_to_string name_str)
         ~args
         ~res:None
       in
@@ -856,13 +858,13 @@ and process_con_bind (cb : Ast.constructor_binding) : Parsetree.constructor_decl
     @return List of OCaml extension constructors *)
 and process_exn_bind (eb : Ast.exn_bind) : Parsetree.extension_constructor list = match eb with
   | ExnBind (id, ty_opt, rest_opt) ->
-      let name_str = process_with_state (idx_to_string id.value) in
+      let name_str = process_names_state (assert false) (idx_to_string id.value) in
       let args = match ty_opt with
         | None -> Parsetree.Pcstr_tuple []
         | Some ty -> Parsetree.Pcstr_tuple [process_type ty.value]
       in
       let ext_constr = Builder.extension_constructor
-        ~name:(ghost name_str)
+        ~name:(ghost @@ Name.name_to_string name_str)
         ~kind:(Parsetree.Pext_decl ([], args, None))
       in
       let rest = match rest_opt with
@@ -871,11 +873,11 @@ and process_exn_bind (eb : Ast.exn_bind) : Parsetree.extension_constructor list 
       in
       ext_constr :: rest
   | ExnBindAlias (id1, id2, rest_opt) ->
-      let name1_str = process_with_state (idx_to_string id1.value) in
-      let name2 = process_with_state (idx_to_string id2.value) in
-      let longid2 = string_to_longident name2 in
+      let name1_str = process_names_state (assert false) (idx_to_string id1.value) in
+      let name2 = process_names_state (assert false) (idx_to_string id2.value) in
+      let longid2 = string_to_longident @@ Name.name_to_string name2 in
       let ext_constr = Builder.extension_constructor
-        ~name:(ghost name1_str)
+        ~name:(ghost @@ Name.name_to_string name1_str)
         ~kind:(Parsetree.Pext_rebind (ghost longid2))
       in
       let rest = match rest_opt with
@@ -891,8 +893,8 @@ and process_exn_bind (eb : Ast.exn_bind) : Parsetree.extension_constructor list 
     @param wo The identifier with or without [op]
     @return The processed identifier *)
 and process_with_op (wo : Ast.with_op) : string = match wo with
-  | WithOp id -> process_with_state (idx_to_string id.value)
-  | WithoutOp id -> process_with_state (idx_to_string id.value)
+  | WithOp id -> Name.name_to_string (process_names_state (assert false) (idx_to_string id.value))
+  | WithoutOp id -> Name.name_to_string (process_names_state (assert false) (idx_to_string id.value))
 
 (** {1 Structure Processing}
 
@@ -959,7 +961,7 @@ and process_anotate (a : Ast.anotate) : string = match a with
     @return List of OCaml module bindings *)
 and process_str_bind (sb : Ast.structure_binding) : Parsetree.module_binding list = trace_part ~level:2 ~ast:"structure_binding" ~msg:"" (* ~msg:(Ast.show_str_bind sb) *) ~value:(fun () -> match sb with
   | StrBind (id, annot_opt, rest_opt) ->
-      let name_str = process_with_state (idx_to_string id.value) in
+      let name_str = process_names_state (assert false) (idx_to_string id.value) in
       (* Create empty module since AST doesn't include structure body *)
       let module_expr = Builder.pmod_structure [] in
       let module_expr_with_sig = match annot_opt with
@@ -970,7 +972,7 @@ and process_str_bind (sb : Ast.structure_binding) : Parsetree.module_binding lis
             | Transparent -> Builder.pmod_constraint module_expr module_type
             | Opaque -> Builder.pmod_constraint module_expr module_type
       in
-      let binding = Builder.module_binding ~name:(ghost (Some name_str)) ~expr:module_expr_with_sig in
+      let binding = Builder.module_binding ~name:(ghost (Some (Name.name_to_string name_str))) ~expr:module_expr_with_sig in
       let rest = match rest_opt with
         | None -> []
         | Some r -> process_str_bind r.value
@@ -1021,8 +1023,8 @@ and process_sign (signature : Ast.signature) : Parsetree.module_type = trace_par
 and process_typ_refine (tr : Ast.typ_refine) : (Longident.t * Parsetree.core_type) list = match tr with
   | TypRef (_tvars, id, ty, rest_opt) ->
       (* Type variables are currently ignored in refinement *)
-      let name_str = process_with_state (idx_to_string id.value) in
-      let longid = string_to_longident name_str in
+      let name_str = process_names_state (assert false) (idx_to_string id.value) in
+      let longid = string_to_longident @@ Name.name_to_string name_str in
       let core_type = process_type ty.value in
       let here = (longid, core_type) in
       let rest = match rest_opt with
@@ -1055,12 +1057,12 @@ and process_spec (specification' : Ast.specification Ast.node) : Parsetree.signa
       [Builder.psig_type Asttypes.Nonrecursive tdecls]
   | SpecDatAlias (id1, id2) ->
       (* Datatype alias in signature *)
-      let name1_str = process_with_state (idx_to_string id1.value) in
-      let name2_str = process_with_state (idx_to_string id2.value) in
-      let longid2 = string_to_longident name2_str in
+      let name1_str = process_names_state (assert false) (idx_to_string id1.value) in
+      let name2_str = process_names_state (assert false) (idx_to_string id2.value) in
+      let longid2 = string_to_longident @@ Name.name_to_string name2_str in
       let alias_type = Builder.ptyp_constr (ghost longid2) [] in
       let tdecl = Builder.type_declaration
-        ~name:(ghost name1_str)
+        ~name:(ghost @@ Name.name_to_string name1_str)
         ~params:[]
         ~cstrs:[]
         ~kind:Parsetree.Ptype_abstract
@@ -1084,8 +1086,8 @@ and process_spec (specification' : Ast.specification Ast.node) : Parsetree.signa
       [Builder.psig_include (Builder.include_infos module_type)]
   | SpecIncludeIdx ids ->
       List.concat (List.map (fun (id : Ast.idx Ast.node) ->
-        let name_str = process_with_state (idx_to_string id.value) in
-        let longid = string_to_longident name_str in
+        let name_str = process_names_state (assert false) (idx_to_string id.value) in
+        let longid = string_to_longident @@ Name.name_to_string name_str in
         let module_type = Builder.pmty_ident (ghost longid) in
         [Builder.psig_include (Builder.include_infos module_type)]
       ) ids)
@@ -1103,10 +1105,10 @@ and process_spec (specification' : Ast.specification Ast.node) : Parsetree.signa
 and process_val_specification (vd : Ast.val_specification) : Parsetree.value_description list = trace_part ~level:2 ~ast:"val_specification" ~msg:"" (* ~msg:(Ast.show_val_specification vd) *) ~value:(fun () ->
   match vd with
   | ValDesc (id, ty, rest_opt) ->
-      let name_str = process_with_state (idx_to_string id.value) in
+      let name_str = process_names_state (assert false) (idx_to_string id.value) in
       let core_type = process_type ty.value in
       let vdesc = Builder.value_description
-        ~name:(ghost name_str)
+        ~name:(ghost @@ Name.name_to_string name_str)
         ~type_:core_type
         ~prim:[]
       in
@@ -1122,7 +1124,7 @@ and process_val_specification (vd : Ast.val_specification) : Parsetree.value_des
     @return List of OCaml type declarations *)
 and process_typ_specification (td : Ast.typ_specification) : Parsetree.type_declaration list = trace_part ~level:2 ~ast:"typ_specification" ~msg:"" (* ~msg:(Ast.show_typ_specification td) *) ~value:(fun () -> match td with
   | TypDesc (tvars, id, rest_opt) ->
-      let name_str = process_with_state (idx_to_string id.value) in
+      let name_str = process_names_state (assert false) (idx_to_string id.value) in
       let params = List.map (fun (tv : Ast.idx Ast.node) ->
         (* Type variables already have the ' prefix, just strip it *)
         let tv_str = idx_to_string tv.value in
@@ -1135,7 +1137,7 @@ and process_typ_specification (td : Ast.typ_specification) : Parsetree.type_decl
         (Builder.ptyp_var var_name, (Asttypes.NoVariance, Asttypes.NoInjectivity))
       ) tvars in
       let tdecl = Builder.type_declaration
-        ~name:(ghost name_str)
+        ~name:(ghost @@ Name.name_to_string name_str)
         ~params
         ~cstrs:[]
         ~kind:Parsetree.Ptype_abstract
@@ -1154,7 +1156,7 @@ and process_typ_specification (td : Ast.typ_specification) : Parsetree.type_decl
     @return List of OCaml type declarations *)
 and process_dat_specification (dd : Ast.dat_specification) : Parsetree.type_declaration list = trace_part ~level:2 ~ast:"dat_specification" ~msg:"" (* ~msg:(Ast.show_dat_specification dd) *) ~value:(fun () -> match dd with
   | DatDesc (tvars, id, cd, rest_opt) ->
-      let name_str = process_with_state (idx_to_string id.value) in
+      let name_str = process_names_state (assert false) (idx_to_string id.value) in
       let params = List.map (fun (tv : Ast.idx Ast.node) ->
         (* Type variables already have the ' prefix, just strip it *)
         let tv_str = idx_to_string tv.value in
@@ -1168,7 +1170,7 @@ and process_dat_specification (dd : Ast.dat_specification) : Parsetree.type_decl
       ) tvars in
       let constructors = process_con_specification cd.value in
       let tdecl = Builder.type_declaration
-        ~name:(ghost name_str)
+        ~name:(ghost @@ Name.name_to_string name_str)
         ~params
         ~cstrs:[]
         ~kind:(Parsetree.Ptype_variant constructors)
@@ -1188,13 +1190,13 @@ and process_dat_specification (dd : Ast.dat_specification) : Parsetree.type_decl
 and process_con_specification (cd : Ast.con_specification) : Parsetree.constructor_declaration list = trace_part ~level:2 ~ast:"con_specification" ~msg:"" (* ~msg:(Ast.show_con_specification cd) *) ~value:(fun () -> match cd with
   | ConDesc (id, ty_opt, rest_opt) ->
       (* Same as process_con_bind *)
-      let name_str = process_with_state (idx_to_string id.value) in
+      let name_str = process_names_state (assert false) (idx_to_string id.value) in
       let args = match ty_opt with
         | None -> Parsetree.Pcstr_tuple []
         | Some ty -> Parsetree.Pcstr_tuple [process_type ty.value]
       in
       let cdecl = Builder.constructor_declaration
-        ~name:(ghost name_str)
+        ~name:(ghost @@ Name.name_to_string name_str)
         ~args
         ~res:None
       in
@@ -1211,13 +1213,13 @@ and process_con_specification (cd : Ast.con_specification) : Parsetree.construct
 and process_exn_specification (ed : Ast.exn_specification) : Parsetree.extension_constructor list = trace_part ~level:2 ~ast:"exn_specification" ~msg:"" (* ~msg:(Ast.show_exn_specification ed) *) ~value:(fun () -> match ed with
   | ExnDesc (id, ty_opt, rest_opt) ->
       (* Similar to process_exn_bind but for signatures *)
-      let name_str = process_with_state (idx_to_string id.value) in
+      let name_str = process_names_state (assert false) (idx_to_string id.value) in
       let args = match ty_opt with
         | None -> Parsetree.Pcstr_tuple []
         | Some ty -> Parsetree.Pcstr_tuple [process_type ty.value]
       in
       let ext_constr = Builder.extension_constructor
-        ~name:(ghost name_str)
+        ~name:(ghost @@ Name.name_to_string name_str)
         ~kind:(Parsetree.Pext_decl ([], args, None))
       in
       let rest = match rest_opt with
@@ -1232,9 +1234,9 @@ and process_exn_specification (ed : Ast.exn_specification) : Parsetree.extension
     @return List of OCaml module declarations *)
 and process_str_specification (sd : Ast.str_specification) : Parsetree.module_declaration list = trace_part ~level:2 ~ast:"str_specification" ~msg:"" (* ~msg:(Ast.show_str_specification sd) *) ~value:(fun () -> match sd with
   | StrDesc (id, s, rest_opt) ->
-      let name_str = process_with_state (idx_to_string id.value) in
+      let name_str = process_names_state (assert false) (idx_to_string id.value) in
       let module_type = process_sign s.value in
-      let mdecl = Builder.module_declaration ~name:(ghost (Some name_str)) ~type_:module_type in
+      let mdecl = Builder.module_declaration ~name:(ghost (Some (Name.name_to_string name_str))) ~type_:module_type in
       let rest = match rest_opt with
         | None -> []
         | Some r -> process_str_specification r.value
@@ -1278,12 +1280,12 @@ and dec_to_structure_items (declaration : Ast.declaration) : Parsetree.structure
   | DataDecAlias (id1, id2) ->
       (* Datatype alias: datatype t = datatype u *)
       (* In OCaml, this would be: type t = u *)
-      let name1_str = process_with_state (idx_to_string id1.value) in
-      let name2_str = process_with_state (idx_to_string id2.value) in
-      let longid2 = string_to_longident name2_str in
+      let name1_str = process_names_state (assert false) (idx_to_string id1.value) in
+      let name2_str = process_names_state (assert false) (idx_to_string id2.value) in
+      let longid2 = string_to_longident @@ Name.name_to_string name2_str in
       let alias_type = Builder.ptyp_constr (ghost longid2) [] in
       let tdecl = Builder.type_declaration
-        ~name:(ghost name1_str)
+        ~name:(ghost @@ Name.name_to_string name1_str)
         ~params:[]
         ~cstrs:[]
         ~kind:Parsetree.Ptype_abstract
@@ -1313,8 +1315,8 @@ and dec_to_structure_items (declaration : Ast.declaration) : Parsetree.structure
       dec_to_structure_items d1.value @ dec_to_structure_items d2.value
   | OpenDec ids ->
       List.map (fun (id : Ast.idx Ast.node) ->
-        let name_str = process_with_state (idx_to_string id.value) in
-        let longid = string_to_longident name_str in
+        let name_str = process_names_state (assert false) (idx_to_string id.value) in
+        let longid = string_to_longident @@ Name.name_to_string name_str in
         let module_expr = Builder.pmod_ident (ghost longid) in
         Builder.pstr_open (Builder.open_infos ~override:Asttypes.Fresh ~expr:module_expr)
       ) ids
@@ -1354,8 +1356,8 @@ and process_prog (prog : Ast.prog) : Parsetree.structure = trace_part ~level:5 ~
     @return List of OCaml module bindings *)
 and process_functor_binding (fb : Ast.functor_binding) : Parsetree.module_binding list = trace_part ~level:2 ~ast:"functor_binding" ~msg:"" (* ~msg:(Ast.show_functor_binding fb) *) ~value:(fun () -> let res = match fb with
   | FctBind (name, param, sig1, annot_opt, body, rest_opt) ->
-      let fname_str = process_with_state (idx_to_string name.value) in
-      let pname_str = process_with_state (idx_to_string param.value) in
+      let fname_str = process_names_state (assert false) (idx_to_string name.value) in
+      let pname_str = process_names_state (assert false) (idx_to_string param.value) in
 
       (* Process parameter signature *)
       let param_module_type = process_sign sig1.value in
@@ -1373,11 +1375,11 @@ and process_functor_binding (fb : Ast.functor_binding) : Parsetree.module_bindin
       in
 
       (* Create functor *)
-      let functor_param = Parsetree.Named (ghost (Some pname_str), param_module_type) in
+      let functor_param = Parsetree.Named (ghost (Some (Name.name_to_string pname_str)), param_module_type) in
       let functor_expr = Builder.pmod_functor functor_param final_body in
 
       let binding = Builder.module_binding
-        ~name:(ghost (Some fname_str))
+        ~name:(ghost (Some (Name.name_to_string fname_str)))
         ~expr:functor_expr
       in
 
@@ -1388,7 +1390,7 @@ and process_functor_binding (fb : Ast.functor_binding) : Parsetree.module_bindin
       binding :: rest
   | FctBindOpen (name, specification, annot_opt, body, rest_opt) ->
       (* Opened functor - parameter specification is directly visible *)
-      let fname_str = process_with_state (idx_to_string name.value) in
+      let fname_str = process_names_state (assert false) (idx_to_string name.value) in
 
       (* Process parameter specification *)
       let param_module_spec = process_spec specification in
@@ -1407,11 +1409,11 @@ and process_functor_binding (fb : Ast.functor_binding) : Parsetree.module_bindin
       in
 
       (* Create functor with unit parameter (opened specs) *)
-      let functor_param = Parsetree.Named (ghost (Some fname_str), param_module_type) in
+      let functor_param = Parsetree.Named (ghost (Some (Name.name_to_string fname_str)), param_module_type) in
       let functor_expr = Builder.pmod_functor functor_param final_body in
 
       let binding = Builder.module_binding
-        ~name:(ghost (Some fname_str))
+        ~name:(ghost (Some (Name.name_to_string fname_str)))
         ~expr:functor_expr
       in
 
@@ -1431,10 +1433,10 @@ in res
     @return List of OCaml module type declarations *)
 and process_signature_binding (sb : Ast.signature_binding) : Parsetree.module_type_declaration list = trace_part ~level:2 ~ast:"signature_binding" ~msg:"" (* ~msg:(Ast.show_signature_binding sb) *) ~value:(fun () -> match sb with
   | SignBind (id, s, rest_opt) ->
-      let name_str = process_with_state (idx_to_string id.value) in
+      let name_str = process_names_state (assert false) (idx_to_string id.value) in
       let module_type = process_sign s.value in
       let mtdecl = Builder.module_type_declaration
-        ~name:(ghost name_str)
+        ~name:(ghost @@ Name.name_to_string name_str)
         ~type_:(Some module_type)
       in
       let rest = match rest_opt with

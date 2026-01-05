@@ -35,6 +35,7 @@ type name_context =
   | Structure   (** A module/structure name (e.g., [List], [MyModule]) *)
   | Signature   (** A signature name (e.g., [ORD], [MONO_ARRAY]) *)
   | Value       (** A value binding (e.g., [x], [my_function]) *)
+  | Variable
 
 (** The action to take when processing this name during conversion.
 
@@ -85,14 +86,11 @@ val entries : t -> entry list
     @param path Predicate on the module path
     @param package Predicate on the package specifier
     @param context Predicate on the syntactic context
-    @return A new store containing only matching entries *)
+    @return A pair of stores: the first with matching entries, the second with non-matching entries *)
 val select :
+  (entry -> bool) ->  
   t ->
-  ?name:(Name.name -> bool) ->
-  ?path:(Name.path -> bool) ->
-  ?package:(Name.package -> bool) ->
-  ?context:(name_context -> bool) ->
-  t
+  (t * t)  (* matching store, non-matching store *)
 
 (** [combine t1 t2] merges two stores by concatenating their entries.
 
@@ -109,4 +107,4 @@ val combine : t -> t -> t
     @param t The store to search
     @param name The qualified name to look up
     @return A list of all entries matching the name *)
-val get_name : t -> Name.t -> entry list
+val get_name : t -> Name.name -> entry list

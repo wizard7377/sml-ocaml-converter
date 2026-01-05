@@ -22,7 +22,9 @@ type config = {
 }
 
 
-
 module type CONFIG = sig 
     val config : config 
 end
+let fst3 (x,_,_) = x
+let snd3 (_,y,_) = y
+let trd3 (_,_,z) = z

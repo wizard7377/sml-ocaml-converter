@@ -1,78 +1,82 @@
-type context =
-  | TypeVar
-  | TypeConst
-  | Value
-  | Structure
-  | Signature 
-  | PatternHead
-  | PatternTail
-  | Empty
+open Names
+open Common 
+exception Unbound_name of Names.Name.t
+exception Ambiguous_name of Names.Name.t * Names.Name.t list
+let third : ('a * 'b * 'c) -> 'c = fun (_, _, c) -> c
+class process_names (pkg:Name.package) (store : Store.t) = object (self)
+    val mutable open_modules : Name.path list = [[]]
+    val mutable included_modules : Name.path list = [[]]
+    val mutable local_binds : (Name.t * Store.action * Store.name_context list) list = []
+    val mutable store : Store.t = store
+    val mutable package : Names.Name.package = pkg 
+    
+    method private path_is_valid (path : Name.path) : Names.Query.t = Names.Query.package_query (fun pkg' -> pkg == pkg') (* TODO Create better logic *)
+    
+    method private push_local_bind (name:Name.t) (action:Store.action) (ctx:Store.name_context list) =
+      local_binds <- (name, action, ctx) :: local_binds 
+    
+    method private pop_local_bind () =
+      match local_binds with 
+      | [] -> raise (Failure "No local binds to pop")
+      | (name, action, ctx) :: rest -> 
+          local_binds <- rest ; (name, action, ctx)
+    method open_module name = 
+        let (_, path, _) = Name.parse_name name in
+        (open_modules <- path :: open_modules) ; name 
+    method include_module (name : Name.t) : Name.t = 
+      (included_modules <- snd3 (Name.parse_name name) :: included_modules) ; name
+    method local_bind : 'a . ?ctx:Store.name_context list -> Name.t -> Store.action -> (Name.t -> 'a) -> 'a = 
+        (fun ?(ctx = Names.any_context) name action f -> 
+            self#push_local_bind name action ctx ;
+            let result = f name in
+            let _ = self#pop_local_bind () in
+            result)
+    method private get_local_bind : ?ctx:(Store.name_context list) -> Name.t -> (Name.t * Store.action * Store.name_context list) option = 
+        (fun ?(ctx = Names.any_context) name -> 
+            let rec find_in_binds binds = match binds with 
+              | [] -> None
+              | (n, action, c) :: rest -> 
+                  if n = name && (List.exists (fun x -> List.mem x ctx) c) then 
+                    Some ((n, action, c))
+                  else  
+                    (find_in_binds rest)
+                  
+            in
+            find_in_binds local_binds)
 
-module type PROCESS_NAMES = sig
-  module Config : Common.CONFIG
-  type t
-  (** The type of collections of processed names.
-      This should include both names that should and {e should not} be changed
-          *) 
+    method private create_action (ctx:Store.name_context) (base : string) : string = match ctx with
+        | Store.Value -> String.lowercase_ascii base
+        | Store.Type -> String.lowercase_ascii base
+        | Store.Constructor -> String.capitalize_ascii base
+        | Store.Structure -> String.capitalize_ascii base
+        | Store.Signature -> String.capitalize_ascii base
+        | Store.Variable -> String.lowercase_ascii base
+        
+    method private run_action : ctx:Store.name_context -> Store.action -> Name.t -> Name.t = 
+        (fun ~ctx action name -> match action with 
+            | Store.Noted -> Name.make_name ~package:(fst3 (Name.parse_name name)) ~path:(snd3 (Name.parse_name name)) ~root:(self#create_action ctx (trd3 (Name.parse_name name)))
+            | Store.Exact s -> Name.make_name ~package:(fst3 (Name.parse_name name)) ~path:(snd3 (Name.parse_name name)) ~root:s
+            | Store.Change f -> f name
+            | Store.NoChange -> name) 
+    method process_name ?(ctx=Names.any_context) (name : Name.path * Name.name) : Name.t =
+        match self#get_local_bind ~ctx (Name.make_name ~package:package ~path:(fst name) ~root:(snd name)) with
+        | Some (n, action, ctx' :: _) -> self#run_action ~ctx:ctx' action n
+        | None ->
+            let name_question = Query.name_query ((==) @@ snd name) in
+            let path_question : Query.t = (self#path_is_valid (fst name)) in
+            let context_question = Query.context_query (fun e -> List.mem e ctx) in
+            let combined_question = Query.query_and (Query.query_and name_question path_question) context_question in
+            let has_name, _ = Query.select_query ~query:combined_question ~store:store in 
+            match Store.entries has_name with
+            | [] -> raise (Unbound_name (Name.make_name ~package:package ~path:(fst name) ~root:(snd name)))
+            | [entry] -> self#run_action ~ctx:(List.hd ctx) entry.action entry.name
+            | entries -> raise (Ambiguous_name (Name.make_name ~package:package ~path:(fst name) ~root:(snd name), List.map (fun (e:Store.entry) -> e.name) entries))
+        
+    method name_to_idx (name : Name.t) : string list = let 
+        packageName, path, root = Name.parse_name name 
+    in path @ [root]
 
-  val init : unit -> t
-
-  val add_name: string -> string -> t -> t
-  val get_name : t -> string -> string option
-  val process_name : ?ctx:context -> t -> string -> string * t
 end
 
-module MapString = Map.Make(struct
-    type t = string
-    let compare = String.compare
-end)
 
-let is_lowercase (s : string) : bool =
-    match s with
-    | "" -> false
-    | _ -> 
-        let c = String.get s 0 in
-        Char.code c >= Char.code 'a' && Char.code c <= Char.code 'z'
-let is_uppercase (s : string) : bool =
-    match s with
-    | "" -> false
-    | _ -> 
-        let c = String.get s 0 in
-        Char.code c >= Char.code 'A' && Char.code c <= Char.code 'Z'
-let ocaml_reserved_names = ["and";"as";"assert";"asr";"begin";"class ";"constraint";"do";"done";"downto";"else";"end ";"exception";"external";"false";"for";"fun";"function ";"functor";"if";"in";"include";"inherit";"initializer ";"land";"lazy";"let";"lor";"lsl";"lsr ";"lxor";"match";"method";"mod";"module";"mutable ";"new";"nonrec";"object";"of";"open";"or ";"private";"rec";"sig";"struct";"then";"to ";"true";"try";"type";"val";"virtual";"when ";"while";"with" ]
-module Make (C : Common.CONFIG) : PROCESS_NAMES = struct
-    module Config = C
-    type t = string MapString.t
-    
-    let init () : t = MapString.empty
-    let add_name (original : string) (new_name : string) (names : t) : t = 
-        MapString.add original new_name names
-    let get_name (names : t) (original : string) : string option = 
-        MapString.find_opt original names
-    let process_name ?(ctx=Empty) (names : t) (original : string) = match get_name names original with
-        | Some new_name -> (new_name, names)
-        | None -> match ctx with
-                  | TypeVar when is_uppercase original ->
-                        let new_name = String.uncapitalize_ascii original in
-                        let names' = add_name original new_name names in
-                        (new_name, names')
-                  | TypeConst when is_uppercase original ->
-                        let new_name = String.uncapitalize_ascii original  in
-                        let names' = add_name original new_name names in
-                        (new_name, names') 
-                  | Structure when is_lowercase original ->
-                        let new_name = String.capitalize_ascii original in
-                        let names' = add_name original new_name names in
-                        (new_name, names')
-                  | Signature when is_lowercase original ->
-                        let new_name = String.capitalize_ascii original in
-                        let names' = add_name original new_name names in
-                        (new_name, names')
-                  | PatternHead when is_lowercase original ->
-                     let new_name = String.capitalize_ascii original in
-                     let names' = add_name original new_name names in
-                        (new_name, names')
-                  | _ -> (original, names)
-                     
-            
-end 
+

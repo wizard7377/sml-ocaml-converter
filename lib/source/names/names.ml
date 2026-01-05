@@ -24,3 +24,9 @@ module Name = Name
 (** Name store for tracking and querying names.
     See {!Store} for full documentation. *)
 module Store = Store
+
+module Query = Query
+
+(** AST name extraction functionality.
+    See {!Get_names} for full documentation. *)
+let any_context : Store.name_context list = [Store.Value; Store.Type; Store.Constructor; Store.Structure; Store.Signature; Store.Variable]

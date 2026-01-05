@@ -1,5 +1,8 @@
 open Common 
 open Ast 
+module type STORE = sig 
+    val store : Names.Store.t
+end
 module type BACKEND = sig 
     module Config : Common.CONFIG 
     exception BadAst of string

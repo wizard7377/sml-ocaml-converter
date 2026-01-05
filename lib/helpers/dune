@@ -1,3 +1,4 @@
 (library
+ (public_name shibboleth.helpers)
  (name helpers)
  (libraries ppxlib))

@@ -1,2 +1,2 @@
 
-module Make (Config : Common.CONFIG) : Backend_sig.BACKEND
+module Make (Store : Backend_sig.STORE) (Config : Common.CONFIG) : Backend_sig.BACKEND

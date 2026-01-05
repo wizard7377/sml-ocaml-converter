@@ -24,3 +24,6 @@ type config = {
 module type CONFIG = sig 
     val config : config 
 end
+val fst3 : ('a * 'b * 'c) -> 'a
+val snd3 : ('a * 'b * 'c) -> 'b
+val trd3 : ('a * 'b * 'c) -> 'c
