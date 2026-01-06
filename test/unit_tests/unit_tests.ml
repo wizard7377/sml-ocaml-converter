@@ -9,7 +9,7 @@ module TestConfig : Common.CONFIG = struct
   let config = {
     Common.input_file = "";
     output_file = None;
-    verbosity = None;
+    verbosity = Some 3;
     conversions = {
       pattern_names = Common.Do_convert;
       constructor_names_values = Common.Do_convert;
@@ -159,8 +159,8 @@ let test_process_type_var () =
 let test_process_type_var_equality () =
   let input = TypVar (b (IdxVar (b "'eq"))) in
   let result = process_type_value input in
-  let expected_str = "''eq" in
-  check string "equality type variable ''eq"
+  let expected_str = "'eq" in
+  check string "equality type variable 'eq"
     expected_str
     (core_type_to_string result)
 
@@ -1328,5 +1328,5 @@ let run_unit_tests () : unit =
     "Pattern Matching (AST Structure)", pattern_matching_tests;
   ]
 
-let () = ()
-  (* run_unit_tests () TODO *)
+let () = 
+  run_unit_tests ()

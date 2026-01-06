@@ -155,7 +155,7 @@ let rec process_type_value (ty : Ast.typ) : Parsetree.core_type = match ty with
     | _ -> failwith "Expected type variable")
   | TypCon (args, head) ->
     let head_str = idx_to_string head.value in
-    let head' = process_names_state (assert false) head_str in
+    let head' = process_names_state [Type] head_str in
     let args' = List.map (fun arg -> process_type_value arg.Ast.value) args in
     Builder.ptyp_constr (ghost (string_to_longident @@ Name.name_to_string head')) args' 
   

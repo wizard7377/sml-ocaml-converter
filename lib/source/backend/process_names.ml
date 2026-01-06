@@ -68,10 +68,16 @@ class process_names (pkg:Name.package) (store : Store.t) = object (self)
             let combined_question = Query.query_and (Query.query_and name_question path_question) context_question in
             let has_name, _ = Query.select_query ~query:combined_question ~store:store in 
             match Store.entries has_name with
-            | [] -> raise (Unbound_name (Name.make_name ~package:package ~path:(fst name) ~root:(snd name)))
+             [] -> let 
+              action = self#create_action (List.hd ctx) (snd name) in 
+              let new_name = Name.make_name ~package:package ~path:(fst name) ~root:action in
+              let process_name_f ~(f:string) ~(n:Name.t) = let 
+                _, path, root = Name.parse_name n 
+              in Name.make_name ~package:package ~path:path ~root:f
+              self#local_bind new_name (Store.Change (fun n -> action )) (fun _ -> new_name)
             | [entry] -> self#run_action ~ctx:(List.hd ctx) entry.action entry.name
             | entries -> raise (Ambiguous_name (Name.make_name ~package:package ~path:(fst name) ~root:(snd name), List.map (fun (e:Store.entry) -> e.name) entries))
-        
+        | _ -> assert false
     method name_to_idx (name : Name.t) : string list = let 
         packageName, path, root = Name.parse_name name 
     in path @ [root]
