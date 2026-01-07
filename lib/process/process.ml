@@ -6,9 +6,9 @@ type input =
     | File of string list
     | CM of string 
 type output = int
-class process ?(store = Names.Store.create []) cfg_init = object (self)
+class process ?(store = Context.create []) cfg_init = object (self)
   val mutable cfg : config = cfg_init
-  val mutable store : Names.Store.t = store
+  val mutable store : Context.t = store
   method set_config c = cfg <- c
   method get_config () = cfg
   method get_store () = store

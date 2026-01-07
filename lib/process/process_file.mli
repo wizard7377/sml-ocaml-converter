@@ -73,7 +73,7 @@ type ocaml_code
                  known identifiers (e.g., standard library names)
     @param config Conversion configuration including input/output paths
                   and transformation flags *)
-class process_file : ?store:Names.Store.t -> config -> object
+class process_file : ?store:Context.t -> config -> object
 
   (** [set_config cfg] updates the processor's configuration.
 
@@ -96,7 +96,7 @@ class process_file : ?store:Names.Store.t -> config -> object
       - Incremental compilation scenarios
 
       @return The current name store *)
-  method get_store : unit -> Names.Store.t
+  method get_store : unit -> Context.t
 
   (** [set_store store] replaces the processor's name store.
 
@@ -106,7 +106,7 @@ class process_file : ?store:Names.Store.t -> config -> object
       - Testing specific name resolution scenarios
 
       @param store New name store to use *)
-  method set_store : Names.Store.t -> unit
+  method set_store : Context.t -> unit
 
   (** [parse_sml source] parses SML source text into an internal AST.
 

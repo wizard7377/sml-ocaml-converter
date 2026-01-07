@@ -30,8 +30,8 @@ module TestConfig : Common.CONFIG = struct
   let config = test_config 
 end
 
-module TestStore (* TODO *) = struct 
-  let store = Names.Store.create []
+module TestStore (* TODO *) = struct
+  let context = Context.create []
 end
 (** Instantiate Backend with test config *)
 module TestBackend = Backend.Make(TestStore)(TestConfig)

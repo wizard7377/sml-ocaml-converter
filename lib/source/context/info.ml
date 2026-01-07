@@ -1,10 +1,15 @@
 
 
-type name_info = .. 
+type path = string list
+
+type name_info = ..
 type name_info += ConstructorInfo of {
     arity : int option ;
 }
-type path = string list
+type name_info += ModuleInfo of {
+    maps_to : path option
+}
+
 type name = {
     path : path ;
     root : string ;
@@ -19,10 +24,10 @@ let merge (t1 : t) (t2 : t) : t =
     let merged = Hashtbl.copy t1 in
     Hashtbl.iter (fun k v -> Hashtbl.replace merged k v) t2;
     merged
-let find (table : t) (paths : path list) (name_str : string) : name_info list =
+let find ~(ctx : t) ~(opened : path list) ~(root : string) : name_info list =
     let results = ref [] in
     Hashtbl.iter (fun n info ->
-        if List.mem n.path paths && n.root = name_str then
+        if List.mem n.path opened && n.root = root then
         results := info :: !results
-    ) table;
+    ) ctx;
     !results

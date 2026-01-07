@@ -26,7 +26,7 @@ class process_names (store : Context.t ref) = object (self)
     current_path <- path
   
   method private is_constructor_name ~(path: string list) ~(name: string) : bool =
-    let infos = Context.find !store open_paths name in
+    let infos = Context.find ~ctx:!store ~opened:open_paths ~root:name in
     match infos with
     | [] -> false
     | _ -> true
