@@ -1,7 +1,7 @@
 open Common 
 open Ast 
-module type STORE = sig 
-    val store : Names.Store.t
+module type CONTEXT = sig 
+    val context : Context.t
 end
 module type BACKEND = sig 
     module Config : Common.CONFIG 

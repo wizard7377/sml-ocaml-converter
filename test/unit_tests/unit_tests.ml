@@ -19,11 +19,11 @@ module TestConfig : Common.CONFIG = struct
     };
   }
 end
-module TestStore (* TODO *) = struct 
-  let store = Names.Store.create []
+module TestContext (* TODO *) = struct 
+  let context = Context.create []
 end
 (** Instantiate Backend with test config *)
-module TestBackend = Backend.Make(TestStore)(TestConfig)
+module TestBackend = Backend.Make(TestContext)(TestConfig)
 open TestBackend
 
 (** Helper functions for converting to strings *)

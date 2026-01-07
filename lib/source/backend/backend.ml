@@ -21,16 +21,18 @@ open Process_names
 include Helpers
 open Common
 module Debug = Ppxlib.Pprintast
-module Make (Store : Backend_sig.STORE) (Config : CONFIG) = struct  
+module Make (Context : CONTEXT) (Config : CONFIG) = struct  
   let namer : Process_names.process_names = 
-    new Process_names.process_names (Local "") Store.store 
+    new Process_names.process_names (Local "") Context.context 
 type res = Parsetree.toplevel_phrase list
 include Names
 module Config = Config 
   
   let current_path : Name.path ref = ref []
-  let process_names_state : Store.name_context list -> Names.Name.name -> Name.t =
-    fun ctx name -> namer#process_name ~ctx (!current_path , name)
+  let process_names_state : Process_names.context -> string list -> string list =
+    fun ctx name -> assert (name <> []) ; match name with
+      | [] -> []
+      | h :: t -> (namer#process_name ~ctx ~path:h ~name:t)
   exception BadAst of string
 
 (** Helper function to create a located value with no source location.

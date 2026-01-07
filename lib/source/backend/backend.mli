@@ -76,7 +76,7 @@
     This functor instantiates the complete SML-to-OCaml transformation
     pipeline with the specified name resolution store and configuration.
 
-    @param Store Implementation of the {!Backend_sig.STORE} signature,
+    @param Context Implementation of the {!Backend_sig.CONTEXT} signature,
                  providing name resolution and identifier transformation
                  capabilities.
     @param Config Implementation of the {!Common.CONFIG} signature,
@@ -86,4 +86,4 @@
     @return A module implementing the {!Backend_sig.BACKEND} signature,
             which provides functions for transforming each SML AST node
             type to its OCaml equivalent. *)
-module Make (Store : Backend_sig.STORE) (Config : Common.CONFIG) : Backend_sig.BACKEND
+module Make (Context : Backend_sig.CONTEXT) (Config : Common.CONFIG) : Backend_sig.BACKEND

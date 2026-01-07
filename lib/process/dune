@@ -2,4 +2,4 @@
  (public_name shibboleth.process)
  (name process) 
  (modules process process_common process_file process_cm)
- (libraries common names backend frontend helpers))
+ (libraries common  backend context frontend helpers))
