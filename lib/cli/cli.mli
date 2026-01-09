@@ -41,3 +41,7 @@
 
     @return Unit. The function will call [exit] with the appropriate exit code. *)
 val entrypoint : unit -> unit
+
+(** Test configuration with default conversion settings.
+    Used for unit testing the backend conversion functions. *)
+val test_config : Common.config

@@ -14,37 +14,20 @@ let verb : int Term.t =
   let doc = "Verbosity level" in
   Arg.(value & opt int 0 & info ["v"; "verbose"] ~doc)
 
-let mkConvert_flags patterns constructors functions uncurry_types uncurry_values : Common.do_convert = {
-    pattern_names = patterns ;
-    constructor_names_values = constructors ;
-    function_names = functions ;
-    uncurry_types = uncurry_types ;
-    uncurry_values = uncurry_values ;
+let mkConvert_flags names : Common.do_convert = {
+    convert_names = names ;
 }
+
+
+
 let convert_flags : Common.do_convert Term.t = 
   let process_names_doc : Arg.info = Arg.info ["process-names"] ~doc:"Conversion options for names" in
-  let process_patterns : Common.convert_flag Term.t = 
-    process_convert_flag Common.Dont_convert [] (Arg.info ["patterns"] ~doc:"Convert pattern names")
-  in let 
-  process_constructors : Common.convert_flag Term.t = 
-    process_convert_flag Common.Dont_convert [] (Arg.info ["constructors"] ~doc:"Convert constructor and value names")
-  in let
-  process_functions : Common.convert_flag Term.t = 
-    process_convert_flag Common.Dont_convert [] (Arg.info ["functions"] ~doc:"Convert function names")
-  in let
-  process_uncurry_types : Common.convert_flag Term.t =
-    process_convert_flag Common.Dont_convert [] (Arg.info ["uncurry-types"] ~doc:"Uncurry type expressions")
-  in let
-  process_uncurry_values : Common.convert_flag Term.t =
-    process_convert_flag Common.Dont_convert [] (Arg.info ["uncurry-values"] ~doc:"Uncurry value expressions")
+  let process_names : Common.convert_flag Term.t = 
+    process_convert_flag Common.Dont_convert [] (Arg.info ["names"] ~doc:"Convert names")
   in
-    let+ patterns = process_patterns
-    and+ constructors = process_constructors
-    and+ functions = process_functions
-    and+ uncurry_types = process_uncurry_types
-    and+ uncurry_values = process_uncurry_values
+    let+ names = process_names 
     in
-      mkConvert_flags patterns constructors functions uncurry_types uncurry_values
+      mkConvert_flags names
 
 let common_options : common_options Cmdliner.Term.t =  
   let+ v = verb 

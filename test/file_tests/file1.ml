@@ -82,7 +82,7 @@ struct
 end;  
 
   |sml}
-  let expected_output = "" (* TODO *)
+  let expected_output = None
 end
 
 module TestCase = Test_common.Make(Test1) 

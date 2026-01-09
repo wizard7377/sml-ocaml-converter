@@ -94,16 +94,7 @@ type convert_flag =
       }
     ]} *)
 type do_convert = {
-  pattern_names : convert_flag;
-      (** Controls pattern variable name transformations. *)
-  constructor_names_values : convert_flag;
-      (** Controls constructor name transformations (e.g., NONE → None). *)
-  function_names : convert_flag;
-      (** Controls function name transformations. *)
-  uncurry_types : convert_flag;
-      (** Controls uncurrying of function types. *)
-  uncurry_values : convert_flag;
-      (** Controls uncurrying of function applications. *)
+  convert_names : convert_flag ;
 }
 
 (** Main configuration for the conversion process.

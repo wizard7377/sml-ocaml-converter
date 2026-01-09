@@ -21,9 +21,9 @@ module TestFiles : TEST_FILES = struct
                       Queue.insert (c, Array.sub (indexArray, a)))
 
 
-    fun install fromCS (H as I.Const c) =
+    fun install fromCS (h as I.Const c) =
         (case (fromCS, I.sgnLookup (c))
-           of (_, I.ConDec (_, _, _, _, A, I.Type)) => update (cidFromHead (I.targetHead A), H)
+           of (_, I.ConDec (_, _, _, _, A, I.Type)) => update (cidFromHead (I.targetHead A), h)
             | (I.Clause, I.ConDef (_, _, _, _, A, I.Type, _)) => (update (cidFromHead (I.targetHead A), I.Def(c)))
             | _ => ())
 
@@ -68,7 +68,7 @@ module TestFiles : TEST_FILES = struct
 
 
   |sml}
-  let expected_output = "" (* TODO *)
+  let expected_output = None
 end
 
 module TestCase = Test_common.Make(TestFiles) 

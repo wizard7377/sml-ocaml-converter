@@ -124,7 +124,7 @@
 %right ANDALSO
 %right AS
 %right ARROW
-%nonassoc SHORT_IDENT EQUAL
+%nonassoc EQUAL
 %right STAR
 %left COLON COLON_GT
 
@@ -205,43 +205,43 @@
 (* Identifiers                                                               *)
 (* ========================================================================= *)
 
-ident:
+%inline ident:
   | SHORT_IDENT { ident_to_idx $1 }
   | STAR { IdxIdx (b "*") }
 ;
 
-eq_ident:
+%inline eq_ident:
   | ident { $1 }
   | EQUAL { IdxIdx (b "=") }
 ;
 
-op_ident:
+%inline op_ident:
   | ident { WithoutOp (b $1) }
   | OP ident { WithOp (b $2) }
 ;
 
-modid:
+%inline modid:
   | ident { $1 }
 ;
 
-sigid:
+%inline sigid:
   | ident { $1 }
 ;
 
-tyvar:
+%inline tyvar:
   | TYVAR { IdxVar (b $1) }
 ;
 
-tycon:
+%inline tycon:
   | SHORT_IDENT { ident_to_idx $1 }
 ;
 
-longid:
+%inline longid:
   | ident { $1 }
   | LONG_IDENT { idents_to_long_idx $1 }
 ;
 
-long_tycon:
+%inline long_tycon:
   | tycon { $1 }
   | LONG_IDENT { idents_to_long_idx $1 }
 ;
@@ -687,7 +687,7 @@ and_exnbind_opt:
 
 strbind:
   | modid sigconstraint_opt EQUAL structure and_strbind_opt {
-      StrBind (b $1, $2, $5)
+      StrBind (b $1, $2, b $4, $5)
     }
 ;
 
@@ -776,6 +776,7 @@ and_sigbind_opt:
 (* ========================================================================= *)
 
 specification:
+  | kwspec { $1 }
   | specification kwspec { SpecSeq (b $1, b $2) }
   | specification SHARING TYPE longid_eq_seq { SpecSharingTyp (b $1, $4) }
   | specification SHARING longid_eq_seq { SpecSharingStr (b $1, $3) }

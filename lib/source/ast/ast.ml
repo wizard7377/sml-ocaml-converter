@@ -1325,12 +1325,14 @@ and anotate =
 
     @see 'StrDec' Structure declarations *)
 and structure_binding =
-  | StrBind of idx node * (anotate node * signature node) option * structure_binding node option
+  | StrBind of idx node * (anotate node * signature node) option * structure node * structure_binding node option
       (** Structure binding: [id \[:\[\:>\] sig\] = structure].
 
-          Note: This representation stores just the binding metadata.
-          The structure name and constraint are here; the body is
-          provided in context by {!StrDec} or {!AnotateStr}. *)
+          Fields:
+          - idx: Structure name
+          - option: Optional signature constraint (transparent/opaque)
+          - structure: The structure body (right-hand side of =)
+          - option: Optional chained structure binding (for 'and') *)
 
 (** {2 Signatures}
 

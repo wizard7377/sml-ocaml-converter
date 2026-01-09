@@ -1,8 +1,8 @@
 open Cmdliner
 open Cmdliner.Term.Syntax
-include Process 
+include Process
 open Cmd_convert_file
-
+include Test_cmd
 
 
 let cmd_convert : int Cmd.t = let 

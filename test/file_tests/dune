@@ -1,4 +1,4 @@
 (test
  (name file_tests)
- (libraries alcotest shibboleth ast backend helpers compiler-libs.common ppxlib)
+ (libraries cli alcotest shibboleth ast backend helpers compiler-libs.common ppxlib)
  (modules file_tests test_common file1 file2))

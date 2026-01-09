@@ -1,52 +1,51 @@
-type context = .. 
-type context += PatternHead 
-type context += PatternTail  
-type context += Value 
-type context += Type 
-type context += ModuleValue 
+type context = ..
+type context += PatternHead
+type context += PatternTail
+type context += Value
+type context += Type
+type context += ModuleValue
 type context += ModuleType
-
+type context += Label
+type context += Constructor
+type context += Operator
+type context += Empty
+open! Ppxlib
 type is_constructor = YesItIs of int | NoItsNot
 let process_lowercase (s : string) : string = String.uncapitalize_ascii s ;;
 let process_uppercase (s : string) : string = String.capitalize_ascii s ;;
 let process_caps (s : string) : string = String.uppercase_ascii s ;;
-class process_names (store : Context.t ref) = object (self)
+class process_names (config : Common.config ref) (store : Context.t ref) = object (self)
   val store : Context.t ref = store
-  val mutable open_paths = [[""]]
-  val mutable current_path = [""]
-  val mutable module_aliases : (string, string list) Hashtbl.t = Hashtbl.create 0 
-  (* TODO Add this to the context instead *)
-  method add_module_alias ~name ~path = 
-    Hashtbl.add module_aliases name path
-  method add_open ~path = 
-    open_paths <- path :: open_paths
-  method get_current_path () = 
-    current_path
-  method set_current_path ~path = 
-    current_path <- path
-  
-  method private is_constructor_name ~(path: string list) ~(name: string) : bool =
-    let infos = Context.find ~ctx:!store ~opened:open_paths ~root:name in
-    match infos with
-    | [] -> false
-    | _ -> true
- 
+  val config : Common.config ref = config
 
-  method process_name ~(ctx : context) ~(path : string list) ~(name : string) = match ctx with   
-    | PatternHead -> 
-      process_uppercase name
-    | PatternTail -> 
-      if self#is_constructor_name ~path ~name then process_uppercase name else process_lowercase name
-    | Value -> 
-      if self#is_constructor_name ~path ~name then process_uppercase name else process_lowercase name
-    | Type -> 
-      process_lowercase name
-    | ModuleValue -> 
-      process_uppercase name
-    | ModuleType -> 
-      process_caps name
-    | _ -> 
-      name
+
+  (** Check if a string is an operator (non-alphanumeric identifier) *)
+  method private is_operator (s : string) : bool =
+    String.length s > 0 &&
+    let c = String.get s 0 in
+    not ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c = '_')
+
+  (** Build a Longident from name parts without using Longident.parse
+      (which incorrectly wraps operators in parentheses).
+      ["A"; "B"; "C"] becomes Ldot(Ldot(Lident "A", "B"), "C") *)
+  method private build_longident (parts : string list) : Longident.t =
+    match parts with
+    | [] -> failwith "empty name"
+    | [x] -> Longident.Lident x
+    | first :: rest ->
+        List.fold_left (fun acc part -> Longident.Ldot (acc, part))
+          (Longident.Lident first) rest
+
+  method process_name ?(ctx : context = Empty) ~(name : string list) =
+    assert (List.length name > 0);
+    assert (not @@ String.starts_with "(" @@ List.nth name 0);
+    assert (not @@ String.ends_with ")" @@ List.nth name (List.length name - 1));
+
+    match !config.conversions.convert_names with
+    | Common.Dont_convert -> self#build_longident name
+    | Common.Debug_convert -> assert false
+    | Common.Do_convert -> assert false
+    
     
 
 

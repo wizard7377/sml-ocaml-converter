@@ -7,25 +7,14 @@ include Frontend
 module type TEST_FILES = sig
   val test_name : string
   val input : string
-  val expected_output : string
+  val expected_output : string option 
 end
 
 module type TEST_CASE = sig
 include TEST_FILES
   val run_test : unit test_case
 end
-let test_config = {
-    Common.input_file = "";
-    output_file = None;
-    verbosity = Some 2;
-    conversions = {
-      pattern_names = Common.Do_convert;
-      constructor_names_values = Common.Do_convert;
-      function_names = Common.Do_convert;
-      uncurry_types = Common.Do_convert;
-      uncurry_values = Common.Do_convert;
-    };
-  }
+let test_config = Cli.test_config
 module TestConfig : Common.CONFIG = struct
   let config = test_config 
 end
@@ -45,7 +34,9 @@ let compare_files (actual:string) (expected:string) : bool =
   let processed_actual = process actual in
   let processed_expected = process expected in
   (actual == expected)
-let test_files = Alcotest.testable Fmt.string compare_files
+
+let string_format : string Fmt.t = Fmt.string
+let test_files = Alcotest.testable string_format compare_files
 module Make (Files : TEST_FILES) : TEST_CASE = struct
   include Files
 
@@ -58,6 +49,10 @@ module Make (Files : TEST_FILES) : TEST_CASE = struct
     Format.pp_print_flush fmt ();
     let actual = Buffer.contents buffer in
     let processed_actual =  actual in
-    let processed_expected =  expected_output in
-    Alcotest.(check test_files) test_name processed_expected processed_actual)
+    let test_name' = Re.replace ~all:true (Re.compile (Re.str " ")) ~f:(fun s -> "_") test_name in
+    match expected_output with
+    | None -> Alcotest.(check pass) test_name' input processed_actual
+    | Some expected ->
+        let processed_expected = expected in
+        Alcotest.(check test_files) test_name processed_expected processed_actual)
 end

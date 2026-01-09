@@ -1,3 +1,3 @@
 (test
  (name unit_tests)
- (libraries alcotest ast backend helpers compiler-libs.common ppxlib))
+ (libraries cli alcotest ast backend helpers compiler-libs.common ppxlib))

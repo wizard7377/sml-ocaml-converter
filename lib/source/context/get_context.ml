@@ -152,18 +152,19 @@ let rec process_structure ~(path : string list) (str : structure node) : Info.t 
 (** Process a structure_binding node *)
 and process_structure_binding ~(path : string list) (str_bind : structure_binding node) : Info.t =
   match unbox_node str_bind with
-  | StrBind (name_node, sig_opt, rest_opt) ->
+  | StrBind (name_node, sig_opt, struct_node, rest_opt) ->
     let name = idx_to_string (unbox_node name_node) in
     let new_path = path @ [name] in
     let sigs = match sig_opt with
       | Some (_, sig_node) -> process_signature ~path:new_path sig_node
       | None -> Info.create []
     in
+    let struct_info = process_structure ~path:new_path struct_node in
     let rest = match rest_opt with
       | Some rest_node -> process_structure_binding ~path rest_node
       | None -> Info.create []
     in
-    Info.merge sigs rest
+    Info.merge (Info.merge sigs struct_info) rest
 
 (** Process a declaration node *)
 and process_declaration ~(path : string list) (dec : declaration node) : Info.t =
