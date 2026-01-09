@@ -1323,4 +1323,4 @@ let run_unit_tests () : unit =
   ]
 
 let () = 
-  skip (run_unit_tests ()) ; ()
+  run_unit_tests ()
