@@ -1,0 +1,12 @@
+
+type atag = string
+type attr = Parsetree.attribute
+type cite = Parsetree.payload
+type 'a citer = 'a -> attr -> 'a
+
+class process_label : string -> object
+    method cite : 'a . 'a citer -> (Lexing.position * Lexing.position) option -> 'a -> 'a
+    method cite_exact : 'a . 'a citer -> string -> string list -> 'a -> 'a
+    method destruct : unit -> bool
+end
+

@@ -1,15 +1,9 @@
 include Test_common
+
 module TestData : TEST_FILES = struct
-  let test_name = {|Data - Simple Structure with Refs|}
-  let input = {sml|
-structure Data : DATA =
-struct
-  val maxFill = ref 5
-  val maxSplit = ref 5
-  val maxRecurse = ref 2
-end;
-  |sml}
-  let expected_output = None
+  let test_name = "Data - Simple Structure with Refs"
+  let input_file = "file4_input.sml"
+  let expected_file = None
 end
 
 module TestCase = Test_common.Make(TestData)

@@ -2,4 +2,6 @@
 (env 
  (dev 
   (flags (:standard -warn-error -A))
-  ))
+  )
+ (release
+  (flags (:standard -w -A))))

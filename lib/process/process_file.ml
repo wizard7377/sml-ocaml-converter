@@ -8,6 +8,7 @@ class process_file ?(store = Context.create []) cfg_init =
   object (self) 
     val mutable cfg = cfg_init
     val mutable store = store
+    val mutable lexbuf : string = ""
     method get_store () : Context.t = store
     method set_store (s : Context.t) = 
       store <- s
@@ -20,12 +21,17 @@ class process_file ?(store = Context.create []) cfg_init =
           Format.formatter_of_out_channel oc
       | None -> Format.std_formatter
     method parse_sml (s : string) : sml_code =
+      lexbuf <- s ;
       Frontend.parse s
     method convert_to_ocaml (sml:sml_code) : ocaml_code =
       let ctx = Context.get_context sml in 
       let ctx0 = Context.merge ctx (self#get_store ()) in
       let ctx1 = Context.merge ctx0 Context.basis_context in (* TODO Make this a flag *)
-      let module BackendContext = struct let context = ctx1 end in
+      let module BackendContext = struct 
+        let lexbuf = lexbuf
+        let context = ctx1 
+      end 
+      in
       let module BackendConfig = struct let config = self#get_config () end in
       let module Backend = Backend.Make(BackendContext)(BackendConfig) in
       Backend.process_sml ~prog:sml

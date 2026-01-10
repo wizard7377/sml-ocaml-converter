@@ -1,19 +1,22 @@
-SOURCES := $(wildcard lib/**/*.ml) $(wildcard test/unit/**/*.ml)
+SOURCES := $(wildcard lib/**/*.ml) $(wildcard lib/**/*.mli)
 DUNE := dune
-TEST_EXE := test/unit/backend.exe
-OPTS += 
+FILE_TEST_EXE := test/file_tests/file_tests.exe
+UNIT_TEST_EXE := test/unit_tests/unit_tests.exe
+DEV ?= 
+DUNE_OPTS += $(if $(DEV), --profile dev, --profile release)
+TEST_OPTS += 
 .PHONY: test build install clean docs
-test: $(SOURCES)
-	$(DUNE) exec $(TEST_EXE) -- $(OPTS)
-
-build:
-	$(DUNE) build
+test: build 
+	@$(DUNE) exec $(DUNE_OPTS) $(FILE_TEST_EXE) -- $(TEST_OPTS)
+	@$(DUNE) exec $(DUNE_OPTS) $(UNIT_TEST_EXE) -- $(TEST_OPTS)
+build: 
+	@$(DUNE) build $(DUNE_OPTS) 
 
 install:
-	$(DUNE) install
+	@$(DUNE) install $(DUNE_OPTS)
 
 clean:
-	$(DUNE) clean
+	@$(DUNE) clean $(DUNE_OPTS)
 
 docs: 
-	@$(DUNE) build @doc @doc-private
+	@$(DUNE) build $(DUNE_OPTS) @doc @doc-private

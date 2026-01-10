@@ -61,7 +61,7 @@
 type 'a node = {
     value : 'a ;
         (** The wrapped AST payload. *)
-    comments : string list [@opaque];
+    pos : (Lexing.position * Lexing.position) option [@opaque]
         (** Source comments associated with this node, preserved from parsing. *)
 } [@@deriving show]
 
@@ -87,7 +87,7 @@ type 'a node = {
 
     @param v The value to wrap
     @return A node containing [v] with an empty comment list *)
-let box_node (v : 'a) : 'a node = { value = v ; comments = [] }
+let box_node (v : 'a) : 'a node = { value = v ; pos = None }
 
 (** Extract the value from a node wrapper, discarding metadata.
 

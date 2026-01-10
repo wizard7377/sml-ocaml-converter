@@ -21,6 +21,7 @@ include File20
 include File21
 include File22
 include File23
+include File24
 include Alcotest
 
 let run_file_tests () = Alcotest.run "File_Tests" [
@@ -46,7 +47,8 @@ let run_file_tests () = Alcotest.run "File_Tests" [
     "Qid_Strings", [File20.TestCase.run_test];
     "Split_Local_Refs", [File21.TestCase.run_test];
     "EVar_Nested_Let", [File22.TestCase.run_test];
-    "Limit_Options", [File23.TestCase.run_test]
+    "Limit_Options", [File23.TestCase.run_test];
+    "Comment_Preservation", [File24.TestCase.run_test]
 ]
 
 let () = run_file_tests ()
