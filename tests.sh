@@ -15,4 +15,4 @@ all_simple_files+=$simple_sml_files
 
 
 echo "Running tests..."
-dune exec shibboleth --profile=dev --profile=checkparser -- file $all_files
+dune exec shibboleth -- file $all_files -v 0

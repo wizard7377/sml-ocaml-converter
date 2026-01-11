@@ -23,6 +23,9 @@ let conversion_flags : Common.conversions Term.t =
   and+ convert_comments = convert_comments_flag in
   Common.mkConversions ~convert_names ~convert_comments ()
 
+let concat_output : bool Term.t =
+  let doc = "Concatenate all output into a single output" in
+  Arg.(value & flag & info [ "concat-output" ] ~doc)
 let common_options : Common.options Cmdliner.Term.t =
-  let+ v = verb and+ c = conversion_flags in
-  Common.mkOptions ~verbosity:(Some v) ~conversions:c ()
+  let+ v = verb and+ c = conversion_flags and+ co = concat_output in
+  Common.mkOptions ~verbosity:(Some v) ~conversions:c ~concat_output:co ()

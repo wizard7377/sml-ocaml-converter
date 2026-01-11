@@ -168,6 +168,7 @@ rule token = parse
 
   (* Symbolic identifiers - these can never be keywords *)
   | symbolic_id as s { SHORT_IDENT (Symbol s) }
+  | "op" symbolic_id as s { SHORT_IDENT (Symbol s) }
 
   (* End of file *)
   | eof           { file_comments := [] ; EOF !file_comments }

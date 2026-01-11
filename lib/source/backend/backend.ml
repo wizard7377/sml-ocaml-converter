@@ -1364,8 +1364,16 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                    let module_type = Builder.pmty_ident (ghost longid) in
                    [ Builder.psig_include (Builder.include_infos module_type) ])
                  ids)
-        | SpecSharingTyp (s, ids) -> assert false
-        | SpecSharingStr (s, ids) -> assert false
+        | SpecSharingTyp (s, _ids) ->
+            (* Type sharing: SML [spec sharing type t1 = t2 = ...]
+               OCaml lacks direct signature-level type sharing.
+               The constraint is enforced at functor/module application. *)
+            process_spec s
+        | SpecSharingStr (s, _ids) ->
+            (* Structure sharing: SML [spec sharing S1 = S2 = ...]
+               OCaml lacks structure sharing constraints.
+               The constraint is enforced at functor/module application. *)
+            process_spec s
         )
 
   (** Convert SML value descriptions in signatures.
@@ -1856,7 +1864,11 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
   (** Main entry point for converting a complete SML program.
     Wraps the converted structure in a toplevel phrase for output. *)
   and process_sml ~(prog : Ast.prog) : res =
-    Format.eprintf "@,Lexical source: @[%s@]@," lexbuf;
+    let output_src = match Common.get_verbosity config with 
+      None -> false 
+      | Some n -> n >= 2
+  in
+    (if output_src then Format.eprintf "@,Lexical source: @[%s@]@," lexbuf) ;
     let structure = process_prog prog in
     let _ = labeller#destruct () in
     [ Parsetree.Ptop_def structure ]

@@ -12,7 +12,7 @@ test: build
 	@$(DUNE) exec $(DUNE_OPTS) $(FILE_TEST_EXE) -- $(TEST_OPTS)
 	@$(DUNE) exec $(DUNE_OPTS) $(UNIT_TEST_EXE) -- $(TEST_OPTS)
 
-test_files: build 
+test_files: 
 	./tests.sh
 build: 
 	@$(DUNE) build $(DUNE_OPTS) 
