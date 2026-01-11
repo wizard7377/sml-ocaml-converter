@@ -18,7 +18,7 @@
     {1 Architecture}
 
     The {!process} class encapsulates the entire conversion state:
-    - Configuration settings ({!Common.config})
+    - Configuration settings ({!Common.options})
     - Name store for tracking identifiers ({!Names.Store.t})
     - Input/output handling
 
@@ -40,18 +40,19 @@
 
 open Common
 
+type sml_code
 (** Internal representation of SML source code.
 
     This type is used during the parsing phase to hold the raw SML source
     text before it's transformed into an AST. *)
-type sml_code
 
+type ocaml_code
 (** Internal representation of OCaml source code.
 
     This type is used during the output phase to hold the pretty-printed
     OCaml source text before it's written to a file. *)
-type ocaml_code
 
+type input = Common.source
 (** Input specification for the conversion process.
 
     The converter can process either:
@@ -68,19 +69,13 @@ type ocaml_code
 
     Process a CM file:
     {[ CM "sources.cm" ]} *)
-type input =
-  | File of string list
-      (** List of SML source file paths to process. *)
-  | CM of string
-      (** Path to a CM (Compilation Manager) file. The CM file specifies
-          a collection of SML source files and their dependencies. *)
 
+type output = Common.target
 (** Output result of the conversion process.
 
     Returns an exit code:
     - [0] indicates successful conversion
     - Non-zero indicates an error occurred *)
-type output = int
 
 (** Main conversion processor class.
 
@@ -94,19 +89,22 @@ type output = int
                  names or for incremental compilation.
     @param config Conversion configuration including input/output paths,
                   verbosity level, and conversion flags. *)
-class process : ?store:Context.t -> config -> object
-
-  (** [set_config cfg] updates the processor's configuration.
+class process :
+  ?store:Context.t
+  -> options
+  -> object
+       method set_config : options -> unit
+       (** [set_config cfg] updates the processor's configuration.
 
       @param cfg New configuration to use for subsequent conversions. *)
-  method set_config : config -> unit
 
-  (** [get_config ()] retrieves the current configuration.
+       method get_config : unit -> options
+       (** [get_config ()] retrieves the current configuration.
 
       @return The active configuration settings. *)
-  method get_config : unit -> config
 
-  (** [get_store ()] retrieves the current name store.
+       method get_store : unit -> Context.t
+       (** [get_store ()] retrieves the current name store.
 
       The name store contains all discovered identifiers and their contexts
       from the conversion process. This is useful for:
@@ -115,9 +113,9 @@ class process : ?store:Context.t -> config -> object
       - Analyzing identifier transformations
 
       @return The accumulated name store. *)
-  method get_store : unit -> Context.t
 
-  (** [set_store store] replaces the processor's name store.
+       method set_store : Context.t -> unit
+       (** [set_store store] replaces the processor's name store.
 
       This allows:
       - Reusing name context across multiple conversions
@@ -125,9 +123,9 @@ class process : ?store:Context.t -> config -> object
       - Testing specific name resolution scenarios
 
       @param store New name store to use. *)
-  method set_store : Context.t -> unit
 
-  (** [run input] executes the conversion pipeline.
+       method run : input -> int
+       (** [run input] executes the conversion pipeline.
 
       This is the main entry point for performing SML-to-OCaml conversion.
       The method will:
@@ -139,6 +137,4 @@ class process : ?store:Context.t -> config -> object
 
       @param input Input specification (files or CM file)
       @return Exit code: 0 for success, non-zero for failure *)
-  method run : input -> output
-
-end
+     end

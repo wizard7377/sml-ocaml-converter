@@ -6,4 +6,4 @@ module TestServerPatterns : TEST_FILES = struct
   let expected_file = None
 end
 
-module TestCase = Test_common.Make(TestServerPatterns)
+module TestCase = Test_common.Make (TestServerPatterns)

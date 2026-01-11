@@ -93,7 +93,6 @@ rule token = parse
   (* Comments *)
   | "(*"         { comment_depth := 1;
                    Buffer.clear comment_buf;
-                   Buffer.add_string comment_buf "(*";
                    comment lexbuf }
 
   (* String literals *)

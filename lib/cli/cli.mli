@@ -30,6 +30,8 @@
 
     @see <https://github.com/dbuenzli/cmdliner> Cmdliner documentation *)
 
+val entrypoint : unit -> unit
+
 (** [entrypoint ()] is the main entry point for the CLI application.
 
     This function:
@@ -40,8 +42,3 @@
     It should be called once from the executable's main function.
 
     @return Unit. The function will call [exit] with the appropriate exit code. *)
-val entrypoint : unit -> unit
-
-(** Test configuration with default conversion settings.
-    Used for unit testing the backend conversion functions. *)
-val test_config : Common.config

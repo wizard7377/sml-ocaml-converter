@@ -50,17 +50,19 @@
 
 open Common
 
+type sml_code
+
 (** Internal representation of SML source code.
 
     This abstract type holds the parsed SML AST along with any
     metadata needed for conversion. *)
-type sml_code
+
+type ocaml_code
 
 (** Internal representation of OCaml source code.
 
     This abstract type holds the OCaml Parsetree representation
     ready for pretty-printing. *)
-type ocaml_code
 
 (** File conversion processor class.
 
@@ -73,21 +75,24 @@ type ocaml_code
                  known identifiers (e.g., standard library names)
     @param config Conversion configuration including input/output paths
                   and transformation flags *)
-class process_file : ?store:Context.t -> config -> object
-
-  (** [set_config cfg] updates the processor's configuration.
+class process_file :
+  ?store:Context.t
+  -> options
+  -> object
+       method set_config : options -> unit
+       (** [set_config cfg] updates the processor's configuration.
 
       This allows reusing a processor instance with different settings.
 
       @param cfg New configuration to apply *)
-  method set_config : config -> unit
 
-  (** [get_config ()] retrieves the current configuration.
+       method get_config : unit -> options
+       (** [get_config ()] retrieves the current configuration.
 
       @return The active configuration settings *)
-  method get_config : unit -> config
 
-  (** [get_store ()] retrieves the accumulated name store.
+       method get_store : unit -> Context.t
+       (** [get_store ()] retrieves the accumulated name store.
 
       The store contains all identifiers discovered during parsing
       and their syntactic contexts. Useful for:
@@ -96,9 +101,9 @@ class process_file : ?store:Context.t -> config -> object
       - Incremental compilation scenarios
 
       @return The current name store *)
-  method get_store : unit -> Context.t
 
-  (** [set_store store] replaces the processor's name store.
+       method set_store : Context.t -> unit
+       (** [set_store store] replaces the processor's name store.
 
       This enables:
       - Pre-populating with standard library names
@@ -106,9 +111,9 @@ class process_file : ?store:Context.t -> config -> object
       - Testing specific name resolution scenarios
 
       @param store New name store to use *)
-  method set_store : Context.t -> unit
 
-  (** [parse_sml source] parses SML source text into an internal AST.
+       method parse_sml : string -> sml_code
+       (** [parse_sml source] parses SML source text into an internal AST.
 
       This phase:
       - Lexes the input using ocamllex
@@ -119,9 +124,9 @@ class process_file : ?store:Context.t -> config -> object
       @param source SML source text (typically from a file)
       @return Parsed SML code representation
       @raise Parsing.Parse_error if the source is syntactically invalid *)
-  method parse_sml : string -> sml_code
 
-  (** [convert_to_ocaml sml] transforms SML AST to OCaml Parsetree.
+       method convert_to_ocaml : sml_code -> ocaml_code
+       (** [convert_to_ocaml sml] transforms SML AST to OCaml Parsetree.
 
       This phase:
       - Resolves names using the name store
@@ -135,9 +140,9 @@ class process_file : ?store:Context.t -> config -> object
       @param sml Parsed SML code from {!parse_sml}
       @return OCaml code representation
       @raise Failure if conversion encounters unresolvable constructs *)
-  method convert_to_ocaml : sml_code -> ocaml_code
 
-  (** [print_ocaml ocaml] pretty-prints OCaml Parsetree to source text.
+       method print_ocaml : ocaml_code -> string
+       (** [print_ocaml ocaml] pretty-prints OCaml Parsetree to source text.
 
       This phase:
       - Formats the OCaml AST using the standard pretty-printer
@@ -146,6 +151,4 @@ class process_file : ?store:Context.t -> config -> object
 
       @param ocaml OCaml code from {!convert_to_ocaml}
       @return Formatted OCaml source text ready to write to a file *)
-  method print_ocaml : ocaml_code -> string
-
-end
+     end

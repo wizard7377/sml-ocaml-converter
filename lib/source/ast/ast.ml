@@ -38,6 +38,13 @@
     {b Important}: When constructing AST nodes, always use {!box_node} to wrap values.
     When destructuring, use {!unbox_node} to extract the payload. *)
 
+type 'a node = {
+  value : 'a;  (** The wrapped AST payload. *)
+  pos : (Lexing.position * Lexing.position) option; [@opaque]
+      (** Source comments associated with this node, preserved from parsing. *)
+}
+[@@deriving show]
+
 (** Generic wrapper for AST nodes.
 
     The ['a node] type wraps any AST payload with associated metadata.
@@ -58,14 +65,6 @@
 
     @see 'box_node' Helper to create nodes without comments
     @see 'unbox_node' Helper to extract the wrapped value *)
-type 'a node = {
-    value : 'a ;
-        (** The wrapped AST payload. *)
-    pos : (Lexing.position * Lexing.position) option [@opaque]
-        (** Source comments associated with this node, preserved from parsing. *)
-} [@@deriving show]
-
-
 
 (** Create a node wrapper with no associated comments.
 
@@ -87,7 +86,7 @@ type 'a node = {
 
     @param v The value to wrap
     @return A node containing [v] with an empty comment list *)
-let box_node (v : 'a) : 'a node = { value = v ; pos = None }
+let box_node (v : 'a) : 'a node = { value = v; pos = None }
 
 (** Extract the value from a node wrapper, discarding metadata.
 
@@ -181,7 +180,7 @@ type prog =
 
           Represents an empty source file or the base case
           when building program sequences. *)
-    [@@deriving show]
+[@@deriving show]
 
 (** Functor bindings.
 
@@ -209,7 +208,18 @@ type prog =
     @see 'signature' Signature types for parameter and result constraints
     @see 'structure' Structure expressions for functor bodies *)
 and functor_binding =
-  | FctBind of idx node * idx node * signature node * (anotate node * signature node) option * structure node * functor_binding node option
+  | FctGen of
+      idx node
+      * (anotate node * signature node) option
+      * structure node
+      * functor_binding node option
+  | FctBind of
+      idx node
+      * idx node
+      * signature node
+      * (anotate node * signature node) option
+      * structure node
+      * functor_binding node option
       (** Plain functor: [id1 ( id2 : sig ) [:[:>] sig] = structure].
 
           Components:
@@ -221,7 +231,12 @@ and functor_binding =
           - Optional additional bindings ([and ...])
 
           @see 'anotate' Transparent vs opaque sealing *)
-  | FctBindOpen of idx node * specification node * (anotate node * signature node) option * structure node * functor_binding node option
+  | FctBindOpen of
+      idx node
+      * specification node
+      * (anotate node * signature node) option
+      * structure node
+      * functor_binding node option
       (** Opened functor: [id ( specification ) [:[:>] sig] = structure].
 
           The specification components are directly visible in the functor body
@@ -868,7 +883,8 @@ and declaration =
               box_node (IdxIdx (box_node "bool"))
             )
           ]} *)
-  | AbstractDec of data_binding node * type_binding node option * declaration node list
+  | AbstractDec of
+      data_binding node * type_binding node option * declaration node list
       (** Abstract type: [abstype datbind \[withtype typbind\] with declaration end].
 
           The datatype constructors are hidden outside the [with] block.
@@ -1048,7 +1064,12 @@ and function_binding =
 
     @see 'pat' Pattern syntax for function parameters *)
 and fun_match =
-  | FunMatchPrefix of with_op node * pat node list * typ node option * expression node * fun_match node option
+  | FunMatchPrefix of
+      with_op node
+      * pat node list
+      * typ node option
+      * expression node
+      * fun_match node option
       (** Prefix (nonfix) function clause: [\[op\] id pat1 ... patn \[: typ\] = expression].
 
           The {!with_op} contains the function name (with optional [op] prefix).
@@ -1069,7 +1090,13 @@ and fun_match =
               )))
             )
           ]} *)
-  | FunMatchInfix of pat node * idx node * pat node * typ node option * expression node * fun_match node option
+  | FunMatchInfix of
+      pat node
+      * idx node
+      * pat node
+      * typ node option
+      * expression node
+      * fun_match node option
       (** Infix function clause: [pat1 id pat2 \[: typ\] = expression].
 
           The identifier [id] must be declared infix.
@@ -1078,7 +1105,14 @@ and fun_match =
             (* SML: fun x ++ y = x @ y *)
             FunMatchInfix (x_pat, plusplus_id, y_pat, None, append_exp, None)
           ]} *)
-  | FunMatchLow of pat node * idx node * pat node * pat node list * typ node option * expression node * fun_match node option
+  | FunMatchLow of
+      pat node
+      * idx node
+      * pat node
+      * pat node list
+      * typ node option
+      * expression node
+      * fun_match node option
       (** Curried infix clause: [( pat1 id pat2 ) pat'1 ... pat'n \[: typ\] = expression].
 
           An infix operator with additional curried arguments.
@@ -1126,7 +1160,11 @@ and type_binding =
     @see 'DatDec' Datatype declarations
     @see 'constructor_binding' Constructor bindings *)
 and data_binding =
-  | DatBind of idx node list * idx node * constructor_binding node * data_binding node option
+  | DatBind of
+      idx node list
+      * idx node
+      * constructor_binding node
+      * data_binding node option
       (** Datatype binding: [\[var,\] id = conbind].
 
           Components:
@@ -1325,7 +1363,11 @@ and anotate =
 
     @see 'StrDec' Structure declarations *)
 and structure_binding =
-  | StrBind of idx node * (anotate node * signature node) option * structure node * structure_binding node option
+  | StrBind of
+      idx node
+      * (anotate node * signature node) option
+      * structure node
+      * structure_binding node option
       (** Structure binding: [id \[:\[\:>\] sig\] = structure].
 
           Fields:
@@ -1386,7 +1428,8 @@ and signature =
 
     Refines abstract types in a signature to specific types. *)
 and typ_refine =
-  | TypRef of idx node list * idx node * typ node * (typ node * typ_refine node) option
+  | TypRef of
+      idx node list * idx node * typ node * (typ node * typ_refine node) option
       (** Type refinement: [\[var,\] longid = typ].
 
           Components:
@@ -1566,7 +1609,11 @@ and typ_specification =
     datdesc ::= [var,] id = condesc [and datdesc]
     ]} *)
 and dat_specification =
-  | DatDesc of idx node list * idx node * con_specification node * dat_specification node option
+  | DatDesc of
+      idx node list
+      * idx node
+      * con_specification node
+      * dat_specification node option
       (** Datatype description with constructors.
 
           Like {!data_binding} but in signature context.
@@ -1911,7 +1958,8 @@ and pat_row =
             (* SML: x = a (in a record pattern) *)
             PatRowSimple (x_label, a_pat, empty_row)
           ]} *)
-  | PatRowVar of idx node * typ node option * idx node option * pat_row node option
+  | PatRowVar of
+      idx node * typ node option * idx node option * pat_row node option
       (** Variable row: [id \[: typ\] \[as pat\]].
 
           Shorthand where the label equals the variable name (punning).
@@ -1931,7 +1979,6 @@ and pat_row =
             PatRowVar (x_id, Some int_typ, None, None)
           ]} *)
 
-
 (** {1 CM (Compilation Manager) Support}
 
     Types for representing CM build files, which describe compilation
@@ -1941,10 +1988,16 @@ and pat_row =
 
 (** Type of source file in a CM description. *)
 type cm_filetype =
-  | CM_CM   (** Another CM description file. *)
+  | CM_CM  (** Another CM description file. *)
   | CM_Sig  (** Signature file (.sig). *)
   | CM_Sml  (** Implementation file (.sml). *)
   | CM_Fun  (** Functor file (.fun). *)
+
+type cm_file = {
+  cm_header : string;  (** CM file header (e.g., "Library", "Group"). *)
+  cm_sources : (string * cm_filetype) list;
+      (** List of source files with their types. *)
+}
 
 (** CM file description.
 
@@ -1962,9 +2015,3 @@ type cm_filetype =
         ]
       }
     ]} *)
-type cm_file = {
-    cm_header : string ;
-        (** CM file header (e.g., "Library", "Group"). *)
-    cm_sources : (string * cm_filetype) list
-        (** List of source files with their types. *)
-}

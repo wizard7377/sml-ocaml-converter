@@ -6,4 +6,4 @@ module TestEVarLookup : TEST_FILES = struct
   let expected_file = None
 end
 
-module TestCase = Test_common.Make(TestEVarLookup)
+module TestCase = Test_common.Make (TestEVarLookup)

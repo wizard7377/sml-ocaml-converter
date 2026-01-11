@@ -6,4 +6,4 @@ module TestWeaken : TEST_FILES = struct
   let expected_file = None
 end
 
-module TestCase = Test_common.Make(TestWeaken)
+module TestCase = Test_common.Make (TestWeaken)

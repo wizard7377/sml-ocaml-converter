@@ -1,6 +1,5 @@
 (library
  (public_name shibboleth.common)
  (name common)
-  (modules common)
-
+ (modules common options)
  (libraries ez_file))

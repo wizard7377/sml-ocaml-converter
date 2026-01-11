@@ -1,7 +1,5 @@
-
 open Shibboleth
-open Cli 
+open Cli
 
 let main () = Cli.entrypoint ()
 let () = main ()
-

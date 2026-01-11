@@ -1,11 +1,10 @@
-
 type atag = string
 type attr = Parsetree.attribute
 type cite = Parsetree.payload
 type 'a citer = 'a -> attr -> 'a
 
-
 exception CommentNotFound
+
 val expression : Parsetree.expression citer
 val pattern : Parsetree.pattern citer
 val core_type : Parsetree.core_type citer
@@ -23,7 +22,7 @@ val exception_constructor : Parsetree.extension_constructor citer
 val exception_declaration : Parsetree.type_exception citer
 val class_type : Parsetree.class_type citer
 val class_type_field : Parsetree.class_type_field citer
-val class_infos : 'a Parsetree.class_infos citer 
+val class_infos : 'a Parsetree.class_infos citer
 val class_expr : Parsetree.class_expr citer
 val class_field : Parsetree.class_field citer
 val module_declaration : Parsetree.module_declaration citer

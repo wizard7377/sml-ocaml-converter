@@ -24,12 +24,15 @@
 
     This module exposes the primary data types used throughout the conversion pipeline. *)
 
+type sml = Ast.prog
+
 (** Type alias for SML abstract syntax trees.
 
     Represents a complete parsed SML program. See {!Ast} module for the
     full AST definition covering expressions, patterns, types, declarations,
     structures, signatures, and functors. *)
-type sml = Ast.prog
+
+type ocaml = Parsetree.toplevel_phrase list
 
 (** Type alias for OCaml abstract syntax trees.
 
@@ -39,4 +42,3 @@ type sml = Ast.prog
 
     Note: This is a list because a single SML program may generate multiple
     OCaml top-level declarations. *)
-type ocaml = Parsetree.toplevel_phrase list

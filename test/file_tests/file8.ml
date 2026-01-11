@@ -6,4 +6,4 @@ module TestDomains : TEST_FILES = struct
   let expected_file = None
 end
 
-module TestCase = Test_common.Make(TestDomains)
+module TestCase = Test_common.Make (TestDomains)

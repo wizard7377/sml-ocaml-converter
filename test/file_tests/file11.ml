@@ -6,4 +6,4 @@ module TestFlit : TEST_FILES = struct
   let expected_file = None
 end
 
-module TestCase = Test_common.Make(TestFlit)
+module TestCase = Test_common.Make (TestFlit)

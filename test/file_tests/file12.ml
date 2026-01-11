@@ -6,4 +6,4 @@ module TestOrigins : TEST_FILES = struct
   let expected_file = None
 end
 
-module TestCase = Test_common.Make(TestOrigins)
+module TestCase = Test_common.Make (TestOrigins)

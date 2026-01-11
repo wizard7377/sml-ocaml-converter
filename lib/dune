@@ -2,8 +2,7 @@
  (public_name shibboleth)
  (name shibboleth)
  ; (public_name shibboleth)
- (libraries frontend backend ppx_deriving common helpers)
+ (libraries polish frontend backend ppx_deriving common helpers)
  (preprocess
   (pps ppx_deriving.show))
  (modules shibboleth))
-

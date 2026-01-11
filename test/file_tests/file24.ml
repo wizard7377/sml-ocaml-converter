@@ -6,4 +6,4 @@ module Test24 : TEST_FILES = struct
   let expected_file = None
 end
 
-module TestCase = Test_common.Make(Test24)
+module TestCase = Test_common.Make (Test24)

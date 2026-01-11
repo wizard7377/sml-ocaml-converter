@@ -1,0 +1,7 @@
+(library
+ (name polish)
+ (public_name shibboleth.polish)
+ (preprocess
+  (pps ppx_import ppx_deriving.show ppx_deriving.eq))
+ (libraries ast common ocamlformat)
+ (modules polish))

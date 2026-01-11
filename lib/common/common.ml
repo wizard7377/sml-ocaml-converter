@@ -1,26 +1,21 @@
 open Ez_file
+
 let get_file filename = FileString.read_file filename
 let write_file filename content = () (* TODO *)
 
-type ident = Name of string | Symbol of string 
-type convert_flag = 
-  | Dont_convert
-  | Do_convert 
-  | Debug_convert
-type do_convert = {
-    convert_names : convert_flag ;
-}
+type ident = Name of string | Symbol of string
+type convert_flag = Dont_convert | Do_convert | Debug_convert
+type do_convert = { convert_names : convert_flag }
+
 type config = {
-    input_file : string ;
-    output_file : string option ;
-    verbosity : int option ;
-    conversions : do_convert ;
+  input_file : string;
+  output_file : string option;
+  verbosity : int option;
+  conversions : do_convert;
 }
 
+let fst3 (x, _, _) = x
+let snd3 (_, y, _) = y
+let trd3 (_, _, z) = z
 
-module type CONFIG = sig 
-    val config : config 
-end
-let fst3 (x,_,_) = x
-let snd3 (_,y,_) = y
-let trd3 (_,_,z) = z
+include Options

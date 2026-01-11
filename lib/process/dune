@@ -1,5 +1,5 @@
 (library
  (public_name shibboleth.process)
- (name process) 
+ (name process)
  (modules process process_common process_file process_cm)
- (libraries common backend context frontend helpers))
+ (libraries polish common backend context frontend helpers))

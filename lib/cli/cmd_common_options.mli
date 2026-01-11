@@ -38,25 +38,5 @@
 
     - [verbose]: Verbosity level (0 = quiet, 1 = normal, 2+ = verbose)
     - [conversions]: Flags controlling which semantic transformations to apply *)
-type common_options = {
-  verbose : int option;
-      (** Optional verbosity level. [None] uses default verbosity.
-          Higher numbers produce more detailed output. *)
-  conversions : Common.do_convert;
-      (** Conversion policy specifying which transformations to enable.
-          See {!Common.do_convert} for details on each flag. *)
-}
 
-(** [common_options] is a Cmdliner term for parsing common options.
-
-    This term can be combined with other terms to build complete command
-    definitions. It handles parsing of:
-    - [-v], [--verbose]: Increase verbosity (can be repeated)
-    - [--no-pattern-names]: Disable pattern name conversion
-    - [--no-constructor-names]: Disable constructor name conversion
-    - [--no-function-names]: Disable function name conversion
-    - [--uncurry-types]: Enable type uncurrying
-    - [--uncurry-values]: Enable value uncurrying
-
-    @return A Cmdliner term that produces a {!common_options} value *)
-val common_options : common_options Cmdliner.Term.t
+val common_options : Common.options Cmdliner.Term.t

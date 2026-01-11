@@ -28,7 +28,7 @@
   ppx_import 
   ppx_deriving
   ez_file
-  ocamlformat
+  ocamlformat 
   odoc 
   menhir 
   re 

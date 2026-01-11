@@ -86,4 +86,5 @@
     @return A module implementing the {!Backend_sig.BACKEND} signature,
             which provides functions for transforming each SML AST node
             type to its OCaml equivalent. *)
-module Make (Context : Backend_sig.CONTEXT) (Config : Common.CONFIG) : Backend_sig.BACKEND
+module Make (Context : Backend_sig.CONTEXT) (Config : Common.CONFIG) :
+  Backend_sig.BACKEND

@@ -5,10 +5,15 @@ UNIT_TEST_EXE := test/unit_tests/unit_tests.exe
 DEV ?= 
 DUNE_OPTS += $(if $(DEV), --profile dev, --profile release)
 TEST_OPTS += 
-.PHONY: test build install clean docs
+.PHONY: test build install clean docs test_files format
+
+
 test: build 
 	@$(DUNE) exec $(DUNE_OPTS) $(FILE_TEST_EXE) -- $(TEST_OPTS)
 	@$(DUNE) exec $(DUNE_OPTS) $(UNIT_TEST_EXE) -- $(TEST_OPTS)
+
+test_files: build 
+	./tests.sh
 build: 
 	@$(DUNE) build $(DUNE_OPTS) 
 
@@ -20,3 +25,6 @@ clean:
 
 docs: 
 	@$(DUNE) build $(DUNE_OPTS) @doc @doc-private
+
+format:
+	dune fmt

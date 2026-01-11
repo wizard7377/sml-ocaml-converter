@@ -1,5 +1,5 @@
-
 val get_context : Ast.prog -> Info.t
+
 (**
     Extract the context from a given AST program.
     This involves traversing the AST and collecting all relevant name information

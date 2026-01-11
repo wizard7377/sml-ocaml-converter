@@ -6,4 +6,4 @@ module TestModeSyn : TEST_FILES = struct
   let expected_file = None
 end
 
-module TestCase = Test_common.Make(TestModeSyn)
+module TestCase = Test_common.Make (TestModeSyn)

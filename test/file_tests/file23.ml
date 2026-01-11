@@ -6,4 +6,4 @@ module TestLimitToString : TEST_FILES = struct
   let expected_file = None
 end
 
-module TestCase = Test_common.Make(TestLimitToString)
+module TestCase = Test_common.Make (TestLimitToString)

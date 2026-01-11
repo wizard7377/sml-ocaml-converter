@@ -6,4 +6,4 @@ module TestSplitLocal : TEST_FILES = struct
   let expected_file = None
 end
 
-module TestCase = Test_common.Make(TestSplitLocal)
+module TestCase = Test_common.Make (TestSplitLocal)

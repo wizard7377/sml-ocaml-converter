@@ -948,6 +948,9 @@ fctbind:
   | modid LPAREN specification RPAREN sigconstraint_opt EQUAL structure and_fctbind_opt {
       FctBindOpen (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3), $5, bp $7 $startpos($7) $endpos($7), $8)
     }
+  | modid LPAREN RPAREN sigconstraint_opt EQUAL structure and_fctbind_opt {
+      FctGen (bp $1 $startpos($1) $endpos($1), $4, bp $6 $startpos($6) $endpos($6), $7)
+    }
 ;
 
 and_fctbind_opt:
