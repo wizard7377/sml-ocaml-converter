@@ -1,5 +1,5 @@
 (library
  (public_name shibboleth.common)
  (name common)
- (modules common options)
- (libraries ez_file))
+ (modules common options logger)
+ (libraries fmt fmt.tty ez_file))

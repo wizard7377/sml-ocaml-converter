@@ -151,4 +151,7 @@ class process_file :
 
       @param ocaml OCaml code from {!convert_to_ocaml}
       @return Formatted OCaml source text ready to write to a file *)
+
+      method process_file : string -> string
+      (** [process_file path] performs the complete conversion pipeline. *)
      end

@@ -1,0 +1,16 @@
+{!modules:
+Shibboleth.Ast
+Shibboleth.Backend
+Shibboleth.Frontend
+Shibboleth.Process
+Shibboleth.Context
+Shibboleth.Polish
+}
+
+{1 Utilities}
+
+{!modules:
+Common
+Helpers
+Cli
+}

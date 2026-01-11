@@ -42,3 +42,17 @@ type ocaml = Parsetree.toplevel_phrase list
 
     Note: This is a list because a single SML program may generate multiple
     OCaml top-level declarations. *)
+
+
+(** 
+{!modules:
+Source.Ast
+Source.Backend 
+Source.Frontend
+Source.Polish 
+Cli 
+Common 
+Helpers 
+Process
+}
+*)

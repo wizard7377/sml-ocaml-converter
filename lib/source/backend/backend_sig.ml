@@ -10,7 +10,7 @@ end
 module type BACKEND = sig
   module Config : Common.CONFIG
 
-  exception BadAst of string
+  exception BadAst of (Lexing.position * Lexing.position) option * string
 
   type res = Parsetree.toplevel_phrase list
 

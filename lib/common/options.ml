@@ -1,11 +1,11 @@
 type source = File of string list | StdIn
-type target = FileOut of string | StdOut
-type conversions = { convert_names : bool; convert_comments : bool }
+type target = FileOut of string | StdOut | Silent
+type conversions = { convert_names : bool; convert_comments : bool; add_line_numbers : bool; convert_keywords : bool; rename_types : bool ; make_make_functor : bool }
 
-let mkConversions ?(convert_names = false) ?(convert_comments = false)
+let mkConversions ?(convert_names = true) ?(convert_comments = true) ?(add_line_numbers = true)
+    ?(convert_keywords = true) ?(rename_types = true) ?(make_make_functor = true)
     (_ : unit) : conversions =
-  { convert_names; convert_comments }
-
+  { convert_names; convert_comments; add_line_numbers; convert_keywords; rename_types; make_make_functor }
 type options = {
   input_file : source;  (** Path to the input SML source file. *)
   output_file : target;
@@ -19,19 +19,43 @@ type options = {
           - [Some 3+]: Debug output (all intermediate representations) *)
   conversions : conversions;
       (** Transformation policy specifying which conversions to apply. *)
+
+      concat_output : bool;
+  force : bool;
+  quiet : bool;
+  guess_var : string option;
 }
 
-let mkOptions ?(input_file = StdIn) ?(output_file = StdOut) ?(verbosity = None)
-    ?(conversions = mkConversions ()) (_ : unit) : options =
-  { input_file; output_file; verbosity; conversions }
+let mkOptions 
+  ?(input_file = StdIn) 
+  ?(output_file = Silent) 
+  ?(verbosity = None)
+  ?(conversions = mkConversions ()) 
+  ?(concat_output = true)
+  ?(force = false)
+  ?(quiet = true)
+  ?(guess_var : string option = None)
+  (_ : unit) : options =
+  { input_file; output_file; verbosity; conversions; concat_output; force; quiet; guess_var }
 
 let get_verbosity opts = opts.verbosity
+let get_verbosity_default opts def =
+  match opts.verbosity with
+  | None -> def
+  | Some v -> v
 let get_input_file opts = opts.input_file
 let get_output_file opts = opts.output_file
 let get_conversions opts = opts.conversions
-let get_convert_names opts = opts.convert_names
-let get_convert_comments opts = opts.convert_comments
-
+let get_convert_names opts = opts.conversions.convert_names
+let get_convert_comments opts = opts.conversions.convert_comments
+let get_line_numbers opts = opts.conversions.add_line_numbers
+let get_concat_output opts = opts.concat_output
+let get_force opts = opts.force
+let get_quiet opts = opts.quiet
+let get_convert_keywords opts = opts.conversions.convert_keywords
+let get_rename_types opts = opts.conversions.rename_types
+let get_make_make_functor opts = opts.conversions.make_make_functor
+let get_guess_var opts = opts.guess_var
 module type CONFIG = sig
   val config : options
   (** The configuration value to use for conversion. *)

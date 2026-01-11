@@ -8,10 +8,11 @@ type 'a citer = 'a -> attr -> 'a
 exception CommentNotFound
 
 let rec get_all_comments (lexbuf : string) : (string * int * int) list =
-  let comment_regex =
-    Re.compile
-      (Re.seq [ Re.str "(*"; Re.shortest (Re.rep Re.any); Re.str "*)" ])
+  let rec comment_regex' depth = 
+    let inner_re = if depth > 0 then  Re.first (Re.alt [comment_regex' (depth - 1) ; Re.shortest (Re.rep Re.any)]) else Re.shortest (Re.rep Re.any) in
+      (Re.seq [ Re.str "(*"; inner_re; Re.str "*)" ])
   in
+  let comment_regex = Re.compile @@ comment_regex' 10 in
   let comments = Re.all comment_regex lexbuf in
   let process_comment_group : Re.Group.t -> string * int * int =
    fun group ->
