@@ -17,6 +17,7 @@ val mkOptions :
   options
 
 val get_verbosity : options -> int option
+val get_verbosity_default : options -> int -> int
 val get_conversions : options -> conversions
 val get_input_file : options -> source
 val get_output_file : options -> target

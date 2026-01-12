@@ -28,11 +28,15 @@ let mkOptions
   ?(output_file = Silent) 
   ?(verbosity = None)
   ?(conversions = mkConversions ()) 
-  ?(concat_output = false)
+  ?(concat_output = true)
   (_ : unit) : options =
   { input_file; output_file; verbosity; conversions; concat_output }
 
 let get_verbosity opts = opts.verbosity
+let get_verbosity_default opts def =
+  match opts.verbosity with
+  | None -> def
+  | Some v -> v
 let get_input_file opts = opts.input_file
 let get_output_file opts = opts.output_file
 let get_conversions opts = opts.conversions

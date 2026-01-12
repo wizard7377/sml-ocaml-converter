@@ -66,3 +66,4 @@ val trd3 : 'a * 'b * 'c -> 'c
     @return The third element *)
 
 include module type of Options
+include module type of Logger

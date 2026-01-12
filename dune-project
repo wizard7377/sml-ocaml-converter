@@ -32,6 +32,7 @@
   odoc 
   menhir 
   re 
+  fmt
   )
  (tags
   ("ocaml" "sml")))

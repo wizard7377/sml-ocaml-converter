@@ -116,7 +116,8 @@
 (* ========================================================================= *)
 (* Precedence and associativity (lowest to highest)                          *)
 (* ========================================================================= *)
-
+%nonassoc EOF
+%left SEMICOLON
 %right AND
 %nonassoc BIGARROW
 %nonassoc BAR
@@ -131,14 +132,14 @@
 %nonassoc EQUAL
 %right STAR
 %left COLON COLON_GT
-
+%left PROGRAM_PREC 
 (* ========================================================================= *)
 (* Type declarations for nonterminals                                        *)
 (* ========================================================================= *)
-
-%type <Ast.prog * string list> file
-%type <Ast.prog> program
-%type <Ast.declaration> dec_seq kwdec kwcoredec kwmoduledec
+%type <Ast.prog * string list> main
+%type <Ast.prog> file
+%type <Ast.prog> program nonempty_program
+%type <Ast.declaration> dec_seq nonempty_dec_seq kwdec kwcoredec kwmoduledec
 %type <Ast.declaration node list> kwdec_seq kwcoredec_seq
 %type <Ast.expression> expression atomic_exp
 %type <Ast.expression node list> exp_comma_seq0 exp_comma_seq1 exp_comma_seq2 exp_semicolon_seq2 atomic_exp_seq1
@@ -201,7 +202,7 @@
 %type <int> digit_opt
 %type <Ast.pat node option> as_pat_opt
 
-%start file
+%start main
 
 %%
 
@@ -539,20 +540,22 @@ pat_comma_seq2:
 (* ========================================================================= *)
 
 dec_seq:
-  | kwdec dec_seq { SeqDec [bp $1 $startpos($1) $endpos($1); bp $2 $startpos($2) $endpos($2)] }
-  | SEMICOLON dec_seq { $2 }
+  | kwdec SEMICOLON? dec_seq { SeqDec [bp $1 $startpos($1) $endpos($1); bp $3 $startpos($3) $endpos($3)] }
   | { SeqDec [] }
 ;
 
+(* Non-empty declaration sequence - requires at least one declaration *)
+nonempty_dec_seq:
+  | kwdec SEMICOLON? dec_seq { SeqDec [bp $1 $startpos($1) $endpos($1); bp $3 $startpos($3) $endpos($3)] }
+;
+
 kwdec_seq:
-  | kwdec kwdec_seq { bp $1 $startpos($1) $endpos($1) :: $2 }
-  | SEMICOLON kwdec_seq { $2 }
+  | kwdec SEMICOLON? kwdec_seq { bp $1 $startpos($1) $endpos($1) :: $3 }
   | { [] }
 ;
 
 kwcoredec_seq:
-  | kwcoredec kwcoredec_seq { bp $1 $startpos($1) $endpos($1) :: $2 }
-  | SEMICOLON kwcoredec_seq { $2 }
+  | kwcoredec SEMICOLON? kwcoredec_seq { bp $1 $startpos($1) $endpos($1) :: $3 }
   | { [] }
 ;
 
@@ -744,6 +747,7 @@ atomic_str:
 (* ========================================================================= *)
 
 sig_expr:
+  
   | SIG specification END { SignSig (flatten_spec_node (bp $2 $startpos($2) $endpos($2))) }
   | sigid { SignIdx (bp $1 $startpos($1) $endpos($1)) }
   | sig_expr WHERE TYPE typrefin { SignWhere (bp $1 $startpos($1) $endpos($1), bp $4 $startpos($4) $endpos($4)) }
@@ -888,7 +892,7 @@ condesc:
       ConDesc ((match $1 with WithOp i -> i | WithoutOp i -> i), $2, $3)
     }
 ;
-
+%inline
 bar_condesc_opt:
   | BAR condesc { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
@@ -899,7 +903,7 @@ exndesc:
       ExnDesc ((match $1 with WithOp i -> i | WithoutOp i -> i), $2, $3)
     }
 ;
-
+%inline
 and_exndesc_opt:
   | AND exndesc { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
@@ -908,7 +912,7 @@ and_exndesc_opt:
 strdesc:
   | modid COLON sig_expr and_strdesc_opt { StrDesc (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3), $4) }
 ;
-
+%inline
 and_strdesc_opt:
   | AND strdesc { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
@@ -931,7 +935,7 @@ fundesctail:
       SignSig (flatten_spec_node (bp (SpecSeq (param_spec, result_spec)) $startpos $endpos))
     }
 ;
-
+%inline
 and_fundesc_opt:
   | AND fundesc { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
@@ -952,7 +956,7 @@ fctbind:
       FctGen (bp $1 $startpos($1) $endpos($1), $4, bp $6 $startpos($6) $endpos($6), $7)
     }
 ;
-
+%inline
 and_fctbind_opt:
   | AND fctbind { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
@@ -962,17 +966,31 @@ and_fctbind_opt:
 (* Program (Top-level)                                                       *)
 (* ========================================================================= *)
 
+(* Program that can be empty - used for final position *)
 program:
   | dec_seq { (ProgDec (bp $1 $startpos($1) $endpos($1))) }
   | FUNCTOR fctbind { (ProgFun (bp $2 $startpos($2) $endpos($2))) }
   | SIGNATURE sigbind { (ProgStr (bp $2 $startpos($2) $endpos($2))) }
 ;
-program_list :
-  p0=program { p0 }
-  |  p0=program; p1=program { ProgSeq (bp p0 $startpos(p0) $endpos(p0), bp p1 $startpos(p1) $endpos(p1)) }
-  | p0=program; SEMICOLON ; ps=program_list { ProgSeq (bp p0 $startpos(p0) $endpos(p0), bp ps $startpos(ps) $endpos(ps)) }
+
+(* Non-empty program - must start with a keyword *)
+nonempty_program:
+  | nonempty_dec_seq { (ProgDec (bp $1 $startpos($1) $endpos($1))) }
+  | FUNCTOR fctbind { (ProgFun (bp $2 $startpos($2) $endpos($2))) }
+  | SIGNATURE sigbind { (ProgStr (bp $2 $startpos($2) $endpos($2))) }
+;
+
+(* Program list - allows consecutive programs without semicolons *)
+(* Each non-final program must be non-empty to break the cycle *)
+program_list:
+  | nonempty_program SEMICOLON program_list { ProgSeq (b $1, b $3) }
+  | nonempty_program program_list { ProgSeq (b $1, b $2) }
+  | program { $1 }
   ;
+
+%inline
 file:
-  | program_list SEMICOLON? EOF { ($1, $3) }
-  (* TODO *)
+  program_list { $1 }
   ;
+main: 
+  | file EOF { ($1, $2) }

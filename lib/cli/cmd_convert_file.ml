@@ -21,15 +21,25 @@ let convert_file ~(input_files : string list) ?(output_file : string option)
   0
 
 let output : string option Term.t =
-  let doc = "Output path for converted files" in
-  Arg.(value & opt (some string) None & info [ "o"; "output" ] ~doc)
+  let doc = {|
+  Output path for converted files
+  |} in
+  Arg.(value & opt (some string) None & info [ "o"; "output" ] ~doc ~docv:"OUTPUT")
 
 let input : string list Term.t =
-  let doc = "Input path (file or directory) to convert" in
-  Arg.(non_empty (pos_all string [] & info [] ~doc))
+  let doc = {|
+  Input path(s) to Standard ML source file(s).
+  Multiple files can be specified by separating them with spaces.
+  It is *highly reccomended* to provide these in the order `%.sig %.fun %.sml`, as this will ensure that names are properly ordered. 
+  |} in
+  Arg.(non_empty (pos_all string [] & info [] ~doc ~docv:"INPUT"))
 
 let cmd_convert_file : int Cmd.t =
-  let doc = "Convert Standard ML code to OCaml" in
+  let doc = {|
+  Convert a (group of) Standard ML source file(s) to OCaml. 
+  Works by firstly processing the SML files into an internal representation, applying a series of transformations, and then pretty-printing the result as OCaml code.
+  This is the currently only conversion offered here
+  |} in
   Cmd.v (Cmd.info "file" ~doc ~docs:"SML Converter")
   @@ let+ output = output
      and+ input = input

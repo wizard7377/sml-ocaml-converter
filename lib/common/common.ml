@@ -18,4 +18,13 @@ let fst3 (x, _, _) = x
 let snd3 (_, y, _) = y
 let trd3 (_, _, z) = z
 
+let higher : int option -> int -> bool -> bool = fun x y def ->
+  match x with
+  | None -> def
+  | Some v -> v > y
+let lower : int option -> int -> bool -> bool = fun x y def ->
+  match x with
+  | None -> def
+  | Some v -> v < y
 include Options
+include Logger

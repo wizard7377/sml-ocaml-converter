@@ -5,7 +5,7 @@ include Ast
 let parse (s : string) : Ast.prog =
   let lexbuf = Lexing.from_string s in
   try
-    let res = Parser.file Lexer.token lexbuf in
+    let res = Parser.main Lexer.token lexbuf in
     fst res (* TODO Make this better *)
   with _ ->
     let pos = Lexing.lexeme_start_p lexbuf in

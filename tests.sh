@@ -12,7 +12,7 @@ all_files+=$sml_files
 all_simple_files=$simple_fun_files
 all_simple_files+=$simple_sig_files
 all_simple_files+=$simple_sml_files
-
+DUNE_OPTS+= 
 
 echo "Running tests..."
-dune exec shibboleth -- file $all_files -v 0
+dune exec shibboleth $(DUNE_OPTS) -- file $all_files -v 0

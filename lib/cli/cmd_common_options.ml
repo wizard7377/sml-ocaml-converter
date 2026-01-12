@@ -3,18 +3,28 @@ open Cmdliner.Term.Syntax
 open Cmdliner.Term
 
 let verb : int Term.t =
-  let doc = "Verbosity level" in
+  let doc = {|
+  0, the default, is High, 1 is Medium, 2 is Low, and 3 is Debug.
+  Increase verbosity for more detailed output.
+  |} in
   Arg.(value & opt int 0 & info [ "v"; "verbose" ] ~doc)
 
 let conversion_flags : Common.conversions Term.t =
   let convert_names_doc =
-    "Enable conversion of names from SML to OCaml style"
+    {|
+    Enable the attaching of attributes to names that are likely invalid in OCaml. 
+    This tool is a minimal converter: it merely tries to change the syntax in as few ways as possible.
+    Most notably, we do *not* try to rename variables or functions that have names invalid in OCaml.
+    Enabling this flag `[@sml.bad_name OLD SUGGESTED]` will attach attributes to such definitions of names, which can then be processed by a subsequent renaming tool.
+    |}
   in
   let convert_names_flag : bool Term.t =
     Arg.(value & flag & info [ "convert-names" ] ~doc:convert_names_doc)
   in
-  let convert_comments_doc =
-    "Enable conversion of comments from SML to OCaml style"
+  let convert_comments_doc = {|
+  Enables conversion of SML comments to OCaml comments.
+  The process works by converting SML comments to attributes, which are then replaced with OCaml comments. 
+  |}
   in
   let convert_comments_flag : bool Term.t =
     Arg.(value & flag & info [ "convert-comments" ] ~doc:convert_comments_doc)
@@ -24,7 +34,11 @@ let conversion_flags : Common.conversions Term.t =
   Common.mkConversions ~convert_names ~convert_comments ()
 
 let concat_output : bool Term.t =
-  let doc = "Concatenate all output into a single output" in
+  let doc = {|
+  Concatenate all output into a single output. 
+  This is the default, due to differences between how SML and OCaml handle multiple files handle modules 
+  |} 
+in
   Arg.(value & flag & info [ "concat-output" ] ~doc)
 let common_options : Common.options Cmdliner.Term.t =
   let+ v = verb and+ c = conversion_flags and+ co = concat_output in
