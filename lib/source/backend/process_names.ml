@@ -4,6 +4,7 @@ type context += PatternTail
 type context += Value
 type context += Type
 type context += ModuleValue
+type context += Functor
 type context += ModuleType
 type context += Label
 type context += Constructor
@@ -81,9 +82,9 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
       assert (not @@ String.starts_with "(" @@ List.nth name 0);
       assert (not @@ String.ends_with ")" @@ List.nth name (List.length name - 1));
 
-      let (res, b) = (if Common.get_rename_types !config then
+      let (res, b) = 
         match ctx with
-        | Type -> (
+        | Type when Common.get_rename_types !config -> (
             let rec process_parts parts =
               match parts with
               | [] -> []
@@ -93,8 +94,18 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
             let new_name = process_parts name in
             (new_name, true)
           )
+        | Functor when Common.get_make_make_functor !config -> (
+            let rec process_parts parts =
+              match parts with
+              | [] -> []
+              | [ last ] -> [ "Make_" ^ last ]
+              | first :: rest -> first :: process_parts rest
+            in
+            let new_name = process_parts name in
+            (new_name, true)
+          )
         | _ -> (name, false)
-      else (name, false)) in 
+          in 
       let (scope, basename) = self#split_name res in
       if Ppxlib.Keyword.is_keyword basename && Common.get_convert_keywords !config then
         let new_basename = basename ^ "__" in

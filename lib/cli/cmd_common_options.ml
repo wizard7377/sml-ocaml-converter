@@ -42,11 +42,12 @@ let conversion_flags : (bool * Common.conversions) Term.t =
 
 let concat_output : bool Term.t =
   let doc = {|
-  Concatenate all output into a single output. 
-  This is the default, due to differences between how SML and OCaml handle multiple files handle modules 
-  |} 
+  Concatenate all output into a single file.
+  This is enabled by default, due to differences between how SML and OCaml handle modules across multiple files.
+  Use --concat-output=false to disable.
+  |}
 in
-  Arg.(value & flag & info [ "concat-output" ] ~doc)
+  Arg.(value & opt bool true & info [ "concat-output" ] ~doc)
 let quiet : bool Term.t =
   let doc = {|
   Suppress all output except for errors.

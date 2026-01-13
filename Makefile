@@ -3,6 +3,7 @@ DUNE := dune
 FILE_TEST_EXE := test/file_tests/file_tests.exe
 UNIT_TEST_EXE := test/unit_tests/unit_tests.exe
 DEV ?= 
+BUILD_DOC?=odig odoc
 DUNE_OPTS += $(if $(DEV), --profile dev, --profile release)
 TEST_OPTS+=
 .PHONY: test build install clean docs test_files format
@@ -24,7 +25,7 @@ clean:
 	@$(DUNE) clean $(DUNE_OPTS)
 
 docs: 
-	@$(DUNE) build $(DUNE_OPTS) @doc @doc-private
+	$(BUILD_DOC) shibboleth
 
 format:
 	dune fmt

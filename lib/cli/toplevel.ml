@@ -96,11 +96,11 @@ let get_priority = function
   | ".sml" -> 1
   | _ -> 0
 let order_files (input_path0 : path) (input_path1 : path) : int =
-  let (base0) = (Fpath.rem_ext input_path0, Fpath.get_ext input_path0) in
-  let (base1) = (Fpath.rem_ext input_path1, Fpath.get_ext input_path1) in
+  let base0 = Fpath.rem_ext input_path0 in
+  let base1 = Fpath.rem_ext input_path1 in
   let ext0 = Fpath.get_ext input_path0 in
   let ext1 = Fpath.get_ext input_path1 in
-  match compare base0 base1 with
+  match Fpath.compare base0 base1 with
   | 0 -> compare (get_priority ext0) (get_priority ext1)
   | n -> n
 let process_sml_files (input_path:path) (output_path:path) (sml_files:path list) (options:Common.options) : (int * int) =

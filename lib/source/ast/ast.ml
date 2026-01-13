@@ -213,6 +213,32 @@ and functor_binding =
       * (anotate node * signature node) option
       * structure node
       * functor_binding node option
+      (** Generative functor (SML/NJ extension): [id \[:\[\:>\] sig\] = structure].
+
+          A simpler functor form without explicit parameter specification.
+          The functor name is followed directly by an optional result signature
+          and the body structure expression.
+
+          This is a language extension provided by SML/NJ that allows
+          defining functors without naming the parameter structure.
+
+          Components:
+          - Functor name
+          - Optional result annotation (transparent [:] or opaque [:>])
+          - Body structure expression
+          - Optional additional bindings ([and ...])
+
+          {[
+            (* SML/NJ: functor F : SIG = struct ... end *)
+            FctGen (
+              box_node (IdxIdx (box_node "F")),
+              Some (box_node Transparent, box_node (SignIdx sig_id)),
+              box_node (StructStr body_dec),
+              None
+            )
+          ]}
+
+          @see 'FctBind' Standard SML functor with explicit parameters *)
   | FctBind of
       idx node
       * idx node
@@ -1374,7 +1400,17 @@ and anotate =
     strbind ::= id [:[:>] sig] = structure [and strbind]
     ]}
 
-    @see 'StrDec' Structure declarations *)
+    Structure bindings associate identifiers with structure values,
+    optionally constraining them with signatures. Multiple bindings
+    can be mutually recursive using [and].
+
+    {3 Signature Constraints}
+    - No constraint: All types and values are visible
+    - Transparent ([:sig]): Type definitions visible, signature enforced
+    - Opaque ([:>sig]): Type definitions hidden, abstract types created
+
+    @see 'StrDec' Structure declarations
+    @see 'anotate' Transparent vs opaque sealing *)
 and structure_binding =
   | StrBind of
       idx node
@@ -1383,11 +1419,52 @@ and structure_binding =
       * structure_binding node option
       (** Structure binding: [id \[:\[\:>\] sig\] = structure].
 
-          Fields:
-          - idx: Structure name
-          - option: Optional signature constraint (transparent/opaque)
-          - structure: The structure body (right-hand side of =)
-          - option: Optional chained structure binding (for 'and') *)
+          Binds a structure name to a structure expression, optionally
+          constraining it with a signature for information hiding.
+
+          Components:
+          - Structure name (conventionally capitalized)
+          - Optional signature constraint:
+            - [None]: No constraint, all definitions visible
+            - [Some (Transparent, sig)]: [:sig] - type equalities preserved
+            - [Some (Opaque, sig)]: [:>sig] - abstract types created
+          - Structure expression (the implementation)
+          - Optional additional bindings ([and ...] for mutual recursion)
+
+          {3 Examples}
+
+          {[
+            (* SML: structure S = struct val x = 1 end *)
+            StrBind (
+              box_node (IdxIdx (box_node "S")),
+              None,
+              box_node (StructStr (box_node (ValDec (...)))),
+              None
+            )
+
+            (* SML: structure S : SIG = struct ... end (transparent) *)
+            StrBind (
+              s_id,
+              Some (box_node Transparent, sig_node),
+              struct_body,
+              None
+            )
+
+            (* SML: structure S :> SIG = struct ... end (opaque) *)
+            StrBind (
+              s_id,
+              Some (box_node Opaque, sig_node),
+              struct_body,
+              None
+            )
+
+            (* SML: structure A = ... and B = ... (mutually recursive) *)
+            StrBind (a_id, None, a_body,
+              Some (box_node (StrBind (b_id, None, b_body, None))))
+          ]}
+
+          @see 'anotate' Transparent vs opaque sealing semantics
+          @see 'structure' Structure expression forms *)
 
 (** {2 Signatures}
 
@@ -1994,37 +2071,174 @@ and pat_row =
 
 (** {1 CM (Compilation Manager) Support}
 
-    Types for representing CM build files, which describe compilation
-    units and their dependencies. This is SML/NJ-specific.
+    Types for representing CM (Compilation Manager) build description files,
+    which are used by Standard ML of New Jersey (SML/NJ) to manage
+    multi-file projects and their dependencies.
 
-    Note: These types are auxiliary and not part of the SML Definition. *)
+    {2 Overview}
 
-(** Type of source file in a CM description. *)
+    CM files (.cm) are project description files that specify:
+    - Which source files belong to a library or program
+    - The compilation order and dependencies between files
+    - Whether to build a library or a standalone group
+
+    A typical .cm file looks like:
+    {v
+      Library
+        signature MY_SIG
+        structure MyStruct
+      is
+        my-sig.sig
+        my-impl.sml
+        helper.sml
+    v}
+
+    {2 File Types}
+
+    CM distinguishes between different kinds of ML source files:
+    - [.sig] files contain only signature declarations
+    - [.sml] files contain structure implementations
+    - [.fun] files contain functor definitions
+    - [.cm] files are nested CM descriptions
+
+    {2 Headers}
+
+    The header determines how the CM unit is used:
+    - ["Library"]: Exports symbols for use by other libraries/programs
+    - ["Group"]: Internal organization, symbols not exported
+    - ["Library(my.cm)"]: Library with explicit export file
+
+    Note: These types are auxiliary and not part of the SML Definition.
+    They are SML/NJ-specific build system infrastructure.
+
+    @see <https://www.smlnj.org/doc/CM/> SML/NJ Compilation Manager Manual *)
+
+(** File type classification in CM descriptions.
+
+    Each source file in a CM description has an associated type
+    that determines how it's processed during compilation. *)
 type cm_filetype =
-  | CM_CM  (** Another CM description file. *)
-  | CM_Sig  (** Signature file (.sig). *)
-  | CM_Sml  (** Implementation file (.sml). *)
-  | CM_Fun  (** Functor file (.fun). *)
+  | CM_CM
+      (** Nested CM description file: [.cm].
 
+          Another CM file that this one depends on. This creates
+          hierarchical project structures where one library
+          depends on another.
+
+          Example: [$/basis.cm] (SML Basis Library) *)
+  | CM_Sig
+      (** Signature file: [.sig].
+
+          Contains only signature declarations. Conventionally
+          named with a [.sig] extension. Compiled before
+          corresponding implementation files.
+
+          Example: [ORDERED.sig] containing [signature ORDERED = sig ... end] *)
+  | CM_Sml
+      (** Standard ML source file: [.sml].
+
+          Contains structure declarations, value bindings, and
+          other implementation code. This is the primary file
+          type for ML source code.
+
+          Example: [ordered.sml] implementing structures, functions, etc. *)
+  | CM_Fun
+      (** Functor file: [.fun].
+
+          Contains functor declarations. Functors are parameterized
+          modules, and SML/NJ conventionally places them in separate
+          [.fun] files for organizational clarity.
+
+          Example: [mk-set.fun] containing [functor MkSet(...) = ...] *)
+[@@deriving show]
+
+(** CM file record structure.
+
+    Represents the parsed content of a .cm file, including its
+    header declaration and the list of constituent source files. *)
 type cm_file = {
-  cm_header : string;  (** CM file header (e.g., "Library", "Group"). *)
+  cm_header : string;
+      (** Header specifying the CM unit type.
+
+          Common values:
+          - ["Library"]: Exports a library for external use
+          - ["Group"]: Internal compilation unit (no exports)
+          - ["Library(path.cm)"]: Library with explicit export specification
+
+          The header determines visibility of symbols to other CM units. *)
   cm_sources : (string * cm_filetype) list;
-      (** List of source files with their types. *)
+      (** Ordered list of source files with their types.
+
+          Each tuple contains:
+          - File path (relative to .cm file location)
+          - File type classification
+
+          Files are listed in dependency order: dependencies first,
+          dependents later. The CM system uses this order to
+          determine compilation sequence.
+
+          Example:
+          {[
+            [
+              ("basis.cm", CM_CM);        (* external dependency *)
+              ("types.sig", CM_Sig);       (* signatures first *)
+              ("types.sml", CM_Sml);       (* implementations next *)
+              ("functor.fun", CM_Fun);     (* functors last *)
+            ]
+          ]} *)
 }
+[@@deriving show]
 
 (** CM file description.
 
-    Represents the structure of a .cm file for the SML/NJ
-    Compilation Manager.
+    Represents the complete structure of a .cm file for the SML/NJ
+    Compilation Manager. This type is used when parsing .cm files
+    or generating them programmatically.
 
-    {3 Example}
+    {3 Basic Library Example}
     {[
-      let my_cm = {
+      let basic_lib = {
         cm_header = "Library";
         cm_sources = [
-          ("my-sig.sig", CM_Sig);
-          ("my-impl.sml", CM_Sml);
-          ("my-functor.fun", CM_Fun);
+          ("ordered.sig", CM_Sig);
+          ("ordered.sml", CM_Sml);
         ]
       }
-    ]} *)
+    ]}
+
+    This represents a CM file:
+    {v
+      Library
+        signature ORDERED
+        structure IntOrdered
+      is
+        ordered.sig
+        ordered.sml
+    v}
+
+    {3 Complex Project Example}
+    {[
+      let complex_project = {
+        cm_header = "Library";
+        cm_sources = [
+          ("$/basis.cm", CM_CM);          (* SML Basis Library *)
+          ("$/smlnj-lib.cm", CM_CM);      (* SML/NJ Library *)
+          ("types.sig", CM_Sig);           (* Local signatures *)
+          ("utils.sig", CM_Sig);
+          ("utils.sml", CM_Sml);           (* Implementations *)
+          ("types.sml", CM_Sml);
+          ("mk-module.fun", CM_Fun);       (* Functors *)
+        ]
+      }
+    ]}
+
+    {3 Usage in Build Systems}
+
+    These types are typically used when:
+    - Parsing existing .cm files to understand project structure
+    - Generating .cm files from other build descriptions
+    - Analyzing dependencies in SML/NJ projects
+    - Converting between build systems (e.g., CM to dune)
+
+    @see 'cm_filetype' File type classifications
+    @see <https://www.smlnj.org/doc/CM/new.pdf> CM User Manual *)

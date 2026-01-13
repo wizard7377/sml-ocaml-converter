@@ -3,7 +3,7 @@ type target = FileOut of string | StdOut | Silent
 type conversions
 
 val mkConversions :
-  ?convert_names:bool -> ?convert_comments:bool -> ?add_line_numbers:bool -> ?convert_keywords:bool -> ?rename_types:bool -> unit -> conversions
+  ?convert_names:bool -> ?convert_comments:bool -> ?add_line_numbers:bool -> ?convert_keywords:bool -> ?rename_types:bool -> ?make_make_functor:bool -> unit -> conversions
 
 type options
 
@@ -15,6 +15,7 @@ val mkOptions :
   ?concat_output:bool ->
   ?force:bool ->
   ?quiet:bool ->
+  ?guess_var:string option ->
   unit ->
   options
 
@@ -30,6 +31,8 @@ val get_force : options -> bool
 val get_line_numbers : options -> bool
 val get_convert_keywords : options -> bool
 val get_rename_types : options -> bool
+val get_make_make_functor : options -> bool
+val get_guess_var : options -> string option
 val get_quiet : options -> bool
 module type CONFIG = sig
   val config : options

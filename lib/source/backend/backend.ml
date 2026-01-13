@@ -32,7 +32,12 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   let namer : Process_names.process_names =
     new Process_names.process_names (ref Config.config) (ref Context.context)
-
+    let renamed (original : string) (final : string) : (string * string list) = 
+      ("sml.renamed" , [original ; final])
+    let should_rename (original : string) (final : string option) : string * string list =
+      match final with 
+      None -> ("sml.name.check" , [original])
+      | Some s -> ("sml.name.changeto" , [original ; s])
   (** Helper to get a Ppxlib.Longident.t from the name processor *)
   let process_name_to_longident ~(ctx : Process_names.context)
       (name_parts : string list) : Ppxlib.Longident.t =
@@ -465,11 +470,11 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
               let tdecls = process_dat_bind db.value in
               let type_items =
                 match tb_opt with
-                | None -> [ Builder.pstr_type Asttypes.Nonrecursive tdecls ]
+                | None -> [ Builder.pstr_type Asttypes.Recursive tdecls ]
                 | Some tb ->
                     let tb_decls = process_typ_bind tb.value in
-                    [ Builder.pstr_type Asttypes.Nonrecursive tdecls;
-                      Builder.pstr_type Asttypes.Nonrecursive tb_decls ]
+                    [ Builder.pstr_type Asttypes.Recursive tdecls;
+                      Builder.pstr_type Asttypes.Recursive tb_decls ]
               in
               let mod_name = ghost (Some "_Types") in
               let mod_expr = Builder.pmod_structure type_items in
@@ -541,7 +546,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                      ~cstrs:[] ~kind:Parsetree.Ptype_abstract
                      ~private_:Asttypes.Public ~manifest:(Some alias_type))
               in
-              let type_items = [ Builder.pstr_type Asttypes.Nonrecursive [ tdecl ] ] in
+              let type_items = [ Builder.pstr_type Asttypes.Recursive [ tdecl ] ] in
               let mod_name = ghost (Some "_Types") in
               let mod_expr = Builder.pmod_structure type_items in
               let body =
@@ -1139,6 +1144,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         let name_str =
           process_name_to_string ~ctx:Constructor (idx_to_name id.value)
         in
+        Common.log ~cfg:config ~level:Common.Debug ~kind:Neutral
+          ~msg:(Printf.sprintf "Processing constructor: %s" name_str); 
         let args =
           match ty_opt with
           | None -> Parsetree.Pcstr_tuple []
@@ -1154,7 +1161,13 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
           | None -> []
           | Some rest -> process_con_bind rest.value
         in
-        cdecl :: rest
+        if namer#is_good ~ctx:Constructor ~name:[name_str] then cdecl :: rest else let 
+          (name, _) = namer#process_name ~ctx:Constructor ~name:[name_str] in
+          let (tag, args) = renamed name_str (Ppxlib.Longident.name name) in
+          let marked_cdecl =
+            labeller#cite_exact Helpers.Attr.constructor_declaration tag args cdecl in
+          marked_cdecl :: rest
+
 
   (** Convert SML exception bindings.
 
@@ -1253,7 +1266,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | FunctorApp (id, s) ->
         (* Functor application - can't inline *)
         let functor_id =
-          process_name_to_longident ~ctx:ModuleValue (idx_to_name id.value)
+          process_name_to_longident ~ctx:Functor (idx_to_name id.value)
         in
         let arg_expr = structure_to_module_expr s.value in
         let mod_expr =
@@ -1306,7 +1319,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | FunctorApp (id, s) ->
         (* Functor application F(A) *)
         let functor_id =
-          process_name_to_longident ~ctx:ModuleValue (idx_to_name id.value)
+          process_name_to_longident ~ctx:Functor (idx_to_name id.value)
         in
         let arg_expr = structure_to_module_expr s.value in
         Builder.pmod_apply (Builder.pmod_ident (ghost functor_id)) arg_expr
@@ -1462,7 +1475,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
             [ Builder.psig_type Asttypes.Nonrecursive tdecls ]
         | SpecDat dd ->
             let tdecls = process_dat_specification dd.value in
-            [ Builder.psig_type Asttypes.Nonrecursive tdecls ]
+            [ Builder.psig_type Asttypes.Recursive tdecls ]
         | SpecDatAlias (id1, id2) ->
             (* Datatype alias in signature *)
             let name1_str =
@@ -1478,7 +1491,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                    ~cstrs:[] ~kind:Parsetree.Ptype_abstract
                    ~private_:Asttypes.Public ~manifest:(Some alias_type))
             in
-            [ Builder.psig_type Asttypes.Nonrecursive [ tdecl ] ]
+            [ Builder.psig_type Asttypes.Recursive [ tdecl ] ]
         | SpecExn ed ->
             let ext_constrs = process_exn_specification ed.value in
             List.map
@@ -1747,12 +1760,12 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
             [ Builder.pstr_type Asttypes.Nonrecursive tdecls ]
         | DatDec (db, tb_opt) -> (
             let tdecls = process_dat_bind db.value in
-            let type_item = Builder.pstr_type Asttypes.Nonrecursive tdecls in
+            let type_item = Builder.pstr_type Asttypes.Recursive tdecls in
             match tb_opt with
             | None -> [ type_item ]
             | Some tb ->
                 let tb_decls = process_typ_bind tb.value in
-                [ type_item; Builder.pstr_type Asttypes.Nonrecursive tb_decls ])
+                [ type_item; Builder.pstr_type Asttypes.Recursive tb_decls ])
         | DataDecAlias (id1, id2) ->
             (* Datatype alias: datatype t = datatype u *)
             (* In OCaml, this would be: type t = u *)
@@ -1769,7 +1782,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                    ~cstrs:[] ~kind:Parsetree.Ptype_abstract
                    ~private_:Asttypes.Public ~manifest:(Some alias_type))
             in
-            [ Builder.pstr_type Asttypes.Nonrecursive [ tdecl ] ]
+            [ Builder.pstr_type Asttypes.Recursive [ tdecl ] ]
         | AbstractDec (db, tb_opt, decs) ->
             (* Abstract type with local implementations *)
             (* The datatype is abstract, only the inner decs are visible *)

@@ -10,18 +10,4 @@ Shibboleth converts Standard ML source code to OCaml through lexing, parsing, AS
 
 {!modules:
 Shibboleth
-Ast
-Backend
-Frontend
-Process
-Context
-Polish
-}
-
-{1 Utilities}
-
-{!modules:
-Common
-Helpers
-Cli
 }
