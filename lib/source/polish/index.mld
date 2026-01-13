@@ -1,0 +1,17 @@
+AST polishing and optimization passes.
+
+{1 Synopsis}
+
+This module performs post-processing and optimization on the SML AST before
+backend conversion. It applies transformations to simplify or normalize the
+AST, improving the quality of generated OCaml code.
+
+{1 Transformations}
+
+- AST simplification and normalization
+- Redundant construct elimination
+- Preparation for backend conversion
+
+{!modules:
+Polish
+}

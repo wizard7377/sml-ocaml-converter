@@ -3,5 +3,5 @@
  (public_name shibboleth.polish)
  (preprocess
   (pps ppx_import ppx_deriving.show ppx_deriving.eq))
- (libraries ast common)
+ (libraries re ast common)
  (modules polish))

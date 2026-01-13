@@ -29,3 +29,6 @@ docs:
 
 format:
 	dune fmt
+
+release: 
+	rm ./*.opam 

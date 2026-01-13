@@ -1,6 +1,7 @@
 (lang dune 3.20)
 
 (name shibboleth)
+(version v0.0.1-4-g3d6bd2c-dirty)
 
 (generate_opam_files true)
 
@@ -27,10 +28,7 @@
   menhir 
   ppx_import 
   ppx_deriving
-  ez_file
   ocamlformat 
-  odoc 
-  menhir 
   re 
   fmt
   )
