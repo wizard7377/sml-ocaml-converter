@@ -1,18 +1,11 @@
 #!/bin/sh
-format="%p "
-fun_files=$(find ./examples/twelf/src -name "*.fun" -printf "$format")
-sig_files=$(find ./examples/twelf/src -name "*.sig" -printf "$format")
-sml_files=$(find ./examples/twelf/src -name "*.sml" -printf "$format")
-simple_fun_files=$(find ./examples/simple/ -name "*.fun" -printf "$format")
-simple_sml_files=$(find ./examples/simple/ -name "*.sml" -printf "$format")
-simple_sig_files=$(find ./examples/simple/ -name "*.sig" -printf "$format")
-all_files=$fun_files 
-all_files+=$sig_files 
-all_files+=$sml_files
-all_simple_files=$simple_fun_files
-all_simple_files+=$simple_sig_files
-all_simple_files+=$simple_sml_files
-DUNE_OPTS+= 
 
-echo "Running tests..."
-dune exec shibboleth $(DUNE_OPTS) -- file $all_files -v 0
+TEST_OPTS="$@"
+rm -rf examples/output 
+mkdir -p examples/output
+if [[ -z $TEST_OPTS ]]; then
+    TEST_OPTS="--verb=1"
+    eval "dune exec shibboleth  -- group "$TEST_OPTS" --force --input examples/twelf --output examples/output"
+else 
+    eval "dune exec shibboleth  -- group "$TEST_OPTS" --force --input examples/twelf --output examples/output"
+fi 

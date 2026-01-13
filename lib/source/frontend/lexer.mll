@@ -168,6 +168,13 @@ rule token = parse
 
   (* Symbolic identifiers - these can never be keywords *)
   | symbolic_id as s { SHORT_IDENT (Symbol s) }
+  | (alphanum_id '.')+ symbolic_id {
+      (* Parse the full long identifier *)
+      let full = Lexing.lexeme lexbuf in
+      let parts = String.split_on_char '.' full in
+      LONG_IDENT (List.map (fun s -> Name s) parts)
+    }
+    
   | "op" symbolic_id as s { SHORT_IDENT (Symbol s) }
 
   (* End of file *)

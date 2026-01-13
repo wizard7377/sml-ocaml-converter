@@ -37,3 +37,13 @@ val cmd_convert_file : int Cmdliner.Cmd.t
     single-file conversion functionality.
 
     @return A Cmdliner command that returns an exit code (0 for success) *)
+
+
+val cmd_convert_group : int Cmdliner.Cmd.t
+
+(** [cmd_convert_group] is the Cmdliner command definition for group conversion.
+
+    This command can be added to the CLI's command group to enable
+    directory-based batch conversion functionality.
+
+    @return A Cmdliner command that returns an exit code (0 for success) *)

@@ -116,7 +116,9 @@
 (* ========================================================================= *)
 (* Precedence and associativity (lowest to highest)                          *)
 (* ========================================================================= *)
+
 %nonassoc EOF
+%left PROGRAM_SEP
 %left SEMICOLON
 %right AND
 %nonassoc BIGARROW
@@ -226,7 +228,7 @@ let boxed(r) :=
 
 %inline op_ident:
   | ident { WithoutOp (b $1) }
-  | OP ident { WithOp (b $2) }
+  | "op" ident { WithOp (b $2) }
 ;
 
 %inline modid:
@@ -257,14 +259,14 @@ let boxed(r) :=
 
 op_longid:
   | longid { WithoutOp (b $1) }
-  | OP ident { WithOp (b $2) }
-  | OP LONG_IDENT { WithOp (b (idents_to_long_idx $2)) }
+  | "op" ident { WithOp (b $2) }
+  | "op" LONG_IDENT { WithOp (b (idents_to_long_idx $2)) }
 ;
 
 op_eq_ident:
   | op_longid { $1 }
   | EQUAL { WithoutOp (b (IdxIdx (b "="))) }
-  | OP EQUAL { WithOp (b (IdxIdx (b "="))) }
+  | "op" EQUAL { WithOp (b (IdxIdx (b "="))) }
 ;
 
 eq_ident_seq1:
@@ -310,11 +312,11 @@ tyvarseq:
 
 tyvarseq1:
   | tyvar { [b $1] }
-  | LPAREN tyvar_comma_seq1 RPAREN { $2 }
+  | "(" tyvar_comma_seq1 ")" { $2 }
 ;
 
 tyvar_comma_seq1:
-  | tyvar COMMA tyvar_comma_seq1 { b $1 :: $3 }
+  | tyvar "," tyvar_comma_seq1 { b $1 :: $3 }
   | tyvar { [b $1] }
 ;
 
@@ -323,7 +325,7 @@ tyvar_comma_seq1:
 (* ========================================================================= *)
 
 typ:
-  | tuple_typ ARROW typ {
+  | tuple_typ "->" typ {
       let src = if List.length $1 = 1 then List.hd $1 else bp (TypTuple $1) $startpos($1) $endpos($1) in
       TypFun (src, bp $3 $startpos($3) $endpos($3))
     }
@@ -338,7 +340,7 @@ tuple_typ:
 ;
 
 typ_sans_star:
-  | LPAREN typ_comma_seq2 RPAREN long_tycon { TypCon ($2, bp $4 $startpos($4) $endpos($4)) }
+  | "(" typ_comma_seq2 ")" long_tycon { TypCon ($2, bp $4 $startpos($4) $endpos($4)) }
   | typ_sans_star long_tycon { TypCon ([bp $1 $startpos($1) $endpos($1)], bp $2 $startpos($2) $endpos($2)) }
   | atomic_typ { $1 }
 ;
@@ -347,12 +349,12 @@ atomic_typ:
   | long_tycon { TypCon ([], bp $1 $startpos($1) $endpos($1)) }
   | tyvar { TypVar (bp $1 $startpos($1) $endpos($1)) }
   | LBRACE typrow_opt RBRACE { TypRecord $2 }
-  | LPAREN typ RPAREN { TypPar (bp $2 $startpos($2) $endpos($2)) }
+  | "(" typ ")" { TypPar (bp $2 $startpos($2) $endpos($2)) }
 ;
 
 typ_comma_seq2:
-  | typ COMMA typ_comma_seq2 { bp $1 $startpos($1) $endpos($1) :: $3 }
-  | typ COMMA typ { [bp $1 $startpos($1) $endpos($1); bp $3 $startpos($3) $endpos($3)] }
+  | typ "," typ_comma_seq2 { bp $1 $startpos($1) $endpos($1) :: $3 }
+  | typ "," typ { [bp $1 $startpos($1) $endpos($1); bp $3 $startpos($3) $endpos($3)] }
 ;
 
 typrow_opt:
@@ -365,7 +367,7 @@ typrow:
 ;
 
 comma_typrow_opt:
-  | COMMA typrow { $2 }
+  | "," typrow { $2 }
   | { [] }
 ;
 
@@ -381,14 +383,14 @@ expression:
       | [] -> failwith "impossible: empty expression sequence"
     }
   | expression COLON typ { TypedExp (bp $1 $startpos $endpos, bp $3 $startpos($3) $endpos($3)) }
-  | expression ANDALSO expression { AndExp (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3)) }
-  | expression ORELSE expression { OrExp (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3)) }
-  | e=expression HANDLE m=match_clause { HandleExp (bp e $startpos(e) $endpos(e), bp m $startpos(m) $endpos(m)) }
-  | RAISE e=expression { RaiseExp (bp e $startpos(e) $endpos(e)) }
-  | IF c=expression THEN t=expression ELSE f=expression { IfExp (bp c $startpos(c) $endpos(c), bp t $startpos(t) $endpos(t), bp f $startpos(f) $endpos(f)) }
-  | WHILE c=expression DO bdy=expression { WhileExp (bp c $startpos(c) $endpos(c), bp bdy $startpos(bdy) $endpos(bdy)) }
-  | CASE e=expression OF m=match_clause { CaseExp (bp e $startpos(e) $endpos(e), bp m $startpos(m) $endpos(m)) }
-  | FN m=match_clause { FnExp (bp m $startpos(m) $endpos(m)) }
+  | expression "andalso" expression { AndExp (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3)) }
+  | expression "orelse" expression { OrExp (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3)) }
+  | e=expression "handle" m=match_clause { HandleExp (bp e $startpos(e) $endpos(e), bp m $startpos(m) $endpos(m)) }
+  | "raise" e=expression { RaiseExp (bp e $startpos(e) $endpos(e)) }
+  | "if" c=expression "then" t=expression "else" f=expression { IfExp (bp c $startpos(c) $endpos(c), bp t $startpos(t) $endpos(t), bp f $startpos(f) $endpos(f)) }
+  | "while" c=expression "do" bdy=expression { WhileExp (bp c $startpos(c) $endpos(c), bp bdy $startpos(bdy) $endpos(bdy)) }
+  | "case" e=expression "of" m=match_clause { CaseExp (bp e $startpos(e) $endpos(e), bp m $startpos(m) $endpos(m)) }
+  | "fn" m=match_clause { FnExp (bp m $startpos(m) $endpos(m)) }
 ;
 
 atomic_exp_seq1:
@@ -399,12 +401,12 @@ atomic_exp_seq1:
 atomic_exp:
   | scon { ExpCon (bp $1 $startpos($1) $endpos($1)) }
   | op_eq_ident { ExpIdx (match $1 with WithOp i | WithoutOp i -> i) }
-  | LET dec_seq IN exp_semicolon_exp END { LetExp ([bp $2 $startpos($2) $endpos($2)], $4) }
+  | "let" dec_seq "in" exp_semicolon_exp "end" { LetExp ([bp $2 $startpos($2) $endpos($2)], $4) }
   | HASH lab { RecordSelector (bp $2 $startpos($2) $endpos($2)) }
-  | LPAREN expression RPAREN { ParenExp (bp $2 $startpos($2) $endpos($2)) }
-  | LPAREN RPAREN { TupleExp [] }
-  | LPAREN exp_comma_seq2 RPAREN { TupleExp $2 }
-  | LPAREN exp_semicolon_seq2 RPAREN { SeqExp $2 }
+  | "(" expression ")" { ParenExp (bp $2 $startpos($2) $endpos($2)) }
+  | "(" ")" { TupleExp [] }
+  | "(" exp_comma_seq2 ")" { TupleExp $2 }
+  | "(" exp_semicolon_seq2 ")" { SeqExp $2 }
   | LBRACE exprow_opt RBRACE { RecordExp $2 }
   | LBRACKET exp_comma_seq0 RBRACKET { ListExp $2 }
 ;
@@ -420,12 +422,12 @@ exp_comma_seq0:
 ;
 
 exp_comma_seq1:
-  | expression COMMA exp_comma_seq1 { bp $1 $startpos($1) $endpos($1) :: $3 }
+  | expression "," exp_comma_seq1 { bp $1 $startpos($1) $endpos($1) :: $3 }
   | expression { [bp $1 $startpos($1) $endpos($1)] }
 ;
 
 exp_comma_seq2:
-  | expression COMMA exp_comma_seq1 { bp $1 $startpos($1) $endpos($1) :: $3 }
+  | expression "," exp_comma_seq1 { bp $1 $startpos($1) $endpos($1) :: $3 }
 ;
 
 exp_semicolon_seq2:
@@ -447,7 +449,7 @@ exprow:
 ;
 
 comma_exprow_opt:
-  | COMMA exprow_list { $2 }
+  | "," exprow_list { $2 }
   | { [] }
 ;
 
@@ -474,7 +476,7 @@ pat:
       | _ -> failwith "impossible: invalid pattern sequence"
     }
   | pat COLON typ { PatTyp (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3)) }
-  | pat AS pat {
+  | pat "as" pat {
       match $1 with
       | PatIdx op -> PatAs (op, None, bp $3 $startpos($3) $endpos($3))
       | PatTyp (p, ty) -> (match p.value with PatIdx op -> PatAs (op, Some ty, bp $3 $startpos($3) $endpos($3)) | _ -> failwith "invalid layered pattern")
@@ -492,9 +494,9 @@ atomic_pat:
   | scon { PatCon (bp $1 $startpos($1) $endpos($1)) }
   | op_longid { PatIdx (bp $1 $startpos($1) $endpos($1)) }
   | LBRACE patrow_opt RBRACE { PatRecord $2 }
-  | LPAREN pat RPAREN { PatParen (bp $2 $startpos($2) $endpos($2)) }
-  | LPAREN RPAREN { PatTuple [] }
-  | LPAREN pat_comma_seq2 RPAREN { PatTuple $2 }
+  | "(" pat ")" { PatParen (bp $2 $startpos($2) $endpos($2)) }
+  | "(" ")" { PatTuple [] }
+  | "(" pat_comma_seq2 ")" { PatTuple $2 }
   | LBRACKET pat_comma_seq0 RBRACKET { PatList $2 }
 ;
 
@@ -512,12 +514,12 @@ patrow:
 ;
 
 as_pat_opt:
-  | AS pat { Some (bp $2 $startpos($2) $endpos($2)) }
+  | "as" pat { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
 ;
 
 comma_patrow_opt:
-  | COMMA patrow { $2 }
+  | "," patrow { $2 }
   | { [] }
 ;
 
@@ -527,12 +529,12 @@ pat_comma_seq0:
 ;
 
 pat_comma_seq1:
-  | pat COMMA pat_comma_seq1 { bp $1 $startpos($1) $endpos($1) :: $3 }
+  | pat "," pat_comma_seq1 { bp $1 $startpos($1) $endpos($1) :: $3 }
   | pat { [bp $1 $startpos($1) $endpos($1)] }
 ;
 
 pat_comma_seq2:
-  | pat COMMA pat_comma_seq1 { bp $1 $startpos($1) $endpos($1) :: $3 }
+  | pat "," pat_comma_seq1 { bp $1 $startpos($1) $endpos($1) :: $3 }
 ;
 
 (* ========================================================================= *)
@@ -540,22 +542,26 @@ pat_comma_seq2:
 (* ========================================================================= *)
 
 dec_seq:
-  | kwdec SEMICOLON? dec_seq { SeqDec [bp $1 $startpos($1) $endpos($1); bp $3 $startpos($3) $endpos($3)] }
+  | kwdec SEMICOLON* dec_seq { SeqDec [bp $1 $startpos($1) $endpos($1); bp $3 $startpos($3) $endpos($3)] }
+  | expression SEMICOLON+ dec_seq { SeqDec [bp (ExpDec (bp $1 $startpos($1) $endpos($1))) $startpos($1) $endpos($1); bp $3 $startpos($3) $endpos($3)] }
+  | expression { SeqDec [bp (ExpDec (bp $1 $startpos($1) $endpos($1))) $startpos($1) $endpos($1)] }
   | { SeqDec [] }
 ;
 
 (* Non-empty declaration sequence - requires at least one declaration *)
 nonempty_dec_seq:
-  | kwdec SEMICOLON? dec_seq { SeqDec [bp $1 $startpos($1) $endpos($1); bp $3 $startpos($3) $endpos($3)] }
+  | kwdec SEMICOLON* dec_seq { SeqDec [bp $1 $startpos($1) $endpos($1); bp $3 $startpos($3) $endpos($3)] }
+  | expression SEMICOLON+ dec_seq { SeqDec [bp (ExpDec (bp $1 $startpos($1) $endpos($1))) $startpos($1) $endpos($1); bp $3 $startpos($3) $endpos($3)] }
+  | expression { SeqDec [bp (ExpDec (bp $1 $startpos($1) $endpos($1))) $startpos($1) $endpos($1)] }
 ;
 
 kwdec_seq:
-  | kwdec SEMICOLON? kwdec_seq { bp $1 $startpos($1) $endpos($1) :: $3 }
+  | kwdec SEMICOLON* kwdec_seq { bp $1 $startpos($1) $endpos($1) :: $3 }
   | { [] }
 ;
 
 kwcoredec_seq:
-  | kwcoredec SEMICOLON? kwcoredec_seq { bp $1 $startpos($1) $endpos($1) :: $3 }
+  | kwcoredec SEMICOLON* kwcoredec_seq { bp $1 $startpos($1) $endpos($1) :: $3 }
   | { [] }
 ;
 
@@ -565,39 +571,39 @@ kwdec:
 ;
 
 kwmoduledec:
-  | STRUCTURE strbind { StrDec (bp $2 $startpos($2) $endpos($2)) }
+  | "structure" strbind { StrDec (bp $2 $startpos($2) $endpos($2)) }
 ;
 
 kwcoredec:
-  | VAL valbind { ValDec ([], bp $2 $startpos($2) $endpos($2)) }
-  | VAL tyvarseq1 valbind { ValDec ($2, bp $3 $startpos($3) $endpos($3)) }
-  | FUN funbind { FunDec (bp $2 $startpos($2) $endpos($2)) }
-  | FUN tyvarseq1 funbind { FunDec (bp $3 $startpos($3) $endpos($3)) }
-  | TYPE typbind { TypDec (bp $2 $startpos($2) $endpos($2)) }
-  | DATATYPE datbind_0 typbind_opt { DatDec (bp $2 $startpos($2) $endpos($2), $3) }
-  | DATATYPE datbind_n typbind_opt { DatDec (bp $2 $startpos($2) $endpos($2), $3) }
-  | DATATYPE tycon EQUAL DATATYPE long_tycon { DataDecAlias (bp $2 $startpos($2) $endpos($2), bp $5 $startpos($5) $endpos($5)) }
-  | ABSTYPE datbind typbind_opt WITH dec_seq END { AbstractDec (bp $2 $startpos($2) $endpos($2), $3, [bp $5 $startpos($5) $endpos($5)]) }
-  | EXCEPTION exnbind { ExnDec (bp $2 $startpos($2) $endpos($2)) }
-  | LOCAL dec_seq IN dec_seq END { LocalDec (bp $2 $startpos($2) $endpos($2), bp $4 $startpos($4) $endpos($4)) }
-  | OPEN longid_seq1 { OpenDec $2 }
-  | INFIX digit_opt eq_ident_seq1 { FixityDec (bp (Infix (b $2)) $startpos $endpos, $3) }
-  | INFIXR digit_opt eq_ident_seq1 { FixityDec (bp (Infixr (b $2)) $startpos $endpos, $3) }
-  | NONFIX eq_ident_seq1 { FixityDec (bp Nonfix $startpos $endpos, $2) }
+  | "val" valbind { ValDec ([], bp $2 $startpos($2) $endpos($2)) }
+  | "val" tyvarseq1 valbind { ValDec ($2, bp $3 $startpos($3) $endpos($3)) }
+  | "fun" funbind { FunDec (bp $2 $startpos($2) $endpos($2)) }
+  | "fun" tyvarseq1 funbind { FunDec (bp $3 $startpos($3) $endpos($3)) }
+  | "type" typbind { TypDec (bp $2 $startpos($2) $endpos($2)) }
+  | "datatype" datbind_0 typbind_opt { DatDec (bp $2 $startpos($2) $endpos($2), $3) }
+  | "datatype" datbind_n typbind_opt { DatDec (bp $2 $startpos($2) $endpos($2), $3) }
+  | "datatype" tycon EQUAL "datatype" long_tycon { DataDecAlias (bp $2 $startpos($2) $endpos($2), bp $5 $startpos($5) $endpos($5)) }
+  | "abstype" datbind typbind_opt "with" dec_seq "end" { AbstractDec (bp $2 $startpos($2) $endpos($2), $3, [bp $5 $startpos($5) $endpos($5)]) }
+  | "exception" exnbind { ExnDec (bp $2 $startpos($2) $endpos($2)) }
+  | "local" dec_seq "in" dec_seq "end" { LocalDec (bp $2 $startpos($2) $endpos($2), bp $4 $startpos($4) $endpos($4)) }
+  | "open" longid_seq1 { OpenDec $2 }
+  | "infix" digit_opt eq_ident_seq1 { FixityDec (bp (Infix (b $2)) $startpos $endpos, $3) }
+  | "infixr" digit_opt eq_ident_seq1 { FixityDec (bp (Infixr (b $2)) $startpos $endpos, $3) }
+  | "nonfix" eq_ident_seq1 { FixityDec (bp Nonfix $startpos $endpos, $2) }
 ;
 
 typbind_opt:
-  | WITHTYPE typbind { Some (bp $2 $startpos($2) $endpos($2)) }
+  | "withtype" typbind { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
 ;
 
 valbind:
   | pat EQUAL expression and_valbind_opt { ValBind (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3), $4) }
-  | REC valbind { ValBindRec (bp $2 $startpos($2) $endpos($2)) }
+  | "rec" valbind { ValBindRec (bp $2 $startpos($2) $endpos($2)) }
 ;
 
 and_valbind_opt:
-  | AND valbind { Some (bp $2 $startpos($2) $endpos($2)) }
+  | "and" valbind { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
 ;
 
@@ -606,7 +612,7 @@ funbind:
 ;
 
 and_funbind_opt:
-  | AND funbind { Some (bp $2 $startpos($2) $endpos($2)) }
+  | "and" funbind { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
 ;
 
@@ -617,7 +623,7 @@ funmatch:
   | atomic_pat ident atomic_pat colon_typ_opt EQUAL expression bar_funmatch_opt {
       FunMatchInfix (bp $1 $startpos($1) $endpos($1), bp $2 $startpos($2) $endpos($2), bp $3 $startpos($3) $endpos($3), $4, bp $6 $startpos($6) $endpos($6), $7)
     }
-  | LPAREN atomic_pat ident atomic_pat RPAREN atomic_pat_seq1 colon_typ_opt EQUAL expression bar_funmatch_opt {
+  | "(" atomic_pat ident atomic_pat ")" atomic_pat_seq1 colon_typ_opt EQUAL expression bar_funmatch_opt {
       FunMatchLow (bp $2 $startpos($2) $endpos($2), bp $3 $startpos($3) $endpos($3), bp $4 $startpos($4) $endpos($4), $6, $7, bp $9 $startpos($9) $endpos($9), $10)
     }
 ;
@@ -633,7 +639,7 @@ colon_typ_opt:
 ;
 
 of_typ_opt:
-  | OF typ { Some (bp $2 $startpos($2) $endpos($2)) }
+  | "of" typ { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
 ;
 
@@ -642,7 +648,7 @@ typbind:
 ;
 
 and_typbind_opt:
-  | AND typbind { Some (bp $2 $startpos($2) $endpos($2)) }
+  | "and" typbind { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
 ;
 
@@ -659,7 +665,7 @@ datbind_n:
 ;
 
 and_datbind_opt:
-  | AND datbind { Some (bp $2 $startpos($2) $endpos($2)) }
+  | "and" datbind { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
 ;
 
@@ -688,7 +694,7 @@ exnbind:
 ;
 
 and_exnbind_opt:
-  | AND exnbind { Some (bp $2 $startpos($2) $endpos($2)) }
+  | "and" exnbind { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
 ;
 
@@ -703,7 +709,7 @@ strbind:
 ;
 
 and_strbind_opt:
-  | AND strbind { Some (bp $2 $startpos($2) $endpos($2)) }
+  | "and" strbind { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
 ;
 
@@ -735,11 +741,11 @@ atomic_str_seq1:
 ;
 
 atomic_str:
-  | STRUCT dec_seq END { StructStr (bp $2 $startpos($2) $endpos($2)) }
+  | "struct" dec_seq "end" { StructStr (bp $2 $startpos($2) $endpos($2)) }
   | longid { StrIdx (bp $1 $startpos($1) $endpos($1)) }
-  | LET dec_seq IN structure END { Ast.LocalDec (bp $2 $startpos($2) $endpos($2), bp $4 $startpos($4) $endpos($4)) }
-  | LPAREN structure RPAREN { $2 }
-  | LPAREN dec_seq RPAREN { StructStr (bp $2 $startpos($2) $endpos($2)) }
+  | "let" dec_seq "in" structure "end" { Ast.LocalDec (bp $2 $startpos($2) $endpos($2), bp $4 $startpos($4) $endpos($4)) }
+  | "(" structure ")" { $2 }
+  | "(" dec_seq ")" { StructStr (bp $2 $startpos($2) $endpos($2)) }
 ;
 
 (* ========================================================================= *)
@@ -747,16 +753,17 @@ atomic_str:
 (* ========================================================================= *)
 
 sig_expr:
-  
-  | SIG specification END { SignSig (flatten_spec_node (bp $2 $startpos($2) $endpos($2))) }
+
+  | "sig" specification "end" { SignSig (flatten_spec_node (bp $2 $startpos($2) $endpos($2))) }
+  | "sig" "end" { SignSig [] }
   | sigid { SignIdx (bp $1 $startpos($1) $endpos($1)) }
-  | sig_expr WHERE TYPE typrefin { SignWhere (bp $1 $startpos($1) $endpos($1), bp $4 $startpos($4) $endpos($4)) }
-  | FUNCTOR LPAREN modid COLON sig_expr RPAREN ARROW sig_expr {
+  | sig_expr "where" "type" typrefin { SignWhere (bp $1 $startpos($1) $endpos($1), bp $4 $startpos($4) $endpos($4)) }
+  | "functor" "(" modid COLON sig_expr ")" "->" sig_expr {
       let param_spec = bp (SpecStr (bp (StrDesc (bp $3 $startpos($3) $endpos($3), bp $5 $startpos($5) $endpos($5), None)) $startpos($3) $endpos($5))) $startpos $endpos in
       let result_spec = bp (SpecInclude (bp $8 $startpos($8) $endpos($8))) $startpos($8) $endpos($8) in
       SignSig (flatten_spec_node (bp (SpecSeq (param_spec, result_spec)) $startpos $endpos))
     }
-  | FUNCTOR modid COLON sig_expr ARROW sig_expr {
+  | "functor" modid COLON sig_expr "->" sig_expr {
       let param_spec = bp (SpecStr (bp (StrDesc (bp $2 $startpos($2) $endpos($2), bp $4 $startpos($4) $endpos($4), None)) $startpos($2) $endpos($4))) $startpos $endpos in
       let result_spec = bp (SpecInclude (bp $6 $startpos($6) $endpos($6))) $startpos($6) $endpos($6) in
       SignSig (flatten_spec_node (bp (SpecSeq (param_spec, result_spec)) $startpos $endpos))
@@ -770,7 +777,7 @@ typrefin:
 ;
 
 and_typrefin_opt:
-  | AND TYPE typrefin { Some (bp $3 $startpos($3) $endpos($3)) }
+  | "and" "type" typrefin { Some (bp $3 $startpos($3) $endpos($3)) }
   | { None }
 ;
 
@@ -779,7 +786,7 @@ sigbind:
 ;
 
 and_sigbind_opt:
-  | AND sigbind { Some (bp $2 $startpos($2) $endpos($2)) }
+  | "and" sigbind { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
 ;
 
@@ -790,8 +797,8 @@ and_sigbind_opt:
 specification:
   | kwspec { $1 }
   | specification kwspec { SpecSeq (bp $1 $startpos($1) $endpos($1), bp $2 $startpos($2) $endpos($2)) }
-  | specification SHARING TYPE longid_eq_seq { SpecSharingTyp (bp $1 $startpos($1) $endpos($1), $4) }
-  | specification SHARING longid_eq_seq { SpecSharingStr (bp $1 $startpos($1) $endpos($1), $3) }
+  | specification "sharing" "type" longid_eq_seq { SpecSharingTyp (bp $1 $startpos($1) $endpos($1), $4) }
+  | specification "sharing" longid_eq_seq { SpecSharingStr (bp $1 $startpos($1) $endpos($1), $3) }
   | specification SEMICOLON { $1 }
 ;
 
@@ -818,30 +825,30 @@ kwspec:
 ;
 
 kwcorespec:
-  | VAL tyvarseq valdesc { SpecVal (bp $3 $startpos($3) $endpos($3)) }
-  | TYPE typbind { SpecTypBind (bp $2 $startpos($2) $endpos($2)) }
-  | TYPE typdesc { SpecTyp (bp $2 $startpos($2) $endpos($2)) }
-  | EQTYPE typdesc { SpecEqtyp (bp $2 $startpos($2) $endpos($2)) }
-  | DATATYPE datdesc_0 typbind_opt { SpecDat (bp $2 $startpos($2) $endpos($2)) }
-  | DATATYPE datdesc_n typbind_opt { SpecDat (bp $2 $startpos($2) $endpos($2)) }
-  | DATATYPE tycon EQUAL DATATYPE long_tycon { SpecDatAlias (bp $2 $startpos($2) $endpos($2), bp $5 $startpos($5) $endpos($5)) }
-  | EXCEPTION exndesc { SpecExn (bp $2 $startpos($2) $endpos($2)) }
-  | LOCAL specification IN specification END { SpecSeq (bp $2 $startpos($2) $endpos($2), bp $4 $startpos($4) $endpos($4)) }
-  | OPEN longid_seq1 { SpecIncludeIdx $2 }
-  | INFIX digit_opt eq_ident_seq1 { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
+  | "val" tyvarseq valdesc { SpecVal (bp $3 $startpos($3) $endpos($3)) }
+  | "type" typbind { SpecTypBind (bp $2 $startpos($2) $endpos($2)) }
+  | "type" typdesc { SpecTyp (bp $2 $startpos($2) $endpos($2)) }
+  | "eqtype" typdesc { SpecEqtyp (bp $2 $startpos($2) $endpos($2)) }
+  | "datatype" datdesc_0 typbind_opt { SpecDat (bp $2 $startpos($2) $endpos($2)) }
+  | "datatype" datdesc_n typbind_opt { SpecDat (bp $2 $startpos($2) $endpos($2)) }
+  | "datatype" tycon EQUAL "datatype" long_tycon { SpecDatAlias (bp $2 $startpos($2) $endpos($2), bp $5 $startpos($5) $endpos($5)) }
+  | "exception" exndesc { SpecExn (bp $2 $startpos($2) $endpos($2)) }
+  | "local" specification "in" specification "end" { SpecSeq (bp $2 $startpos($2) $endpos($2), bp $4 $startpos($4) $endpos($4)) }
+  | "open" longid_seq1 { SpecIncludeIdx $2 }
+  | "infix" digit_opt eq_ident_seq1 { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
                                              b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None))))) }
-  | INFIXR digit_opt eq_ident_seq1 { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
+  | "infixr" digit_opt eq_ident_seq1 { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
                                               b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None))))) }
-  | NONFIX eq_ident_seq1 { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
+  | "nonfix" eq_ident_seq1 { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
                                     b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None))))) }
 ;
 
 kwmodulespec:
-  | STRUCTURE strdesc { SpecStr (bp $2 $startpos($2) $endpos($2)) }
-  | FUNCTOR fundesc { SpecStr (bp $2 $startpos($2) $endpos($2)) }
-  | INCLUDE sig_expr { SpecInclude (bp $2 $startpos($2) $endpos($2)) }
-  | INCLUDE sigid_seq2 { SpecIncludeIdx $2 }
-  | SIGNATURE sigbind { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
+  | "structure" strdesc { SpecStr (bp $2 $startpos($2) $endpos($2)) }
+  | "functor" fundesc { SpecStr (bp $2 $startpos($2) $endpos($2)) }
+  | "include" sig_expr { SpecInclude (bp $2 $startpos($2) $endpos($2)) }
+  | "include" sigid_seq2 { SpecIncludeIdx $2 }
+  | "signature" sigbind { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
                                  b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None))))) }
 ;
 
@@ -857,7 +864,7 @@ valdesc:
 ;
 
 and_valdesc_opt:
-  | AND valdesc { Some (bp $2 $startpos($2) $endpos($2)) }
+  | "and" valdesc { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
 ;
 
@@ -866,7 +873,7 @@ typdesc:
 ;
 
 and_typdesc_opt:
-  | AND typdesc { Some (bp $2 $startpos($2) $endpos($2)) }
+  | "and" typdesc { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
 ;
 
@@ -883,7 +890,7 @@ datdesc_n:
 ;
 
 and_datdesc_opt:
-  | AND datdesc { Some (bp $2 $startpos($2) $endpos($2)) }
+  | "and" datdesc { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
 ;
 
@@ -905,7 +912,7 @@ exndesc:
 ;
 %inline
 and_exndesc_opt:
-  | AND exndesc { Some (bp $2 $startpos($2) $endpos($2)) }
+  | "and" exndesc { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
 ;
 
@@ -914,7 +921,7 @@ strdesc:
 ;
 %inline
 and_strdesc_opt:
-  | AND strdesc { Some (bp $2 $startpos($2) $endpos($2)) }
+  | "and" strdesc { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
 ;
 
@@ -924,7 +931,7 @@ fundesc:
 
 fundesctail:
   | COLON sig_expr { $2 }
-  | LPAREN modid COLON sig_expr RPAREN fundesctail {
+  | "(" modid COLON sig_expr ")" fundesctail {
       let param_spec = bp (SpecStr (bp (StrDesc (bp $2 $startpos($2) $endpos($2), bp $4 $startpos($4) $endpos($4), None)) $startpos($2) $endpos($4))) $startpos $endpos in
       let result_spec = bp (SpecInclude (bp $6 $startpos($6) $endpos($6))) $startpos($6) $endpos($6) in
       SignSig (flatten_spec_node (bp (SpecSeq (param_spec, result_spec)) $startpos $endpos))
@@ -937,7 +944,7 @@ fundesctail:
 ;
 %inline
 and_fundesc_opt:
-  | AND fundesc { Some (bp $2 $startpos($2) $endpos($2)) }
+  | "and" fundesc { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
 ;
 
@@ -946,19 +953,19 @@ and_fundesc_opt:
 (* ========================================================================= *)
 
 fctbind:
-  | modid LPAREN modid COLON sig_expr RPAREN sigconstraint_opt EQUAL structure and_fctbind_opt {
+  | modid "(" modid COLON sig_expr ")" sigconstraint_opt EQUAL structure and_fctbind_opt {
       FctBind (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3), bp $5 $startpos($5) $endpos($5), $7, bp $9 $startpos($9) $endpos($9), $10)
     }
-  | modid LPAREN specification RPAREN sigconstraint_opt EQUAL structure and_fctbind_opt {
+  | modid "(" specification ")" sigconstraint_opt EQUAL structure and_fctbind_opt {
       FctBindOpen (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3), $5, bp $7 $startpos($7) $endpos($7), $8)
     }
-  | modid LPAREN RPAREN sigconstraint_opt EQUAL structure and_fctbind_opt {
+  | modid "(" ")" sigconstraint_opt EQUAL structure and_fctbind_opt {
       FctGen (bp $1 $startpos($1) $endpos($1), $4, bp $6 $startpos($6) $endpos($6), $7)
     }
 ;
 %inline
 and_fctbind_opt:
-  | AND fctbind { Some (bp $2 $startpos($2) $endpos($2)) }
+  | "and" fctbind { Some (bp $2 $startpos($2) $endpos($2)) }
   | { None }
 ;
 
@@ -969,22 +976,22 @@ and_fctbind_opt:
 (* Program that can be empty - used for final position *)
 program:
   | dec_seq { (ProgDec (bp $1 $startpos($1) $endpos($1))) }
-  | FUNCTOR fctbind { (ProgFun (bp $2 $startpos($2) $endpos($2))) }
-  | SIGNATURE sigbind { (ProgStr (bp $2 $startpos($2) $endpos($2))) }
+  | "functor" fctbind { (ProgFun (bp $2 $startpos($2) $endpos($2))) }
+  | "signature" sigbind { (ProgStr (bp $2 $startpos($2) $endpos($2))) }
 ;
 
 (* Non-empty program - must start with a keyword *)
 nonempty_program:
   | nonempty_dec_seq { (ProgDec (bp $1 $startpos($1) $endpos($1))) }
-  | FUNCTOR fctbind { (ProgFun (bp $2 $startpos($2) $endpos($2))) }
-  | SIGNATURE sigbind { (ProgStr (bp $2 $startpos($2) $endpos($2))) }
+  | "functor" fctbind { (ProgFun (bp $2 $startpos($2) $endpos($2))) }
+  | "signature" sigbind { (ProgStr (bp $2 $startpos($2) $endpos($2))) }
 ;
 
 (* Program list - allows consecutive programs without semicolons *)
 (* Each non-final program must be non-empty to break the cycle *)
 program_list:
-  | nonempty_program SEMICOLON program_list { ProgSeq (b $1, b $3) }
-  | nonempty_program program_list { ProgSeq (b $1, b $2) }
+  | nonempty_program SEMICOLON? program_list %prec PROGRAM_SEP { ProgSeq (b $1, b $3) }
+  (* | nonempty_program program_list { ProgSeq (b $1, b $2) } *)
   | program { $1 }
   ;
 

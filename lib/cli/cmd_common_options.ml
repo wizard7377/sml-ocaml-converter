@@ -9,7 +9,7 @@ let verb : int Term.t =
   |} in
   Arg.(value & opt int 0 & info [ "v"; "verbose" ] ~doc)
 
-let conversion_flags : Common.conversions Term.t =
+let conversion_flags : (bool * Common.conversions) Term.t =
   let convert_names_doc =
     {|
     Enable the attaching of attributes to names that are likely invalid in OCaml. 
@@ -29,9 +29,16 @@ let conversion_flags : Common.conversions Term.t =
   let convert_comments_flag : bool Term.t =
     Arg.(value & flag & info [ "convert-comments" ] ~doc:convert_comments_doc)
   in
+  let convert_force_flag : bool Term.t =
+    let doc = {|
+    Force overwrite of output directory if it already exists.
+    |} in
+    Arg.(value & flag & info [ "force" ] ~doc)
+  in
   let+ convert_names = convert_names_flag
-  and+ convert_comments = convert_comments_flag in
-  Common.mkConversions ~convert_names ~convert_comments ()
+  and+ convert_comments = convert_comments_flag
+  and+ force = convert_force_flag in
+  (force, Common.mkConversions ~convert_names ~convert_comments ())
 
 let concat_output : bool Term.t =
   let doc = {|
@@ -40,6 +47,12 @@ let concat_output : bool Term.t =
   |} 
 in
   Arg.(value & flag & info [ "concat-output" ] ~doc)
+let quiet : bool Term.t =
+  let doc = {|
+  Suppress all output except for errors.
+  |} 
+in
+  Arg.(value & flag & info [ "q"; "quiet" ] ~doc)
 let common_options : Common.options Cmdliner.Term.t =
-  let+ v = verb and+ c = conversion_flags and+ co = concat_output in
-  Common.mkOptions ~verbosity:(Some v) ~conversions:c ~concat_output:co ()
+  let+ v = verb and+ (force, c) = conversion_flags and+ co = concat_output and+ q = quiet in
+  Common.mkOptions ~verbosity:(Some v) ~conversions:c ~concat_output:co ~force ~quiet:q ()

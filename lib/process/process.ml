@@ -55,9 +55,13 @@ class process ?(store = Context.create []) cfg_init =
           let output_target = get_output_file cfg in
           (match output_target with
           | FileOut path ->
-              let oc = open_out path in
-              output_string oc ocaml_code;
-              close_out oc
+              let contents = Bos.OS.File.read (Fpath.v path) in
+              let new_contents = match contents with
+              | Error _ -> 
+                ocaml_code
+              | Ok existing_content ->
+                existing_content ^ "\n\n" ^ ocaml_code in
+                Bos.OS.File.write (Fpath.v path) new_contents |> ignore
           | StdOut ->
               print_string ocaml_code
               | Silent -> ());
@@ -68,10 +72,11 @@ class process ?(store = Context.create []) cfg_init =
             errors_store <- (file, Printexc.to_string e) :: errors_store;
             has_errors <- true;
             failures <- failures + 1;
-            ""
+            raise e
       ) files in 
     let _ = if Common.get_concat_output cfg then (let _ = self#write_output @@ String.concat "\n\n\n" res in 0) else (List.iter (fun code -> let _ = self#write_output code in ()) res; 0) in
     Common.log ~cfg ~level:High ~kind:(if failures == 0 then Positive else Negative) ~msg:(Printf.sprintf "Processing complete: %d successes, %d failures out of %d files." successes failures total);
+    Common.log ~cfg ~level:Medium ~kind:Neutral ~msg:(Printf.sprintf "Processed these files: %s" (String.concat ", " files));
     if failures = 0 then 0 else 1
 
     method private run_single_file (file : string) : string =

@@ -950,6 +950,19 @@ and declaration =
             (* SML: open List Option *)
             OpenDec [list_id; option_id]
           ]} *)
+  | ExpDec of expression node
+      (** Top-level expression: any expression at program top level.
+
+          SML allows arbitrary expressions at the top level, which are
+          evaluated for their side effects (e.g., ref assignments, I/O).
+
+          {[
+            (* SML: Control.Print.printDepth := 50; *)
+            ExpDec (box_node (ExpApp (
+              box_node (ExpIdx (box_node (IdxLong [...]))),
+              box_node (ExpCon (box_node (ConInt (box_node "50"))))
+            )))
+          ]} *)
   | FixityDec of fixity node * idx node list
       (** Fixity declaration for operators.
 

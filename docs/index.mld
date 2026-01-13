@@ -1,3 +1,27 @@
-{1 Shibboleth}
+{0 Shibboleth}
 
-{!modules: Shibboleth.Cli Shibboleth.Process.Process Shibboleth.Ast Shibboleth.Backend Shibboleth.Frontend Shibboleth.Names Shibboleth.Common Shibboleth.Helpers}
+SML (Standard ML) to OCaml source-to-source compiler using a classic multi-phase architecture.
+
+{1 Overview}
+
+Shibboleth converts Standard ML source code to OCaml through lexing, parsing, AST transformation, and pretty-printing phases.
+
+{1 Core Libraries}
+
+{!modules:
+Shibboleth
+Ast
+Backend
+Frontend
+Process
+Context
+Polish
+}
+
+{1 Utilities}
+
+{!modules:
+Common
+Helpers
+Cli
+}

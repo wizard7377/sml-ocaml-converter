@@ -10,7 +10,8 @@ let log ~(cfg:Options.options) ?(level=High) ?(kind=Negative) ~(msg:string) =
     | Low -> 2
     | Debug -> 3
   in
-  if verbosity >= level_value then
+  let is_quiet = (Options.get_quiet cfg == false) || (kind == Negative) in
+  if (verbosity >= level_value) && is_quiet then
     let prefix_msg = match kind with
       | Positive -> "SUCCESS "
       | Negative -> "ERROR "

@@ -25,6 +25,8 @@ module Debug = Ppxlib.Pprintast
 
 module Make (Context : CONTEXT) (Config : CONFIG) = struct
   let config = Config.config
+  let quoter = Ppxlib.Expansion_helpers.Quoter.create () 
+  
   let labeller = new Process_label.process_label config Context.lexbuf
   let lexbuf = Context.lexbuf
 
@@ -34,12 +36,12 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
   (** Helper to get a Ppxlib.Longident.t from the name processor *)
   let process_name_to_longident ~(ctx : Process_names.context)
       (name_parts : string list) : Ppxlib.Longident.t =
-    namer#process_name ~ctx ~name:name_parts
+    namer#process_name ~ctx ~name:name_parts |> fst
 
   (** Helper to get a string from the name processor (uses last component) *)
   let process_name_to_string ~(ctx : Process_names.context)
       (name_parts : string list) : string =
-    Ppxlib.Longident.last_exn (namer#process_name ~ctx ~name:name_parts)
+    Ppxlib.Longident.last_exn (namer#process_name ~ctx ~name:name_parts |> fst)
 
   type res = Parsetree.toplevel_phrase list
 
@@ -47,8 +49,9 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   let current_path : string list ref = ref []
 
-  exception BadAst of string
-
+  exception BadAst of (Lexing.position * Lexing.position) option * string
+  let mkBadAst ?loc (msg : string) : exn =
+    BadAst (loc, msg)
   let mkLoc (v : 'a) (loc : Location.t) : 'a Location.loc = { txt = v; loc }
 
   (** Helper function to create a located value with no source location.
@@ -65,15 +68,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         (* TODO use level *)
         let indent = !depth in
         depth := indent + 1;
-        Printf.eprintf "[%i] Entering %s: %s" indent ast
-          (Re.replace_string ~all:true
-             (Re.compile (Re.rep1 Re.space))
-             ~by:" " msg);
+        let _ = Common.log ~cfg:config ~level:Debug ~kind:Neutral ~msg:(Format.sprintf "%dEntering %s %s" !depth ast msg) in
         let res = value () in
-        Printf.eprintf "[%i] Exiting %s: %s" indent ast
-          (Re.replace_string ~all:true
-             (Re.compile (Re.rep1 Re.space))
-             ~by:" " msg);
+        depth := indent;
+        let _ = Common.log ~cfg:config ~level:Debug ~kind:Neutral ~msg:(Format.sprintf "%dExiting %s %s" !depth ast msg) in  
         res
     | _ -> value ()
 
@@ -89,7 +87,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     Handles dotted paths (e.g., "A.B.C" becomes Ldot(Ldot(Lident "A", "B"), "C")) *)
   let string_to_longident (s : string) : Ppxlib.Longident.t =
     match String.split_on_char '.' s with
-    | [] -> raise (BadAst "Empty identifier string")
+    | [] -> raise (mkBadAst "Empty identifier string")
     | [ x ] -> Ppxlib.Longident.Lident x
     | first :: rest ->
         List.fold_left
@@ -115,6 +113,16 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         (* Convert long identifier to dot-separated string *)
         String.concat "."
           (List.map (fun (p : Ast.idx Ast.node) -> idx_to_string p.value) parts)
+
+
+  let process_lowercase (s : string) : string = String.uncapitalize_ascii s
+  let process_uppercase (s : string) : string = String.capitalize_ascii s
+  let process_caps (s : string) : string = String.uppercase_ascii s
+  type capital = Lowercase | Uppercase | Caps
+  let get_capital (s : string) : capital =
+    if s == process_caps s then Caps
+    else if s == process_uppercase s then Uppercase
+    else Lowercase
 
   let rec idx_to_name (idx : Ast.idx) : string list =
     match idx with
@@ -417,26 +425,155 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
           | e :: rest -> Builder.pexp_sequence (process_exp e) (build_seq rest)
         in
         build_seq exps
-    | LetExp (decs, exps) ->
-        (* let dec1 dec2 ... in exp1; exp2; ... end *)
-        let bindings =
-          List.flatten (List.map (fun d -> process_value_dec d.Ast.value) decs)
-        in
-        let body =
-          let rec build_seq = function
-            | [] ->
-                Builder.pexp_construct
-                  (ghost (Ppxlib.Longident.Lident "()"))
-                  None
-            | [ e ] -> process_exp e
-            | e :: rest ->
-                Builder.pexp_sequence (process_exp e) (build_seq rest)
+    | LetExp ([], exps) -> process_exp ({ value = (SeqExp exps); pos = expression.pos })
+
+    | LetExp (dec :: decs, exps) ->  (
+        (* First, flatten SeqDec to handle each declaration individually *)
+        let flattened_decs =
+          let rec flatten_dec d =
+            match d.value with
+            | SeqDec inner_decs -> List.concat (List.map flatten_dec inner_decs)
+            | _ -> [d]
           in
-          build_seq exps
+          flatten_dec dec
         in
-        List.fold_right
-          (fun binding acc -> Builder.pexp_let Nonrecursive [ binding ] acc)
-          bindings body
+        (* Process flattened declarations *)
+        let all_decs = flattened_decs @ decs in
+        match all_decs with
+        | [] -> process_exp ({ value = (SeqExp exps); pos = expression.pos })
+        | first_dec :: rest_decs ->
+          match first_dec.value with
+          | ExnDec eb ->
+              (* Handle exception declarations in let expressions *)
+              (* SML: let exception E of t in ... end *)
+              (* OCaml: let exception E of t in ... *)
+              let exn_constrs = process_exn_bind eb.value in
+              let body =
+                process_exp ({ value = LetExp (rest_decs, exps); pos = expression.pos })
+                |> labeller#cite Helpers.Attr.expression expression.pos
+              in
+              (* Build nested let exception expressions *)
+              List.fold_right
+                (fun ext_constr acc ->
+                  Builder.pexp_letexception ext_constr acc)
+                exn_constrs body
+
+          | DatDec (db, tb_opt) ->
+              (* Handle datatype declarations in let expressions *)
+              (* SML: let datatype t = A | B in ... end *)
+              (* OCaml: let module M = struct type t = A | B end in ... *)
+              let tdecls = process_dat_bind db.value in
+              let type_items =
+                match tb_opt with
+                | None -> [ Builder.pstr_type Asttypes.Nonrecursive tdecls ]
+                | Some tb ->
+                    let tb_decls = process_typ_bind tb.value in
+                    [ Builder.pstr_type Asttypes.Nonrecursive tdecls;
+                      Builder.pstr_type Asttypes.Nonrecursive tb_decls ]
+              in
+              let mod_name = ghost (Some "_Types") in
+              let mod_expr = Builder.pmod_structure type_items in
+              let body =
+                process_exp ({ value = LetExp (rest_decs, exps); pos = expression.pos })
+                |> labeller#cite Helpers.Attr.expression expression.pos
+              in
+              Builder.pexp_letmodule mod_name mod_expr body
+
+          | TypDec tb ->
+              (* Handle type declarations in let expressions *)
+              (* SML: let type t = int in ... end *)
+              (* OCaml: let module M = struct type t = int end in ... *)
+              let tdecls = process_typ_bind tb.value in
+              let type_items = [ Builder.pstr_type Asttypes.Nonrecursive tdecls ] in
+              let mod_name = ghost (Some "_Types") in
+              let mod_expr = Builder.pmod_structure type_items in
+              let body =
+                process_exp ({ value = LetExp (rest_decs, exps); pos = expression.pos })
+                |> labeller#cite Helpers.Attr.expression expression.pos
+              in
+              Builder.pexp_letmodule mod_name mod_expr body
+
+          | LocalDec (d1, d2) ->
+              (* Handle local declarations in let expressions *)
+              (* SML: let local dec1 in dec2 end in ... end *)
+              (* OCaml: let <bindings from dec1 and dec2> in ... *)
+              (* Process as nested let: first dec1, then dec2, then rest *)
+              process_exp ({ value = LetExp ([d1; d2] @ rest_decs, exps); pos = expression.pos })
+
+          | OpenDec ids ->
+              (* Handle open declarations in let expressions *)
+              (* SML: let open M in ... end *)
+              (* OCaml: let open M in ... *)
+              let body =
+                process_exp ({ value = LetExp (rest_decs, exps); pos = expression.pos })
+                |> labeller#cite Helpers.Attr.expression expression.pos
+              in
+              (* Process open declarations from right to left to maintain proper scoping *)
+              List.fold_right
+                (fun (id : Ast.idx Ast.node) acc ->
+                  let longid =
+                    process_name_to_longident ~ctx:ModuleValue
+                      (idx_to_name id.value)
+                  in
+                  let mod_expr = Builder.pmod_ident (ghost longid) in
+                  let open_infos = Builder.open_infos ~override:Asttypes.Fresh ~expr:mod_expr in
+                  Builder.pexp_open open_infos acc)
+                ids body
+
+          | FixityDec _ ->
+              (* Fixity declarations have no runtime effect - skip and process rest *)
+              process_exp ({ value = LetExp (rest_decs, exps); pos = expression.pos })
+
+          | DataDecAlias (id1, id2) ->
+              (* Datatype alias in let expression *)
+              (* SML: let datatype t = datatype u in ... end *)
+              (* OCaml: let module M = struct type t = u end in ... *)
+              let name1_str =
+                process_name_to_string ~ctx:Type (idx_to_name id1.value)
+              in
+              let longid2 =
+                process_name_to_longident ~ctx:Type (idx_to_name id2.value)
+              in
+              let alias_type = Builder.ptyp_constr (ghost longid2) [] in
+              let tdecl =
+                labeller#cite Helpers.Attr.type_declaration id1.pos
+                  (Builder.type_declaration ~name:(ghost name1_str) ~params:[]
+                     ~cstrs:[] ~kind:Parsetree.Ptype_abstract
+                     ~private_:Asttypes.Public ~manifest:(Some alias_type))
+              in
+              let type_items = [ Builder.pstr_type Asttypes.Nonrecursive [ tdecl ] ] in
+              let mod_name = ghost (Some "_Types") in
+              let mod_expr = Builder.pmod_structure type_items in
+              let body =
+                process_exp ({ value = LetExp (rest_decs, exps); pos = expression.pos })
+                |> labeller#cite Helpers.Attr.expression expression.pos
+              in
+              Builder.pexp_letmodule mod_name mod_expr body
+
+          | AbstractDec (db, tb_opt, inner_decs) ->
+              (* Abstract type in let expression *)
+              (* Process the inner declarations, hiding the datatype constructors *)
+              process_exp ({ value = LetExp (inner_decs @ rest_decs, exps); pos = expression.pos })
+
+          | StrDec _ ->
+              (* Structure declarations are not allowed in let expressions per SML spec *)
+              raise (BadAst (first_dec.pos, "Structure declaration not allowed in let expression"))
+
+          | SeqDec inner_decs ->
+              (* Should have been flattened, but handle it just in case *)
+              process_exp ({ value = LetExp (inner_decs @ rest_decs, exps); pos = expression.pos })
+
+          | ValDec _ | FunDec _ ->
+              (* Handle value and function declarations *)
+              let binding = process_value_dec first_dec.value in
+              let body =
+                process_exp ({ value = LetExp (rest_decs, exps); pos = expression.pos })
+                |> labeller#cite Helpers.Attr.expression expression.pos
+              in
+              Builder.pexp_let Nonrecursive binding body
+    )
+        
+       
     | TypedExp (e, ty) ->
         Builder.pexp_constraint (process_exp e) (process_type ty)
     | RaiseExp e ->
@@ -707,37 +844,40 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | TypDec tb ->
         (* Type declarations don't produce value bindings *)
         (* They should be handled at the structure level *)
-        raise (BadAst "TypeDec is not value decleration")
+        raise (mkBadAst ?loc:tb.pos "TypeDec is not value decleration")
     | DatDec (db, tb_opt) ->
         (* Datatype declarations don't produce value bindings *)
         (* They should be handled at the structure level *)
-        raise (BadAst "DatDec is not value decleration")
+        raise (mkBadAst ?loc:db.pos "DatDec is not value decleration")
     | DataDecAlias (id1, id2) ->
         (* Datatype alias - no value bindings *)
-        raise (BadAst "DataDecAlias is not value decleration")
+        raise (mkBadAst "DataDecAlias is not value decleration")
     | AbstractDec (db, tb_opt, decs) ->
         (* Abstract type declarations *)
         (* Process the inner declarations *)
         List.concat (List.map (fun d -> process_value_dec d.Ast.value) decs)
     | ExnDec eb ->
         (* Exception declarations don't produce value bindings *)
-        raise (BadAst "ExnDec is not value decleration")
+        raise (mkBadAst ?loc:eb.pos "ExnDec is not value decleration")
     | StrDec sb ->
         (* Structure declarations don't produce value bindings *)
-        raise (BadAst "StrDec is not value decleration")
+        raise (mkBadAst ?loc:sb.pos "StrDec is not value decleration")
     | SeqDec decs ->
         (* Sequential declarations - process each and concatenate *)
         List.concat (List.map (fun d -> process_value_dec d.Ast.value) decs)
     | LocalDec (d1, d2) ->
-        (* Local declarations - both parts contribute to bindings *)
-        process_value_dec d1.value @ process_value_dec d2.value
-    | OpenDec ids ->
-        (* Open declarations don't produce value bindings *)
-        raise (BadAst "OpenDec is not value decleration")
+        raise (mkBadAst "LocalDec is not value decleration")
+    | OpenDec [] ->
+      raise (mkBadAst "OpenDec with empty list is not value decleration")
+    | OpenDec (id :: rest) ->
+      raise (mkBadAst ?loc:id.pos "OpenDec is not value decleration")
+    | ExpDec exp ->
+        (* Expression declarations don't produce value bindings *)
+        raise (mkBadAst ?loc:exp.pos "ExpDec is not value decleration")
     | FixityDec (fix, ids) ->
         (* Fixity declarations don't produce value bindings *)
-        raise (BadAst "FixityDec is not value decleration")
-
+        raise (mkBadAst "FixityDec is not value decleration")
+ 
   (** Convert SML fixity declarations to string representation.
 
     SML fixity: [infix 6 +], [infixr 5 ::], [nonfix f]
@@ -815,7 +955,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
               (* Generate fresh parameter patterns *)
               let param_pats =
                 List.init num_params (fun i ->
-                    Builder.ppat_var (ghost (Printf.sprintf "arg%d" i)))
+                    Builder.ppat_var (ghost (Printf.sprintf "__arg__%d" i)))
               in
               (* Build function expression *)
               List.fold_right
@@ -828,7 +968,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                           Builder.pexp_ident
                             (ghost
                                (Ppxlib.Longident.Lident
-                                  (Printf.sprintf "arg%d" i)))))
+                                  (Printf.sprintf "__arg__%d" i)))))
                  in
                  let cases =
                    List.map
@@ -1662,6 +1802,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                 Builder.pstr_open
                   (Builder.open_infos ~override:Asttypes.Fresh ~expr:module_expr))
               ids
+        | ExpDec exp ->
+            (* Top-level expression - convert to a structure item *)
+            let ocaml_expr = process_exp exp in
+            [ Builder.pstr_eval ocaml_expr [] ]
         | FixityDec (_fix, _ids) -> [])
 
   (** Convert a top-level SML program to an OCaml structure.
