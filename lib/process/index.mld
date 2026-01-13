@@ -1,0 +1,19 @@
+Name and identifier processing for SML-to-OCaml conversion.
+
+{1 Synopsis}
+
+This module handles the transformation of SML identifiers to valid OCaml names,
+managing keyword conflicts, capitalization conventions, and user-configurable
+name transformations. It is parameterized over a configuration to allow
+flexible naming strategies.
+
+{1 Key Transformations}
+
+- SML constructor names → OCaml constructor names (capitalization)
+- SML function names → OCaml function names (keyword conflict resolution)
+- Pattern variable renaming
+- Reserved word handling ([type] → [type_])
+
+{!modules:
+Process_names
+}

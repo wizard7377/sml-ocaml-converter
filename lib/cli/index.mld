@@ -1,0 +1,18 @@
+Command-line interface and argument parsing.
+
+{1 Synopsis}
+
+This module implements the command-line interface for the shibboleth converter
+using Cmdliner. It handles argument parsing, option validation, and invocation
+of the conversion pipeline.
+
+{1 Features}
+
+- Input/output file path specification
+- Verbosity level control
+- Conversion flag configuration from command-line options
+- Help text and usage information
+
+{!modules:
+Cli
+}

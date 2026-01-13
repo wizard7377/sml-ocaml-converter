@@ -27,10 +27,7 @@
   menhir 
   ppx_import 
   ppx_deriving
-  ez_file
   ocamlformat 
-  odoc 
-  menhir 
   re 
   fmt
   )
