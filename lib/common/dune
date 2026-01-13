@@ -2,4 +2,4 @@
  (public_name shibboleth.common)
  (name common)
  (modules common options logger)
- (libraries fmt fmt.tty ez_file))
+ (libraries re fmt fmt.tty bos fpath))

@@ -1,0 +1,18 @@
+Ppxlib integration and OCaml AST construction utilities.
+
+{1 Synopsis}
+
+This module provides helper functions for constructing OCaml Parsetree nodes
+using Ppxlib's Ast_builder. It abstracts common patterns and provides
+convenient builders for generating well-formed OCaml AST during the conversion
+from SML.
+
+{1 Key Components}
+
+- {!Builder} - Core AST construction utilities using Ppxlib
+- Ghost location handling for generated code
+- Type-safe AST node creation
+
+{!modules:
+Builder
+}

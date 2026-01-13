@@ -1,0 +1,19 @@
+Configuration types and file I/O utilities.
+
+{1 Synopsis}
+
+This module defines the configuration system for the SML-to-OCaml converter,
+including conversion flags, file paths, and I/O operations. It provides the
+{!Common.CONFIG} module type used to parameterize the backend and other
+conversion components.
+
+{1 Key Components}
+
+- Configuration record with input/output paths and verbosity levels
+- Conversion flags for controlling name transformations
+- File I/O utilities for reading SML source and writing OCaml output
+- Default configuration values
+
+{!modules:
+Common
+}
