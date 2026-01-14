@@ -1,7 +1,8 @@
 CLAUDE.md 
 _build/
 ./.*/
-examples/
+examples/**
+!examples/TestSetup.mk
 *.opam
 .github/
 .claude/

@@ -8,16 +8,18 @@
     - SML types map to OCaml types with adjustments for syntax differences
     - SML module system (structures, signatures, functors) maps to OCaml modules
     - Pattern matching and expressions are converted with equivalent semantics
-    - Name processing handles reserved word conflicts and capitalization conventions
+    - Name processing handles reserved word conflicts and capitalization
+      conventions
 
-    @see <https://ocaml.org/api/compilerlibref/Parsetree.html> OCaml Parsetree documentation
+    @see <https://ocaml.org/api/compilerlibref/Parsetree.html>
+      OCaml Parsetree documentation
     @see <http://sml-family.org/sml97-defn.pdf> Standard ML definition *)
 
 open Process_names
 open Backend_sig
 
-(** Result type for the complete conversion.
-    Currently unspecified; will contain the final OCaml structure/signature. *)
+(** Result type for the complete conversion. Currently unspecified; will contain
+    the final OCaml structure/signature. *)
 
 include Helpers
 open Common
@@ -25,19 +27,27 @@ module Debug = Ppxlib.Pprintast
 
 module Make (Context : CONTEXT) (Config : CONFIG) = struct
   let config = Config.config
-  let quoter = Ppxlib.Expansion_helpers.Quoter.create () 
-  
+  let quoter = Ppxlib.Expansion_helpers.Quoter.create ()
   let labeller = new Process_label.process_label config Context.lexbuf
   let lexbuf = Context.lexbuf
 
+  module Log = Common.Make (struct
+    let config = Config.config
+    let group = "backend"
+  end)
+
   let namer : Process_names.process_names =
     new Process_names.process_names (ref Config.config) (ref Context.context)
-    let renamed (original : string) (final : string) : (string * string list) = 
-      ("sml.renamed" , [original ; final])
-    let should_rename (original : string) (final : string option) : string * string list =
-      match final with 
-      None -> ("sml.name.check" , [original])
-      | Some s -> ("sml.name.changeto" , [original ; s])
+
+  let renamed (original : string) (final : string) : string * string list =
+    ("sml.renamed", [ original; final ])
+
+  let should_rename (original : string) (final : string option) :
+      string * string list =
+    match final with
+    | None -> ("sml.name.check", [ original ])
+    | Some s -> ("sml.name.changeto", [ original; s ])
+
   (** Helper to get a Ppxlib.Longident.t from the name processor *)
   let process_name_to_longident ~(ctx : Process_names.context)
       (name_parts : string list) : Ppxlib.Longident.t =
@@ -55,14 +65,14 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
   let current_path : string list ref = ref []
 
   exception BadAst of (Lexing.position * Lexing.position) option * string
-  let mkBadAst ?loc (msg : string) : exn =
-    BadAst (loc, msg)
+
+  let mkBadAst ?loc (msg : string) : exn = BadAst (loc, msg)
   let mkLoc (v : 'a) (loc : Location.t) : 'a Location.loc = { txt = v; loc }
 
   (** Helper function to create a located value with no source location.
 
-    @param v The value to wrap with a phantom location
-    @return The value wrapped in a {!Location.loc} structure *)
+      @param v The value to wrap with a phantom location
+      @return The value wrapped in a {!Location.loc} structure *)
   let ghost (v : 'a) : 'a Location.loc = mkLoc v Location.none
 
   let depth : int ref = ref 0
@@ -73,10 +83,16 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         (* TODO use level *)
         let indent = !depth in
         depth := indent + 1;
-        let _ = Common.log ~cfg:config ~level:Debug ~kind:Neutral ~msg:(Format.sprintf "%dEntering %s %s" !depth ast msg) in
+        let _ =
+          Log.log ~level:Debug ~kind:Neutral
+            ~msg:(Format.sprintf "%dEntering %s %s" !depth ast msg)
+        in
         let res = value () in
         depth := indent;
-        let _ = Common.log ~cfg:config ~level:Debug ~kind:Neutral ~msg:(Format.sprintf "%dExiting %s %s" !depth ast msg) in  
+        let _ =
+          Log.log ~level:Debug ~kind:Neutral
+            ~msg:(Format.sprintf "%dExiting %s %s" !depth ast msg)
+        in
         res
     | _ -> value ()
 
@@ -88,8 +104,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (* Deprecated: Use process_name_to_longident instead *)
 
-  (** Convert a string identifier to a Ppxlib.Longident.t.
-    Handles dotted paths (e.g., "A.B.C" becomes Ldot(Ldot(Lident "A", "B"), "C")) *)
+  (** Convert a string identifier to a Ppxlib.Longident.t. Handles dotted paths
+      (e.g., "A.B.C" becomes Ldot(Ldot(Lident "A", "B"), "C")) *)
   let string_to_longident (s : string) : Ppxlib.Longident.t =
     match String.split_on_char '.' s with
     | [] -> raise (mkBadAst "Empty identifier string")
@@ -99,8 +115,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
           (fun acc part -> Ppxlib.Longident.Ldot (acc, part))
           (Ppxlib.Longident.Lident first) rest
 
-  (** Check if an identifier represents a variable (starts with lowercase or underscore)
-    rather than a constructor (starts with uppercase) *)
+  (** Check if an identifier represents a variable (starts with lowercase or
+      underscore) rather than a constructor (starts with uppercase) *)
   let is_variable_identifier (s : string) : bool =
     if String.length s = 0 then false
     else
@@ -119,20 +135,23 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         String.concat "."
           (List.map (fun (p : Ast.idx Ast.node) -> idx_to_string p.value) parts)
 
-
   let process_lowercase (s : string) : string = String.uncapitalize_ascii s
   let process_uppercase (s : string) : string = String.capitalize_ascii s
   let process_caps (s : string) : string = String.uppercase_ascii s
+
   type capital = Lowercase | Uppercase | Caps
+
   let get_capital (s : string) : capital =
     if s == process_caps s then Caps
     else if s == process_uppercase s then Uppercase
     else Lowercase
-  let scope_out (f : unit -> 'a) : 'a = 
+
+  let scope_out (f : unit -> 'a) : 'a =
     let note = namer#push_context () in
     let res = f () in
-    namer#pop_context note ;
+    namer#pop_context note;
     res
+
   let rec idx_to_name (idx : Ast.idx) : string list =
     match idx with
     | Ast.IdxIdx s -> [ s.value ]
@@ -158,21 +177,23 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Main entry point for converting a complete SML program.
 
-    @param prog The SML program to convert
-    @return The converted OCaml representation as toplevel phrases
+      @param prog The SML program to convert
+      @return The converted OCaml representation as toplevel phrases
 
-    This is implemented after {!process_prog} in the mutually recursive chain. *)
+      This is implemented after {!process_prog} in the mutually recursive chain.
+  *)
 
   (** {2 Type Processing}
 
-    Functions for converting SML types to OCaml types.
+      Functions for converting SML types to OCaml types.
 
-    SML and OCaml have similar type systems, but with syntactic differences:
-    - SML: [int * string -> bool] vs OCaml: [int * string -> bool]
-    - SML: ['a list] vs OCaml: ['a list]
-    - SML: [{x: int, y: int}] (records) vs OCaml: [< x: int; y: int >] (objects)
+      SML and OCaml have similar type systems, but with syntactic differences:
+      - SML: [int * string -> bool] vs OCaml: [int * string -> bool]
+      - SML: ['a list] vs OCaml: ['a list]
+      - SML: [{x: int, y: int}] (records) vs OCaml: [< x: int; y: int >]
+        (objects)
 
-    The main difference is that SML records are converted to OCaml objects. *)
+      The main difference is that SML records are converted to OCaml objects. *)
 
   (** Convert an SML type to an OCaml core type.
 
@@ -252,33 +273,35 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Wrapper function for {!process_type_value}.
 
-    @param ty The SML type to convert
-    @return The corresponding OCaml core type *)
-  let rec process_type (ty : Ast.typ node) : Parsetree.core_type = scope_out @@ fun () ->
+      @param ty The SML type to convert
+      @return The corresponding OCaml core type *)
+  let rec process_type (ty : Ast.typ node) : Parsetree.core_type =
+    scope_out @@ fun () ->
     trace_part ~level:2 ~ast:"typ" ~msg:"" (* ~msg:(Ast.show_typ ty) *)
       ~value:(fun () -> process_type_value ty)
 
   (** {2 Constant Processing}
 
-    Functions for converting SML constants to OCaml constants.
+      Functions for converting SML constants to OCaml constants.
 
-    Note: SML and OCaml have different constant syntaxes that need translation:
-    - SML uses [~] for negation, OCaml uses [-]
-    - SML has word literals ([0w42]), OCaml doesn't (need conversion)
-    - SML character literals use [#"c"], OCaml uses ['c'] *)
+      Note: SML and OCaml have different constant syntaxes that need
+      translation:
+      - SML uses [~] for negation, OCaml uses [-]
+      - SML has word literals ([0w42]), OCaml doesn't (need conversion)
+      - SML character literals use [#"c"], OCaml uses ['c'] *)
 
   (** Convert an SML constant to an OCaml constant.
 
-    Handles:
-    - Integer constants (decimal and hexadecimal)
-    - Word constants (unsigned integers, SML-specific)
-    - Floating-point constants
-    - Character constants ([#"a"] → ['a'])
-    - String constants
+      Handles:
+      - Integer constants (decimal and hexadecimal)
+      - Word constants (unsigned integers, SML-specific)
+      - Floating-point constants
+      - Character constants ([#"a"] → ['a'])
+      - String constants
 
-    @param constant The SML constant to convert
-    @return The corresponding OCaml {!Parsetree.constant}
-    @raise Assert_failure For word constants (not supported in OCaml) *)
+      @param constant The SML constant to convert
+      @return The corresponding OCaml {!Parsetree.constant}
+      @raise Assert_failure For word constants (not supported in OCaml) *)
   let rec process_con (constant : Ast.constant Ast.node) : Parsetree.constant =
     match constant.value with
     | ConInt i ->
@@ -320,13 +343,13 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** {2 Expression Processing}
 
-    Functions for converting SML expressions to OCaml expressions.
+      Functions for converting SML expressions to OCaml expressions.
 
-    Expression conversion is mostly straightforward, with key differences:
-    - SML's [andalso]/[orelse] → OCaml's [&&]/[||]
-    - SML's [fn] → OCaml's [fun]
-    - SML's sequential expressions [(e1; e2; e3)] → OCaml's [e1; e2; e3]
-    - Let expressions require different structuring *)
+      Expression conversion is mostly straightforward, with key differences:
+      - SML's [andalso]/[orelse] → OCaml's [&&]/[||]
+      - SML's [fn] → OCaml's [fun]
+      - SML's sequential expressions [(e1; e2; e3)] → OCaml's [e1; e2; e3]
+      - Let expressions require different structuring *)
 
   (** Convert an SML expression to an OCaml expression.
 
@@ -354,7 +377,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
   let rec process_exp (expression : Ast.expression Ast.node) :
       Parsetree.expression =
     scope_out @@ fun () ->
-      labeller#cite Helpers.Attr.expression expression.pos
+    labeller#cite Helpers.Attr.expression expression.pos
     @@
     match expression.value with
     | ExpCon c -> Builder.pexp_constant (process_con c)
@@ -377,9 +400,13 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         let e2' = process_exp e2 in
         Builder.pexp_apply e1' [ (Nolabel, e2') ]
     | ExpIdx idx ->
-        let name_longident =
-          process_name_to_longident ~ctx:Value (idx_to_name idx.value)
+        let scoped_name =
+          if Common.engaged @@ Common.get_convert_names config then
+            Common.map_last namer#get_name (idx_to_name idx.value)
+          else idx_to_name idx.value
         in
+        let name_longident = process_name_to_longident ~ctx:Value scoped_name in
+
         Builder.pexp_ident (ghost name_longident)
     | InfixApp (e1, op, e2) ->
         let op_longident =
@@ -435,155 +462,174 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
           | e :: rest -> Builder.pexp_sequence (process_exp e) (build_seq rest)
         in
         build_seq exps
-    | LetExp ([], exps) -> process_exp ({ value = (SeqExp exps); pos = expression.pos })
-
-    | LetExp (dec :: decs, exps) ->  (
+    | LetExp ([], exps) ->
+        process_exp { value = SeqExp exps; pos = expression.pos }
+    | LetExp (dec :: decs, exps) -> (
+        scope_out @@ fun () ->
         (* First, flatten SeqDec to handle each declaration individually *)
         let flattened_decs =
           let rec flatten_dec d =
             match d.value with
             | SeqDec inner_decs -> List.concat (List.map flatten_dec inner_decs)
-            | _ -> [d]
+            | _ -> [ d ]
           in
           flatten_dec dec
         in
         (* Process flattened declarations *)
         let all_decs = flattened_decs @ decs in
         match all_decs with
-        | [] -> process_exp ({ value = (SeqExp exps); pos = expression.pos })
-        | first_dec :: rest_decs ->
-          match first_dec.value with
-          | ExnDec eb ->
-              (* Handle exception declarations in let expressions *)
-              (* SML: let exception E of t in ... end *)
-              (* OCaml: let exception E of t in ... *)
-              let exn_constrs = process_exn_bind eb.value in
-              let body =
-                process_exp ({ value = LetExp (rest_decs, exps); pos = expression.pos })
-                |> labeller#cite Helpers.Attr.expression expression.pos
-              in
-              (* Build nested let exception expressions *)
-              List.fold_right
-                (fun ext_constr acc ->
-                  Builder.pexp_letexception ext_constr acc)
-                exn_constrs body
-
-          | DatDec (db, tb_opt) ->
-              (* Handle datatype declarations in let expressions *)
-              (* SML: let datatype t = A | B in ... end *)
-              (* OCaml: let module M = struct type t = A | B end in ... *)
-              let tdecls = process_dat_bind db.value in
-              let type_items =
-                match tb_opt with
-                | None -> [ Builder.pstr_type Asttypes.Recursive tdecls ]
-                | Some tb ->
-                    let tb_decls = process_typ_bind tb.value in
-                    [ Builder.pstr_type Asttypes.Recursive tdecls;
-                      Builder.pstr_type Asttypes.Recursive tb_decls ]
-              in
-              let mod_name = ghost (Some "_Types") in
-              let mod_expr = Builder.pmod_structure type_items in
-              let body =
-                process_exp ({ value = LetExp (rest_decs, exps); pos = expression.pos })
-                |> labeller#cite Helpers.Attr.expression expression.pos
-              in
-              Builder.pexp_letmodule mod_name mod_expr body
-
-          | TypDec tb ->
-              (* Handle type declarations in let expressions *)
-              (* SML: let type t = int in ... end *)
-              (* OCaml: let module M = struct type t = int end in ... *)
-              let tdecls = process_typ_bind tb.value in
-              let type_items = [ Builder.pstr_type Asttypes.Nonrecursive tdecls ] in
-              let mod_name = ghost (Some "_Types") in
-              let mod_expr = Builder.pmod_structure type_items in
-              let body =
-                process_exp ({ value = LetExp (rest_decs, exps); pos = expression.pos })
-                |> labeller#cite Helpers.Attr.expression expression.pos
-              in
-              Builder.pexp_letmodule mod_name mod_expr body
-
-          | LocalDec (d1, d2) ->
-              (* Handle local declarations in let expressions *)
-              (* SML: let local dec1 in dec2 end in ... end *)
-              (* OCaml: let <bindings from dec1 and dec2> in ... *)
-              (* Process as nested let: first dec1, then dec2, then rest *)
-              process_exp ({ value = LetExp ([d1; d2] @ rest_decs, exps); pos = expression.pos })
-
-          | OpenDec ids ->
-              (* Handle open declarations in let expressions *)
-              (* SML: let open M in ... end *)
-              (* OCaml: let open M in ... *)
-              let body =
-                process_exp ({ value = LetExp (rest_decs, exps); pos = expression.pos })
-                |> labeller#cite Helpers.Attr.expression expression.pos
-              in
-              (* Process open declarations from right to left to maintain proper scoping *)
-              List.fold_right
-                (fun (id : Ast.idx Ast.node) acc ->
-                  let longid =
-                    process_name_to_longident ~ctx:ModuleValue
-                      (idx_to_name id.value)
-                  in
-                  let mod_expr = Builder.pmod_ident (ghost longid) in
-                  let open_infos = Builder.open_infos ~override:Asttypes.Fresh ~expr:mod_expr in
-                  Builder.pexp_open open_infos acc)
-                ids body
-
-          | FixityDec _ ->
-              (* Fixity declarations have no runtime effect - skip and process rest *)
-              process_exp ({ value = LetExp (rest_decs, exps); pos = expression.pos })
-
-          | DataDecAlias (id1, id2) ->
-              (* Datatype alias in let expression *)
-              (* SML: let datatype t = datatype u in ... end *)
-              (* OCaml: let module M = struct type t = u end in ... *)
-              let name1_str =
-                process_name_to_string ~ctx:Type (idx_to_name id1.value)
-              in
-              let longid2 =
-                process_name_to_longident ~ctx:Type (idx_to_name id2.value)
-              in
-              let alias_type = Builder.ptyp_constr (ghost longid2) [] in
-              let tdecl =
-                labeller#cite Helpers.Attr.type_declaration id1.pos
-                  (Builder.type_declaration ~name:(ghost name1_str) ~params:[]
-                     ~cstrs:[] ~kind:Parsetree.Ptype_abstract
-                     ~private_:Asttypes.Public ~manifest:(Some alias_type))
-              in
-              let type_items = [ Builder.pstr_type Asttypes.Recursive [ tdecl ] ] in
-              let mod_name = ghost (Some "_Types") in
-              let mod_expr = Builder.pmod_structure type_items in
-              let body =
-                process_exp ({ value = LetExp (rest_decs, exps); pos = expression.pos })
-                |> labeller#cite Helpers.Attr.expression expression.pos
-              in
-              Builder.pexp_letmodule mod_name mod_expr body
-
-          | AbstractDec (db, tb_opt, inner_decs) ->
-              (* Abstract type in let expression *)
-              (* Process the inner declarations, hiding the datatype constructors *)
-              process_exp ({ value = LetExp (inner_decs @ rest_decs, exps); pos = expression.pos })
-
-          | StrDec _ ->
-              (* Structure declarations are not allowed in let expressions per SML spec *)
-              raise (BadAst (first_dec.pos, "Structure declaration not allowed in let expression"))
-
-          | SeqDec inner_decs ->
-              (* Should have been flattened, but handle it just in case *)
-              process_exp ({ value = LetExp (inner_decs @ rest_decs, exps); pos = expression.pos })
-
-          | ValDec _ | FunDec _ ->
-              (* Handle value and function declarations *)
-              let binding = process_value_dec first_dec.value in
-              let body =
-                process_exp ({ value = LetExp (rest_decs, exps); pos = expression.pos })
-                |> labeller#cite Helpers.Attr.expression expression.pos
-              in
-              Builder.pexp_let Nonrecursive binding body
-    )
-        
-       
+        | [] -> process_exp { value = SeqExp exps; pos = expression.pos }
+        | first_dec :: rest_decs -> (
+            match first_dec.value with
+            | ExnDec eb ->
+                (* Handle exception declarations in let expressions *)
+                (* SML: let exception E of t in ... end *)
+                (* OCaml: let exception E of t in ... *)
+                let exn_constrs = process_exn_bind eb.value in
+                let body =
+                  process_exp
+                    { value = LetExp (rest_decs, exps); pos = expression.pos }
+                  |> labeller#cite Helpers.Attr.expression expression.pos
+                in
+                (* Build nested let exception expressions *)
+                List.fold_right
+                  (fun ext_constr acc ->
+                    Builder.pexp_letexception ext_constr acc)
+                  exn_constrs body
+            | DatDec (db, tb_opt) ->
+                (* Handle datatype declarations in let expressions *)
+                (* SML: let datatype t = A | B in ... end *)
+                (* OCaml: let module M = struct type t = A | B end in ... *)
+                let tdecls = process_dat_bind db.value in
+                let type_items =
+                  match tb_opt with
+                  | None -> [ Builder.pstr_type Asttypes.Recursive tdecls ]
+                  | Some tb ->
+                      let tb_decls = process_typ_bind tb.value in
+                      [
+                        Builder.pstr_type Asttypes.Recursive tdecls;
+                        Builder.pstr_type Asttypes.Recursive tb_decls;
+                      ]
+                in
+                let mod_name = ghost (Some "_Types") in
+                let mod_expr = Builder.pmod_structure type_items in
+                let body =
+                  process_exp
+                    { value = LetExp (rest_decs, exps); pos = expression.pos }
+                  |> labeller#cite Helpers.Attr.expression expression.pos
+                in
+                Builder.pexp_letmodule mod_name mod_expr body
+            | TypDec tb ->
+                (* Handle type declarations in let expressions *)
+                (* SML: let type t = int in ... end *)
+                (* OCaml: let module M = struct type t = int end in ... *)
+                let tdecls = process_typ_bind tb.value in
+                let type_items =
+                  [ Builder.pstr_type Asttypes.Nonrecursive tdecls ]
+                in
+                let mod_name = ghost (Some "_Types") in
+                let mod_expr = Builder.pmod_structure type_items in
+                let body =
+                  process_exp
+                    { value = LetExp (rest_decs, exps); pos = expression.pos }
+                  |> labeller#cite Helpers.Attr.expression expression.pos
+                in
+                Builder.pexp_letmodule mod_name mod_expr body
+            | LocalDec (d1, d2) ->
+                (* Handle local declarations in let expressions *)
+                (* SML: let local dec1 in dec2 end in ... end *)
+                (* OCaml: let <bindings from dec1 and dec2> in ... *)
+                (* Process as nested let: first dec1, then dec2, then rest *)
+                process_exp
+                  {
+                    value = LetExp ([ d1; d2 ] @ rest_decs, exps);
+                    pos = expression.pos;
+                  }
+            | OpenDec ids ->
+                (* Handle open declarations in let expressions *)
+                (* SML: let open M in ... end *)
+                (* OCaml: let open M in ... *)
+                let body =
+                  process_exp
+                    { value = LetExp (rest_decs, exps); pos = expression.pos }
+                  |> labeller#cite Helpers.Attr.expression expression.pos
+                in
+                (* Process open declarations from right to left to maintain proper scoping *)
+                List.fold_right
+                  (fun (id : Ast.idx Ast.node) acc ->
+                    let longid =
+                      process_name_to_longident ~ctx:ModuleValue
+                        (idx_to_name id.value)
+                    in
+                    let mod_expr = Builder.pmod_ident (ghost longid) in
+                    let open_infos =
+                      Builder.open_infos ~override:Asttypes.Fresh ~expr:mod_expr
+                    in
+                    Builder.pexp_open open_infos acc)
+                  ids body
+            | FixityDec _ ->
+                (* Fixity declarations have no runtime effect - skip and process rest *)
+                process_exp
+                  { value = LetExp (rest_decs, exps); pos = expression.pos }
+            | DataDecAlias (id1, id2) ->
+                (* Datatype alias in let expression *)
+                (* SML: let datatype t = datatype u in ... end *)
+                (* OCaml: let module M = struct type t = u end in ... *)
+                let name1_str =
+                  process_name_to_string ~ctx:Type (idx_to_name id1.value)
+                in
+                let longid2 =
+                  process_name_to_longident ~ctx:Type (idx_to_name id2.value)
+                in
+                let alias_type = Builder.ptyp_constr (ghost longid2) [] in
+                let tdecl =
+                  labeller#cite Helpers.Attr.type_declaration id1.pos
+                    (Builder.type_declaration ~name:(ghost name1_str) ~params:[]
+                       ~cstrs:[] ~kind:Parsetree.Ptype_abstract
+                       ~private_:Asttypes.Public ~manifest:(Some alias_type))
+                in
+                let type_items =
+                  [ Builder.pstr_type Asttypes.Recursive [ tdecl ] ]
+                in
+                let mod_name = ghost (Some "_Types") in
+                let mod_expr = Builder.pmod_structure type_items in
+                let body =
+                  process_exp
+                    { value = LetExp (rest_decs, exps); pos = expression.pos }
+                  |> labeller#cite Helpers.Attr.expression expression.pos
+                in
+                Builder.pexp_letmodule mod_name mod_expr body
+            | AbstractDec (db, tb_opt, inner_decs) ->
+                (* Abstract type in let expression *)
+                (* Process the inner declarations, hiding the datatype constructors *)
+                process_exp
+                  {
+                    value = LetExp (inner_decs @ rest_decs, exps);
+                    pos = expression.pos;
+                  }
+            | StrDec _ ->
+                (* Structure declarations are not allowed in let expressions per SML spec *)
+                raise
+                  (BadAst
+                     ( first_dec.pos,
+                       "Structure declaration not allowed in let expression" ))
+            | SeqDec inner_decs ->
+                (* Should have been flattened, but handle it just in case *)
+                process_exp
+                  {
+                    value = LetExp (inner_decs @ rest_decs, exps);
+                    pos = expression.pos;
+                  }
+            | ValDec _ | FunDec _ ->
+                (* Handle value and function declarations *)
+                let binding = process_value_dec first_dec.value in
+                let body =
+                  process_exp
+                    { value = LetExp (rest_decs, exps); pos = expression.pos }
+                  |> labeller#cite Helpers.Attr.expression expression.pos
+                in
+                Builder.pexp_let Nonrecursive binding body)
+        | _ -> assert false)
     | TypedExp (e, ty) ->
         Builder.pexp_constraint (process_exp e) (process_type ty)
     | RaiseExp e ->
@@ -615,15 +661,14 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** {2 Expression Rows and Matching}
 
-    Helper functions for expression-related constructs. *)
+      Helper functions for expression-related constructs. *)
 
   (** Convert an SML expression row (record field) to an OCaml record field.
 
-    SML: [{x = 1, y = 2}]
-    OCaml: [{x = 1; y = 2}]
+      SML: [{x = 1, y = 2}] OCaml: [{x = 1; y = 2}]
 
-    @param row The expression row (field binding)
-    @return A pair of field identifier and expression *)
+      @param row The expression row (field binding)
+      @return A pair of field identifier and expression *)
   and process_row (row : Ast.row Ast.node) :
       Ppxlib.Longident.t Location.loc * Parsetree.expression =
     match row.value with
@@ -635,15 +680,15 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Convert SML match clauses to OCaml case list.
 
-    SML: [pat1 => exp1 | pat2 => exp2]
-    OCaml: [| pat1 -> exp1 | pat2 -> exp2]
+      SML: [pat1 => exp1 | pat2 => exp2] OCaml: [| pat1 -> exp1 | pat2 -> exp2]
 
-    Used in [case], [fn], and [handle] expressions.
+      Used in [case], [fn], and [handle] expressions.
 
-    @param m The match clause(s)
-    @return A list of OCaml case expressions *)
+      @param m The match clause(s)
+      @return A list of OCaml case expressions *)
   and process_matching (m : Ast.matching) : Parsetree.case list =
-    scope_out @@ fun () -> match m with
+    scope_out @@ fun () ->
+    match m with
     | Case (pat, expression, rest_opt) -> (
         let case_here =
           Builder.case ~lhs:(process_pat pat) ~guard:None
@@ -655,14 +700,14 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** {1 Pattern Processing}
 
-    Functions for converting SML patterns to OCaml patterns.
+      Functions for converting SML patterns to OCaml patterns.
 
-    Pattern conversion is complex due to:
-    - Distinguishing constructors from variables (SML uses capitalization,
-      but also allows lowercase constructors in some contexts)
-    - Handling the [op] keyword for treating infix operators as prefix
-    - Converting record patterns to tuple/record patterns
-    - Layered patterns ([x as pat]) *)
+      Pattern conversion is complex due to:
+      - Distinguishing constructors from variables (SML uses capitalization, but
+        also allows lowercase constructors in some contexts)
+      - Handling the [op] keyword for treating infix operators as prefix
+      - Converting record patterns to tuple/record patterns
+      - Layered patterns ([x as pat]) *)
 
   (** Convert an SML pattern to an OCaml pattern.
 
@@ -777,14 +822,14 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Convert SML pattern rows (record pattern fields) to OCaml record patterns.
 
-    SML record patterns have three forms:
-    - Wildcard: [{..., x, y}] matches any record with at least x and y fields
-    - Simple: [{x = px, y = py}] binds px and py
-    - Variable shorthand: [{x, y}] is sugar for [{x = x, y = y}]
+      SML record patterns have three forms:
+      - Wildcard: [{..., x, y}] matches any record with at least x and y fields
+      - Simple: [{x = px, y = py}] binds px and py
+      - Variable shorthand: [{x, y}] is sugar for [{x = x, y = y}]
 
-    @param row The pattern row to convert
-    @return A list of field-pattern pairs
-    @raise Assert_failure Currently unimplemented *)
+      @param row The pattern row to convert
+      @return A list of field-pattern pairs
+      @raise Assert_failure Currently unimplemented *)
   and process_pat_row (row : Ast.pat_row) : (string * Parsetree.pattern) list =
     match row with
     | PatRowPoly ->
@@ -825,25 +870,26 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** {1 Declaration Processing}
 
-    Functions for converting SML declarations to OCaml structure items.
+      Functions for converting SML declarations to OCaml structure items.
 
-    SML declarations include:
-    - Value bindings ([val x = 42])
-    - Function definitions ([fun f x = x + 1])
-    - Type definitions ([type t = int * string])
-    - Datatype declarations ([datatype t = A | B of int])
-    - Exception declarations ([exception E of string])
-    - Structure/module declarations
-    - Local declarations, fixity declarations, etc. *)
+      SML declarations include:
+      - Value bindings ([val x = 42])
+      - Function definitions ([fun f x = x + 1])
+      - Type definitions ([type t = int * string])
+      - Datatype declarations ([datatype t = A | B of int])
+      - Exception declarations ([exception E of string])
+      - Structure/module declarations
+      - Local declarations, fixity declarations, etc. *)
 
   (** Convert an SML declaration to OCaml value bindings.
 
-    Note: This function returns value_binding list, but some declarations
-    (like type declarations) don't produce value bindings. Those return empty lists.
-    For full program conversion, use process_prog which returns structure items.
+      Note: This function returns value_binding list, but some declarations
+      (like type declarations) don't produce value bindings. Those return empty
+      lists. For full program conversion, use process_prog which returns
+      structure items.
 
-    @param declaration The SML declaration to convert
-    @return A list of OCaml value bindings *)
+      @param declaration The SML declaration to convert
+      @return A list of OCaml value bindings *)
   and process_value_dec (declaration : Ast.declaration) :
       Parsetree.value_binding list =
     match declaration with
@@ -875,25 +921,24 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | SeqDec decs ->
         (* Sequential declarations - process each and concatenate *)
         List.concat (List.map (fun d -> process_value_dec d.Ast.value) decs)
-    | LocalDec (d1, d2) ->
-        raise (mkBadAst "LocalDec is not value decleration")
+    | LocalDec (d1, d2) -> raise (mkBadAst "LocalDec is not value decleration")
     | OpenDec [] ->
-      raise (mkBadAst "OpenDec with empty list is not value decleration")
+        raise (mkBadAst "OpenDec with empty list is not value decleration")
     | OpenDec (id :: rest) ->
-      raise (mkBadAst ?loc:id.pos "OpenDec is not value decleration")
+        raise (mkBadAst ?loc:id.pos "OpenDec is not value decleration")
     | ExpDec exp ->
         (* Expression declarations don't produce value bindings *)
         raise (mkBadAst ?loc:exp.pos "ExpDec is not value decleration")
     | FixityDec (fix, ids) ->
         (* Fixity declarations don't produce value bindings *)
         raise (mkBadAst "FixityDec is not value decleration")
- 
+
   (** Convert SML fixity declarations to string representation.
 
-    SML fixity: [infix 6 +], [infixr 5 ::], [nonfix f]
+      SML fixity: [infix 6 +], [infixr 5 ::], [nonfix f]
 
-    @param fix The fixity specification
-    @return String representation of fixity *)
+      @param fix The fixity specification
+      @return String representation of fixity *)
   and process_fixity (fix : Ast.fixity) : string =
     match fix with
     | Nonfix -> "nonfix"
@@ -902,11 +947,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Convert SML value bindings.
 
-    SML: [val x = 42 and y = 43]
-    OCaml: [let x = 42 and y = 43]
+      SML: [val x = 42 and y = 43] OCaml: [let x = 42 and y = 43]
 
-    @param vb The value binding(s)
-    @return List of OCaml value bindings *)
+      @param vb The value binding(s)
+      @return List of OCaml value bindings *)
   and process_val_bind (vb : Ast.value_binding) : Parsetree.value_binding list =
     match vb with
     | ValBind (pat, expression, rest_opt) ->
@@ -923,11 +967,11 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Convert SML function bindings to OCaml.
 
-    SML: [fun f 0 = 1 | f n = n * f (n-1)]
-    OCaml: [let rec f = function 0 -> 1 | n -> n * f (n-1)]
+      SML: [fun f 0 = 1 | f n = n * f (n-1)] OCaml:
+      [let rec f = function 0 -> 1 | n -> n * f (n-1)]
 
-    @param fb The function binding(s)
-    @return List of OCaml value bindings *)
+      @param fb The function binding(s)
+      @return List of OCaml value bindings *)
   and process_fun_bind (fb : Ast.function_binding) :
       Parsetree.value_binding list =
     match fb with
@@ -1000,10 +1044,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Convert SML function match clauses.
 
-    Helper for {!process_fun_bind}.
+      Helper for {!process_fun_bind}.
 
-    @param fm The function match clause(s)
-    @return List of pattern-expression pairs *)
+      @param fm The function match clause(s)
+      @return List of pattern-expression pairs *)
   and process_fun_match (fm : Ast.fun_match) :
       (Parsetree.pattern list * Parsetree.expression) list =
     match fm with
@@ -1056,11 +1100,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Convert SML type bindings (type abbreviations).
 
-    SML: [type 'a pair = 'a * 'a]
-    OCaml: [type 'a pair = 'a * 'a]
+      SML: [type 'a pair = 'a * 'a] OCaml: [type 'a pair = 'a * 'a]
 
-    @param tb The type binding(s)
-    @return List of OCaml type declarations *)
+      @param tb The type binding(s)
+      @return List of OCaml type declarations *)
   and process_typ_bind (tb : Ast.type_binding) : Parsetree.type_declaration list
       =
     match tb with
@@ -1098,11 +1141,11 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Convert SML datatype bindings to OCaml variant types.
 
-    SML: [datatype 'a option = NONE | SOME of 'a]
-    OCaml: [type 'a option = None | Some of 'a]
+      SML: [datatype 'a option = NONE | SOME of 'a] OCaml:
+      [type 'a option = None | Some of 'a]
 
-    @param db The datatype binding(s)
-    @return List of OCaml type declarations *)
+      @param db The datatype binding(s)
+      @return List of OCaml type declarations *)
   and process_dat_bind (db : Ast.data_binding) : Parsetree.type_declaration list
       =
     match db with
@@ -1140,8 +1183,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Convert SML constructor bindings within a datatype.
 
-    @param cb The constructor binding(s)
-    @return List of OCaml constructor declarations *)
+      @param cb The constructor binding(s)
+      @return List of OCaml constructor declarations *)
   and process_con_bind (cb : Ast.constructor_binding) :
       Parsetree.constructor_declaration list =
     match cb with
@@ -1149,8 +1192,9 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         let name_str =
           process_name_to_string ~ctx:Constructor (idx_to_name id.value)
         in
-        Common.log ~cfg:config ~level:Common.Debug ~kind:Neutral
-          ~msg:(Printf.sprintf "Processing constructor: %s" name_str) (); 
+        Log.log ~level:Common.Debug ~kind:Neutral
+          ~msg:(Printf.sprintf "Processing constructor: %s" name_str)
+          ();
         let args =
           match ty_opt with
           | None -> Parsetree.Pcstr_tuple []
@@ -1166,21 +1210,25 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
           | None -> []
           | Some rest -> process_con_bind rest.value
         in
-        if namer#is_good ~ctx:Constructor ~name:[name_str] then cdecl :: rest else let 
-          (name, _) = namer#process_name ~ctx:Constructor ~name:[name_str] in
-          let (tag, args) = renamed name_str (Ppxlib.Longident.name name) in
+        if namer#is_good ~ctx:Constructor ~name:[ name_str ] then cdecl :: rest
+        else
+          let name, _ =
+            namer#process_name ~ctx:Constructor ~name:[ name_str ]
+          in
+          let tag, args = renamed name_str (Ppxlib.Longident.name name) in
           let marked_cdecl =
-            labeller#cite_exact Helpers.Attr.constructor_declaration tag args cdecl in
+            labeller#cite_exact Helpers.Attr.constructor_declaration tag args
+              cdecl
+          in
           marked_cdecl :: rest
-
 
   (** Convert SML exception bindings.
 
-    SML: [exception Empty] or [exception Fail of string]
-    OCaml: [exception Empty] or [exception Fail of string]
+      SML: [exception Empty] or [exception Fail of string] OCaml:
+      [exception Empty] or [exception Fail of string]
 
-    @param eb The exception binding(s)
-    @return List of OCaml extension constructors *)
+      @param eb The exception binding(s)
+      @return List of OCaml extension constructors *)
   and process_exn_bind (eb : Ast.exn_bind) :
       Parsetree.extension_constructor list =
     match eb with
@@ -1221,10 +1269,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Extract identifier from SML [op] prefix wrapper.
 
-    The [op] keyword in SML removes infix status: [op +] is prefix [+].
+      The [op] keyword in SML removes infix status: [op +] is prefix [+].
 
-    @param wo The identifier with or without [op]
-    @return The processed identifier *)
+      @param wo The identifier with or without [op]
+      @return The processed identifier *)
   and process_with_op (wo : Ast.with_op) : string =
     match wo with
     | WithOp id ->
@@ -1234,22 +1282,22 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** {1 Structure Processing}
 
-    Functions for converting SML structures (modules) to OCaml modules.
+      Functions for converting SML structures (modules) to OCaml modules.
 
-    SML structures are first-class modules that can be:
-    - Named and bound ([structure S = struct ... end])
-    - Annotated with signatures ([S : SIG] or [S :> SIG])
-    - Created via functor application ([F(A)])
-    - Combined with local declarations *)
+      SML structures are first-class modules that can be:
+      - Named and bound ([structure S = struct ... end])
+      - Annotated with signatures ([S : SIG] or [S :> SIG])
+      - Created via functor application ([F(A)])
+      - Combined with local declarations *)
 
   (** Convert an SML structure expression to OCaml module items.
 
-    Note: This function returns structure items (module contents) for cases
-    where the structure can be inlined. For structure references and functor
-    applications, this may not be fully accurate.
+      Note: This function returns structure items (module contents) for cases
+      where the structure can be inlined. For structure references and functor
+      applications, this may not be fully accurate.
 
-    @param structure The SML structure to convert
-    @return List of OCaml structure items *)
+      @param structure The SML structure to convert
+      @return List of OCaml structure items *)
   and process_str (structure : Ast.structure) : Parsetree.structure_item list =
     match structure with
     | StrIdx id ->
@@ -1291,18 +1339,18 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Convert SML signature annotation type.
 
-    - Transparent ([:]): Type equalities visible
-    - Opaque ([:>]): Abstract types hidden
+      - Transparent ([:]): Type equalities visible
+      - Opaque ([:>]): Abstract types hidden
 
-    @param a The annotation type
-    @return String representation *)
+      @param a The annotation type
+      @return String representation *)
   and process_anotate (a : Ast.anotate) : string =
     match a with Transparent -> ":" | Opaque -> ":>"
 
   (** Convert an SML structure to an OCaml module expression.
 
-    @param structure The SML structure to convert
-    @return An OCaml module expression *)
+      @param structure The SML structure to convert
+      @return An OCaml module expression *)
   and structure_to_module_expr (structure : Ast.structure) :
       Parsetree.module_expr =
     match structure with
@@ -1354,11 +1402,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Convert SML structure bindings.
 
-    SML: [structure S = struct ... end]
-    OCaml: [module S = struct ... end]
+      SML: [structure S = struct ... end] OCaml: [module S = struct ... end]
 
-    @param sb The structure binding(s)
-    @return List of OCaml module bindings *)
+      @param sb The structure binding(s)
+      @return List of OCaml module bindings *)
   and process_str_bind (sb : Ast.structure_binding) :
       Parsetree.module_binding list =
     trace_part ~level:2 ~ast:"structure_binding"
@@ -1394,20 +1441,21 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** {1 Signature Processing}
 
-    Functions for converting SML signatures (module types) to OCaml signatures.
+      Functions for converting SML signatures (module types) to OCaml
+      signatures.
 
-    SML signatures specify the interface of structures, including:
-    - Value specifications ([val f : int -> int])
-    - Type specifications ([type t], [eqtype t])
-    - Datatype specifications
-    - Exception specifications
-    - Nested structure specifications
-    - Sharing constraints ([sharing type t1 = t2]) *)
+      SML signatures specify the interface of structures, including:
+      - Value specifications ([val f : int -> int])
+      - Type specifications ([type t], [eqtype t])
+      - Datatype specifications
+      - Exception specifications
+      - Nested structure specifications
+      - Sharing constraints ([sharing type t1 = t2]) *)
 
   (** Convert an SML signature to OCaml signature items.
 
-    @param signature The SML signature to convert
-    @return List of OCaml signature items *)
+      @param signature The SML signature to convert
+      @return List of OCaml signature items *)
   and process_sign (signature : Ast.signature) : Parsetree.module_type =
     trace_part ~level:2 ~ast:"signature"
       ~msg:"" (* ~msg:(Ast.show_sign signature) *) ~value:(fun () ->
@@ -1433,11 +1481,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Convert SML type refinement ([where type]) clauses.
 
-    SML: [sig ... end where type t = int]
-    OCaml: Uses [with type] constraints
+      SML: [sig ... end where type t = int] OCaml: Uses [with type] constraints
 
-    @param tr The type refinement
-    @return List of type identifier-definition pairs *)
+      @param tr The type refinement
+      @return List of type identifier-definition pairs *)
   and process_typ_refine (tr : Ast.typ_refine) :
       (Ppxlib.Longident.t * Parsetree.core_type) list =
     match tr with
@@ -1457,8 +1504,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Convert SML specifications within signatures.
 
-    @param specification The specification to convert
-    @return List of OCaml signature items *)
+      @param specification The specification to convert
+      @return List of OCaml signature items *)
   and process_spec (specification' : Ast.specification Ast.node) :
       Parsetree.signature_item list =
     trace_part ~level:2 ~ast:"specification"
@@ -1531,13 +1578,12 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
             (* Structure sharing: SML [spec sharing S1 = S2 = ...]
                OCaml lacks structure sharing constraints.
                The constraint is enforced at functor/module application. *)
-            process_spec s
-        )
+            process_spec s)
 
   (** Convert SML value descriptions in signatures.
 
-    @param vd The value description(s)
-    @return List of OCaml value descriptions *)
+      @param vd The value description(s)
+      @return List of OCaml value descriptions *)
   and process_val_specification (vd : Ast.val_specification) :
       Parsetree.value_description list =
     trace_part ~level:2 ~ast:"val_specification"
@@ -1562,8 +1608,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Convert SML abstract type descriptions.
 
-    @param td The type description(s)
-    @return List of OCaml type declarations *)
+      @param td The type description(s)
+      @return List of OCaml type declarations *)
   and process_typ_specification (td : Ast.typ_specification) :
       Parsetree.type_declaration list =
     trace_part ~level:2 ~ast:"typ_specification"
@@ -1604,8 +1650,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Convert SML datatype descriptions in signatures.
 
-    @param dd The datatype description(s)
-    @return List of OCaml type declarations *)
+      @param dd The datatype description(s)
+      @return List of OCaml type declarations *)
   and process_dat_specification (dd : Ast.dat_specification) :
       Parsetree.type_declaration list =
     trace_part ~level:2 ~ast:"dat_specification"
@@ -1647,8 +1693,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Convert SML constructor descriptions in signatures.
 
-    @param cd The constructor description(s)
-    @return List of OCaml constructor declarations *)
+      @param cd The constructor description(s)
+      @return List of OCaml constructor declarations *)
   and process_con_specification (cd : Ast.con_specification) :
       Parsetree.constructor_declaration list =
     trace_part ~level:2 ~ast:"con_specification"
@@ -1678,8 +1724,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Convert SML exception descriptions in signatures.
 
-    @param ed The exception description(s)
-    @return List of OCaml extension constructors *)
+      @param ed The exception description(s)
+      @return List of OCaml extension constructors *)
   and process_exn_specification (ed : Ast.exn_specification) :
       Parsetree.extension_constructor list =
     trace_part ~level:2 ~ast:"exn_specification"
@@ -1709,8 +1755,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Convert SML structure descriptions in signatures.
 
-    @param sd The structure description(s)
-    @return List of OCaml module declarations *)
+      @param sd The structure description(s)
+      @return List of OCaml module declarations *)
   and process_str_specification (sd : Ast.str_specification) :
       Parsetree.module_declaration list =
     trace_part ~level:2 ~ast:"str_specification"
@@ -1735,15 +1781,15 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** {1 Program Processing}
 
-    Functions for converting top-level SML programs.
+      Functions for converting top-level SML programs.
 
-    A program is a sequence of:
-    - Core declarations
-    - Functor declarations ([functor F(X: S) = ...])
-    - Signature declarations ([signature S = ...]) *)
+      A program is a sequence of:
+      - Core declarations
+      - Functor declarations ([functor F(X: S) = ...])
+      - Signature declarations ([signature S = ...]) *)
 
-  (** Convert a declaration to structure items.
-    Helper function for process_prog. *)
+  (** Convert a declaration to structure items. Helper function for
+      process_prog. *)
   and dec_to_structure_items (declaration : Ast.declaration) :
       Parsetree.structure_item list =
     trace_part ~level:5 ~ast:"declaration"
@@ -1828,8 +1874,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Convert a top-level SML program to an OCaml structure.
 
-    @param prog The SML program to convert
-    @return An OCaml structure (list of structure items) *)
+      @param prog The SML program to convert
+      @return An OCaml structure (list of structure items) *)
   and process_prog (prog : Ast.prog) : Parsetree.structure =
     trace_part ~level:5 ~ast:"prog" ~msg:"" ~value:(fun () ->
         match prog with
@@ -1845,11 +1891,11 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Convert SML functor bindings (parameterized modules).
 
-    SML: [functor F(X : SIG) = struct ... end]
-    OCaml: [module F(X : SIG) = struct ... end]
+      SML: [functor F(X : SIG) = struct ... end] OCaml:
+      [module F(X : SIG) = struct ... end]
 
-    @param fb The functor binding(s)
-    @return List of OCaml module bindings *)
+      @param fb The functor binding(s)
+      @return List of OCaml module bindings *)
   and process_functor_binding (fb : Ast.functor_binding) :
       Parsetree.module_binding list =
     trace_part ~level:2 ~ast:"functor_binding"
@@ -1997,11 +2043,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Convert SML signature bindings.
 
-    SML: [signature SIG = sig ... end]
-    OCaml: [module type SIG = sig ... end]
+      SML: [signature SIG = sig ... end] OCaml: [module type SIG = sig ... end]
 
-    @param sb The signature binding(s)
-    @return List of OCaml module type declarations *)
+      @param sb The signature binding(s)
+      @return List of OCaml module type declarations *)
   and process_signature_binding (sb : Ast.signature_binding) :
       Parsetree.module_type_declaration list =
     trace_part ~level:2 ~ast:"signature_binding"
@@ -2023,14 +2068,13 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
             in
             mtdecl :: rest)
 
-  (** Main entry point for converting a complete SML program.
-    Wraps the converted structure in a toplevel phrase for output. *)
+  (** Main entry point for converting a complete SML program. Wraps the
+      converted structure in a toplevel phrase for output. *)
   and process_sml ~(prog : Ast.prog) : res =
-    let output_src = match Common.get_verbosity config with 
-      None -> false 
-      | Some n -> n >= 2
-  in
-    (if output_src then Format.eprintf "@,Lexical source: @[%s@]@," lexbuf) ;
+    let output_src =
+      match Common.get_verbosity config with None -> false | Some n -> n >= 2
+    in
+    if output_src then Format.eprintf "@,Lexical source: @[%s@]@," lexbuf;
     let structure = process_prog prog in
     let _ = labeller#destruct () in
     [ Parsetree.Ptop_def structure ]

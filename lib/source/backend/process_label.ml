@@ -7,10 +7,37 @@ type 'a citer = 'a -> attr -> 'a
 
 exception CommentNotFound
 
+let fixed_name (old_name : string) (new_name : string) : attr =
+  let attr_name : string Location.loc = Location.mknoloc "sml.fixed_name" in
+  let payload_str : Ppxlib.Parsetree.structure_item =
+    Builder.pstr_eval
+      (Builder.pexp_constant
+         (Ppxlib.Parsetree.Pconst_string (new_name, Location.none, None)))
+      []
+  in
+  let attr_payload : Ppxlib.Parsetree.payload = PStr [ payload_str ] in
+  Builder.attribute ~name:attr_name ~payload:attr_payload
+
+let change_name (old_name : string) (new_name : string) : attr =
+  let attr_name : string Location.loc = Location.mknoloc "sml.change_name" in
+  let payload_str : Ppxlib.Parsetree.structure_item =
+    Builder.pstr_eval
+      (Builder.pexp_constant
+         (Ppxlib.Parsetree.Pconst_string (new_name, Location.none, None)))
+      []
+  in
+  let attr_payload : Ppxlib.Parsetree.payload = PStr [ payload_str ] in
+  Builder.attribute ~name:attr_name ~payload:attr_payload
+
 let rec get_all_comments (lexbuf : string) : (string * int * int) list =
-  let rec comment_regex' depth = 
-    let inner_re = if depth > 0 then  Re.first (Re.alt [comment_regex' (depth - 1) ; Re.shortest (Re.rep Re.any)]) else Re.shortest (Re.rep Re.any) in
-      (Re.seq [ Re.str "(*"; inner_re; Re.str "*)" ])
+  let rec comment_regex' depth =
+    let inner_re =
+      if depth > 0 then
+        Re.first
+          (Re.alt [ comment_regex' (depth - 1); Re.shortest (Re.rep Re.any) ])
+      else Re.shortest (Re.rep Re.any)
+    in
+    Re.seq [ Re.str "(*"; inner_re; Re.str "*)" ]
   in
   let comment_regex = Re.compile @@ comment_regex' 10 in
   let comments = Re.all comment_regex lexbuf in
@@ -102,9 +129,8 @@ class process_label opts lexbuf =
       let attr_payload = self#string_to_cite b in
       Builder.attribute ~name:attr_name ~payload:attr_payload
 
-    method cite
-        : 'a. 'a citer -> (Lexing.position * Lexing.position) option -> 'a -> 'a
-        =
+    method cite :
+        'a. 'a citer -> (Lexing.position * Lexing.position) option -> 'a -> 'a =
       fun tag pos x ->
         match pos with
         | None -> x

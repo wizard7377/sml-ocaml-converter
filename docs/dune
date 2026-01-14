@@ -1,4 +1,3 @@
 (documentation
  (package shibboleth)
- 
  (mld_files index))

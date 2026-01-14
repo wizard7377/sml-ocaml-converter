@@ -2,9 +2,9 @@
 
     {1 Synopsis}
 
-    Shibboleth is a source-to-source compiler library that converts Standard ML (SML)
-    programs to OCaml. It provides the complete conversion pipeline from parsing SML
-    source code to generating equivalent OCaml code.
+    Shibboleth is a source-to-source compiler library that converts Standard ML
+    (SML) programs to OCaml. It provides the complete conversion pipeline from
+    parsing SML source code to generating equivalent OCaml code.
 
     {1 Overview}
 
@@ -22,15 +22,16 @@
 
     {1 Type Aliases}
 
-    This module exposes the primary data types used throughout the conversion pipeline. *)
+    This module exposes the primary data types used throughout the conversion
+    pipeline. *)
 
 type sml = Ast.prog
 
 (** Type alias for SML abstract syntax trees.
 
-    Represents a complete parsed SML program. See {!Ast} module for the
-    full AST definition covering expressions, patterns, types, declarations,
-    structures, signatures, and functors. *)
+    Represents a complete parsed SML program. See {!Ast} module for the full AST
+    definition covering expressions, patterns, types, declarations, structures,
+    signatures, and functors. *)
 
 type ocaml = Parsetree.toplevel_phrase list
 
@@ -43,16 +44,5 @@ type ocaml = Parsetree.toplevel_phrase list
     Note: This is a list because a single SML program may generate multiple
     OCaml top-level declarations. *)
 
-
-(** 
-{!modules:
-Source.Ast
-Source.Backend 
-Source.Frontend
-Source.Polish 
-Cli 
-Common 
-Helpers 
-Process
-}
-*)
+(** {!modules:Source.Ast Source.Backend Source.Frontend Source.Polish Cli Common
+    Helpers Process} *)
