@@ -128,7 +128,11 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     if s == process_caps s then Caps
     else if s == process_uppercase s then Uppercase
     else Lowercase
-
+  let scope_out (f : unit -> 'a) : 'a = 
+    let note = namer#push_context () in
+    let res = f () in
+    namer#pop_context note ;
+    res
   let rec idx_to_name (idx : Ast.idx) : string list =
     match idx with
     | Ast.IdxIdx s -> [ s.value ]
@@ -250,7 +254,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
     @param ty The SML type to convert
     @return The corresponding OCaml core type *)
-  let rec process_type (ty : Ast.typ node) : Parsetree.core_type =
+  let rec process_type (ty : Ast.typ node) : Parsetree.core_type = scope_out @@ fun () ->
     trace_part ~level:2 ~ast:"typ" ~msg:"" (* ~msg:(Ast.show_typ ty) *)
       ~value:(fun () -> process_type_value ty)
 
@@ -349,7 +353,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   let rec process_exp (expression : Ast.expression Ast.node) :
       Parsetree.expression =
-    labeller#cite Helpers.Attr.expression expression.pos
+    scope_out @@ fun () ->
+      labeller#cite Helpers.Attr.expression expression.pos
     @@
     match expression.value with
     | ExpCon c -> Builder.pexp_constant (process_con c)
@@ -638,7 +643,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     @param m The match clause(s)
     @return A list of OCaml case expressions *)
   and process_matching (m : Ast.matching) : Parsetree.case list =
-    match m with
+    scope_out @@ fun () -> match m with
     | Case (pat, expression, rest_opt) -> (
         let case_here =
           Builder.case ~lhs:(process_pat pat) ~guard:None
@@ -1145,7 +1150,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
           process_name_to_string ~ctx:Constructor (idx_to_name id.value)
         in
         Common.log ~cfg:config ~level:Common.Debug ~kind:Neutral
-          ~msg:(Printf.sprintf "Processing constructor: %s" name_str); 
+          ~msg:(Printf.sprintf "Processing constructor: %s" name_str) (); 
         let args =
           match ty_opt with
           | None -> Parsetree.Pcstr_tuple []

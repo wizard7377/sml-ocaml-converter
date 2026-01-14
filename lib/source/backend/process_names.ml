@@ -11,10 +11,40 @@ type context += Constructor
 type context += Operator
 type context += Empty
 
+let show_context (ctx : context) : string =
+  match ctx with
+  | PatternHead -> "PatternHead"
+  | PatternTail -> "PatternTail"
+  | Value -> "Value"
+  | Type -> "Type"
+  | ModuleValue -> "ModuleValue"
+  | Functor -> "Functor"
+  | ModuleType -> "ModuleType"
+  | Label -> "Label"
+  | Constructor -> "Constructor"
+  | Operator -> "Operator"
+  | Empty -> "Empty"
+  | _ -> "Unknown"
 open! Ppxlib
-
+module StringMap = Map.Make(String)
 type is_constructor = YesItIs of int | NoItsNot
+type note = int
+type scope = string StringMap.t Stack.t
 
+let get_scope_level (input:string) (name:string option) (scope:string StringMap.t) : string option = 
+  match name with
+  | Some n -> Some n 
+  | None -> StringMap.find_opt input scope
+let last (lst:'a list) : 'a =
+  assert (List.length lst > 0);
+  List.nth lst (List.length lst - 1)
+let rec map_last (f : 'a -> 'a) (lst : 'a list) : 'a list =
+  match lst with
+  | [] -> []
+  | [ x ] -> [ f x ]
+  | first :: rest -> first :: map_last f rest
+let rec get_in_scope (scope:scope) (name:string) : string option =
+  Stack.fold (get_scope_level name) None scope
 let process_lowercase (s : string) : string = String.uncapitalize_ascii s
 let process_uppercase (s : string) : string = String.capitalize_ascii s
 let process_caps (s : string) : string = String.uppercase_ascii s
@@ -23,6 +53,28 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
   object (self)
     val store : Context.t ref = store
     val config : Common.options ref = config
+    val mutable current_depth : int = 0 
+    val mutable context_stack : string StringMap.t Stack.t = Stack.create () 
+
+    method push_context () : note =
+      let depth = current_depth + 1 in
+      current_depth <- depth ;
+      Stack.push StringMap.empty context_stack;
+      depth
+    method pop_context (n : note) : unit =
+      assert (n == current_depth) ;
+      assert (not (Stack.is_empty context_stack)) ;
+      ignore (Stack.pop context_stack) ;
+      current_depth <- current_depth - 1 
+    method add_name ~(from : string) ~(res : string) : unit =
+      assert (not (Stack.is_empty context_stack)) ;
+      let current_map = Stack.pop context_stack in
+      let updated_map = StringMap.add from res current_map in
+      Stack.push updated_map context_stack
+    method get_name (from : string) : string =
+      match get_in_scope context_stack from with
+      | Some name -> name
+      | None -> from
     method private split_name (s : string list) : string list * string = 
       let rec aux parts =
         match parts with
@@ -75,15 +127,16 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
           check_parts name
         )
       | _ -> true 
+
       in
       res
     method process_name ?(ctx : context = Empty) ~(name : string list) =
       assert (List.length name > 0);
       assert (not @@ String.starts_with "(" @@ List.nth name 0);
       assert (not @@ String.ends_with ")" @@ List.nth name (List.length name - 1));
-
+      let name' = map_last (fun s -> self#get_name s) name in
       let (res, b) = 
-        match ctx with
+        (match ctx with
         | Type when Common.get_rename_types !config -> (
             let rec process_parts parts =
               match parts with
@@ -91,7 +144,7 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
               | [ last ] -> if is_lowercase last then  [last] else [ "__" ^ last ]
               | first :: rest -> first :: process_parts rest
             in
-            let new_name = process_parts name in
+            let new_name = process_parts name' in
             (new_name, true)
           )
         | Functor when Common.get_make_make_functor !config -> (
@@ -101,16 +154,28 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
               | [ last ] -> [ "Make_" ^ last ]
               | first :: rest -> first :: process_parts rest
             in
-            let new_name = process_parts name in
+            let new_name = process_parts name' in
             (new_name, true)
           )
-        | _ -> (name, false)
+        | PatternHead -> let res = map_last process_uppercase name' in (res, name' == res)
+        | PatternTail -> (match Common.get_guess_var !config with 
+            | Some v -> let regex = Re.Str.regexp v in if Re.Str.string_match regex (last name') 0 then 
+                let new_name = (map_last (fun s -> if s = last name' then process_lowercase s else s) name') in
+                self#add_name ~from:(last name') ~res:(last new_name);
+                (new_name, true)
+              else (name', false)
+            | None -> (name', false))
+        | _ -> (name', false) (* TODO TOMMOROW: NAMESPACING WITH THESE *)
+        )
           in 
       let (scope, basename) = self#split_name res in
-      if Ppxlib.Keyword.is_keyword basename && Common.get_convert_keywords !config then
+      let (res0, res1) = (if Ppxlib.Keyword.is_keyword basename && Common.get_convert_keywords !config then
         let new_basename = basename ^ "__" in
         let full_name = scope @ [ new_basename ] in
         (self#build_longident full_name, b)
       else
-        (self#build_longident res, b)
-  end
+        (self#build_longident res, b)) 
+      in 
+      if ((last name) != (Ppxlib.Longident.last_exn res0)) then Common.log ~cfg:!config ~level:High ~kind:Neutral ~msg:(Printf.sprintf "From %s, Processed name: %s in context %s" (String.concat "." name) (Ppxlib.Longident.name res0) (show_context ctx)) ();
+      (res0, res1)
+    end

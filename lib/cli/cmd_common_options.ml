@@ -54,6 +54,14 @@ let quiet : bool Term.t =
   |} 
 in
   Arg.(value & flag & info [ "q"; "quiet" ] ~doc)
+let infer_pattern : string option Term.t =
+  let doc = {|
+  A regular expression pattern to identify variable names that should be converted to lowercase in patterns.
+  This is useful for converting SML variable names (which often start with uppercase letters) to OCaml conventions.
+  The regex is applied to the last part of the variable name.
+  |}
+in
+  Arg.(value & opt (some string) None & info [ "infer-pattern" ] ~doc)
 let common_options : Common.options Cmdliner.Term.t =
-  let+ v = verb and+ (force, c) = conversion_flags and+ co = concat_output and+ q = quiet in
-  Common.mkOptions ~verbosity:(Some v) ~conversions:c ~concat_output:co ~force ~quiet:q ()
+  let+ v = verb and+ (force, c) = conversion_flags and+ co = concat_output and+ q = quiet and+ ip = infer_pattern in
+  Common.mkOptions ~verbosity:(Some v) ~conversions:c ~concat_output:co ~force ~quiet:q ~guess_var:ip ()

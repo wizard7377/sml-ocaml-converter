@@ -33,7 +33,7 @@ let mkOptions
   ?(conversions = mkConversions ()) 
   ?(concat_output = true)
   ?(force = false)
-  ?(quiet = true)
+  ?(quiet = false)
   ?(guess_var : string option = None)
   (_ : unit) : options =
   { input_file; output_file; verbosity; conversions; concat_output; force; quiet; guess_var }

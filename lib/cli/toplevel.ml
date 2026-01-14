@@ -4,6 +4,8 @@ include Cmd_common_options
 include Process
 type path = Fpath.t
 
+
+
 exception Dir_exists of path 
 exception Input_output_same_dir of path
 exception Dir_create_error of path 
@@ -32,7 +34,6 @@ let convert_file ~(input_files : path list) ?(output_file : path option)
   in
   let process = new process cfg in
   let res = process#run input_files'' in
-  let _ = res in
   res
 
 

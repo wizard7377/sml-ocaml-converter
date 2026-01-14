@@ -27,13 +27,13 @@ class process_file ?(store = Context.create []) cfg_init =
       Frontend.parse s
 
     method convert_to_ocaml (sml : sml_code) : ocaml_code =
-      Common.log ~cfg ~level:Low ~kind:Neutral ~msg:"Starting conversion from SML to OCaml...";
+      Common.log ~cfg ~level:Low ~kind:Neutral ~msg:"Starting conversion from SML to OCaml..." ();
       let ctx = Context.create [] in
-      Common.log ~cfg ~level:Debug ~kind:Neutral ~msg:"Building initial context...";
+      Common.log ~cfg ~level:Debug ~kind:Neutral ~msg:"Building initial context..." ();
       let ctx0 = Context.merge ctx (self#get_store ()) in
       let ctx1 = Context.merge ctx0 Context.basis_context in
       (* TODO Make this a flag *)
-      Common.log ~cfg ~level:Low ~kind:Neutral ~msg:"Converting SML to OCaml...";
+      Common.log ~cfg ~level:Low ~kind:Neutral ~msg:"Converting SML to OCaml..." ();
       let module BackendContext = struct
         let lexbuf = lexbuf
         let context = ctx1
@@ -55,6 +55,7 @@ class process_file ?(store = Context.create []) cfg_init =
       let ocaml_code = self#convert_to_ocaml sml_code in
       let ocaml_output' = self#print_ocaml ocaml_code in
       let ocaml_output = Polish.polish ocaml_output' in
+      let checked = Process_common.check_output ocaml_output in
       ocaml_output
   end
 

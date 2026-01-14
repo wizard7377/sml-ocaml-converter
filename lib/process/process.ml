@@ -36,20 +36,20 @@ class process ?(store = Context.create []) cfg_init =
           total <- List.length files;
           let res = self#run_files files in
           (if failures > 0 then (List.iteri (fun idx (file, err) ->
-            Common.log ~cfg ~level:High ~kind:Negative ~msg:(Printf.sprintf "#%d: %s in file %s" (idx + 1) err file)
+            Common.log ~cfg ~level:High ~kind:Negative ~msg:(Printf.sprintf "#%d: %s in file %s" (idx + 1) err file) ()
           )) errors_store else ();
           res 
           )
       | StdIn -> assert false
       with 
         e -> 
-          Common.log ~cfg ~level:High ~kind:Negative ~msg:(Printf.sprintf "%s in %s" (Printexc.to_string e) (match input with File files -> String.concat ", " files | _ -> "standard input"));
+          Common.log ~cfg ~level:High ~kind:Negative ~msg:(Printf.sprintf "%s in %s" (Printexc.to_string e) (match input with File files -> String.concat ", " files | _ -> "standard input")) ();
           has_errors <- true;
           1
 
     method private run_files (files : string list) : int =
       let res = List.mapi (fun idx file ->
-        Common.log ~cfg ~level:Medium ~kind:Neutral ~msg:(Printf.sprintf "Processing file %d of %d: %s" (idx + 1) (List.length files) file);
+        Common.log ~cfg ~level:Medium ~kind:Neutral ~msg:(Printf.sprintf "Processing file %d of %d: %s" (idx + 1) (List.length files) file) ();
         try 
           let ocaml_code = self#run_single_file file in
           let output_target = get_output_file cfg in
@@ -75,12 +75,12 @@ class process ?(store = Context.create []) cfg_init =
             raise e
       ) files in 
     let _ = if Common.get_concat_output cfg then (let _ = self#write_output @@ String.concat "\n\n\n" res in 0) else (List.iter (fun code -> let _ = self#write_output code in ()) res; 0) in
-    Common.log ~cfg ~level:High ~kind:(if failures == 0 then Positive else Negative) ~msg:(Printf.sprintf "Processing complete: %d successes, %d failures out of %d files." successes failures total);
-    Common.log ~cfg ~level:Medium ~kind:Neutral ~msg:(Printf.sprintf "Processed these files: %s" (String.concat ", " files));
+    Common.log ~cfg ~level:High ~kind:(if failures == 0 then Positive else Negative) ~msg:(Printf.sprintf "Processing complete: %d successes, %d failures out of %d files." successes failures total) ();
+    Common.log ~cfg ~level:Medium ~kind:Neutral ~msg:(Printf.sprintf "Processed these files: %s" (String.concat ", " files)) ();
     if failures = 0 then 0 else 1
 
     method private run_single_file (file : string) : string =
-          Common.log ~cfg ~level:Medium ~kind:Positive ~msg:(Printf.sprintf "Processing file: %s" file);
+          Common.log ~cfg ~level:Medium ~kind:Positive ~msg:(Printf.sprintf "Processing file: %s" file) ();
           let ic = open_in file in
           let len = in_channel_length ic in
           let content = really_input_string ic len in
@@ -88,20 +88,17 @@ class process ?(store = Context.create []) cfg_init =
           close_in ic;
           let sml_ast = process#parse_sml content in
           if Common.get_verbosity_default cfg 0 > 2 then 
-            Common.log ~cfg ~level:Low ~kind:Neutral ~msg:"Finished parsing SML AST."
-else () ;
+            Common.log ~cfg ~level:Low ~kind:Neutral ~msg:"Finished parsing SML AST." ();
           let ocaml_ast = process#convert_to_ocaml sml_ast in
           if Common.get_verbosity_default cfg 0 > 2 then 
-            Common.log ~cfg ~level:Low ~kind:Neutral ~msg:"Finished converting to OCaml AST."
-else () ;
+            Common.log ~cfg ~level:Low ~kind:Neutral ~msg:"Finished converting to OCaml AST." ();
           let ocaml_code' = process#print_ocaml ocaml_ast in
           if Common.get_verbosity_default cfg 0 > 2 then 
-            Common.log ~cfg ~level:Low ~kind:Neutral ~msg:"Finished printing OCaml code."
-else () ;
+            Common.log ~cfg ~level:Low ~kind:Neutral ~msg:"Finished printing OCaml code." ();
           let ocaml_code = Polish.polish ocaml_code' in
           if Common.get_verbosity_default cfg 0 > 2 then 
-            Common.log ~cfg ~level:Low ~kind:Neutral ~msg:"Finished polishing OCaml code."
-else () ;
-          ocaml_code 
+            Common.log ~cfg ~level:Low ~kind:Neutral ~msg:"Finished polishing OCaml code." ();
+          let checked = Process_common.check_output ~config:cfg ocaml_code in
+          let _  = checked in ocaml_code
   end
 
