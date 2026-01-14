@@ -3,13 +3,13 @@ type attr = Parsetree.attribute
 type cite = Parsetree.payload
 type 'a citer = 'a -> attr -> 'a
 
-class process_label :
-  Common.options
-  -> string
-  -> object
-       method cite :
-         'a. 'a citer -> (Lexing.position * Lexing.position) option -> 'a -> 'a
+val change_name : string -> string -> attr
+val fixed_name : string -> string -> attr
 
-       method cite_exact : 'a. 'a citer -> string -> string list -> 'a -> 'a
-       method destruct : unit -> bool
-     end
+class process_label : Common.options -> string -> object
+  method cite :
+    'a. 'a citer -> (Lexing.position * Lexing.position) option -> 'a -> 'a
+
+  method cite_exact : 'a. 'a citer -> string -> string list -> 'a -> 'a
+  method destruct : unit -> bool
+end

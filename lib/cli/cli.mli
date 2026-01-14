@@ -8,9 +8,9 @@
 
     {1 Overview}
 
-    The CLI is built using the Cmdliner library and supports multiple subcommands
-    for different conversion operations. The primary command is [file] which
-    converts individual SML source files to OCaml.
+    The CLI is built using the Cmdliner library and supports multiple
+    subcommands for different conversion operations. The primary command is
+    [file] which converts individual SML source files to OCaml.
 
     {1 Usage Example}
 
@@ -41,4 +41,5 @@ val entrypoint : unit -> unit
 
     It should be called once from the executable's main function.
 
-    @return Unit. The function will call [exit] with the appropriate exit code. *)
+    @return Unit. The function will call [exit] with the appropriate exit code.
+*)

@@ -6,7 +6,9 @@ include Test_cmd
 
 let cmd_convert : int Cmd.t =
   let doc : Cmd.info =
-    Cmd.info "shibboleth" ~doc:{|
+    Cmd.info "shibboleth"
+      ~doc:
+        {|
     A Standard ML to OCaml Converter.
 
     This tool provides functionality to convert Standard ML source files into OCaml source files.

@@ -49,13 +49,18 @@ let process_lowercase (s : string) : string = String.uncapitalize_ascii s
 let process_uppercase (s : string) : string = String.capitalize_ascii s
 let process_caps (s : string) : string = String.uppercase_ascii s
 let is_lowercase (s : string) : bool = try let fst_char = String.get s 0 in (fst_char >= 'a' && fst_char <= 'z') || fst_char = '_' with Invalid_argument _ -> false
+
+module Log = Common.Make (struct 
+    let config = Common.mkOptions ()
+    let group = "process_names"
+  end)
 class process_names (config : Common.options ref) (store : Context.t ref) =
   object (self)
     val store : Context.t ref = store
     val config : Common.options ref = config
     val mutable current_depth : int = 0 
     val mutable context_stack : string StringMap.t Stack.t = Stack.create () 
-
+    
     method push_context () : note =
       let depth = current_depth + 1 in
       current_depth <- depth ;
@@ -135,9 +140,9 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
       assert (not @@ String.starts_with "(" @@ List.nth name 0);
       assert (not @@ String.ends_with ")" @@ List.nth name (List.length name - 1));
       let name' = map_last (fun s -> self#get_name s) name in
-      let (res, b) = 
+      let (res, b) =
         (match ctx with
-        | Type when Common.get_rename_types !config -> (
+        | Type when Common.is_flag_enabled (Common.get_rename_types !config) -> (
             let rec process_parts parts =
               match parts with
               | [] -> []
@@ -147,7 +152,7 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
             let new_name = process_parts name' in
             (new_name, true)
           )
-        | Functor when Common.get_make_make_functor !config -> (
+        | Functor when Common.is_flag_enabled (Common.get_make_make_functor !config) -> (
             let rec process_parts parts =
               match parts with
               | [] -> []
@@ -169,13 +174,15 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
         )
           in 
       let (scope, basename) = self#split_name res in
-      let (res0, res1) = (if Ppxlib.Keyword.is_keyword basename && Common.get_convert_keywords !config then
+      let (res0, res1) = (if Ppxlib.Keyword.is_keyword basename && Common.is_flag_enabled (Common.get_convert_keywords !config) then
         let new_basename = basename ^ "__" in
         let full_name = scope @ [ new_basename ] in
         (self#build_longident full_name, b)
       else
         (self#build_longident res, b)) 
       in 
-      if ((last name) != (Ppxlib.Longident.last_exn res0)) then Common.log ~cfg:!config ~level:High ~kind:Neutral ~msg:(Printf.sprintf "From %s, Processed name: %s in context %s" (String.concat "." name) (Ppxlib.Longident.name res0) (show_context ctx)) ();
+      if ((last name) != (Ppxlib.Longident.last_exn res0)) then Log.log_with ~cfg:!config ~level:Low ~kind:Neutral ~msg:(Printf.sprintf "From %s, Processed name: %s in context %s" (String.concat "." name) (Ppxlib.Longident.name res0) (show_context ctx)) ();
       (res0, res1)
     end
+
+

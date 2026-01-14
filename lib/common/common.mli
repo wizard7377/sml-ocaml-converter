@@ -65,5 +65,15 @@ val trd3 : 'a * 'b * 'c -> 'c
     @param triple A 3-tuple
     @return The third element *)
 
+val last : 'a list -> 'a
+
+(** [last lst] returns the last element of a list.
+
+    @param lst The input list
+    @return The last element of the list
+    @raise Failure if the list is empty *)
+
+val map_last : ('a -> 'a) -> 'a list -> 'a list
+
 include module type of Options
 include module type of Logger

@@ -6,6 +6,8 @@ DEV ?=
 BUILD_DOC?=odig odoc
 DUNE_OPTS += $(if $(DEV), --profile dev, --profile release)
 TEST_OPTS+=
+
+
 .PHONY: test build install clean docs test_files format
 
 
@@ -32,3 +34,6 @@ format:
 
 release: 
 	rm ./*.opam 
+
+
+include examples/TestSetup.mk

@@ -2,9 +2,9 @@
 
     {1 Synopsis}
 
-    This module implements the [file] subcommand for converting individual
-    SML source files to OCaml. It is the primary command for single-file
-    conversion operations.
+    This module implements the [file] subcommand for converting individual SML
+    source files to OCaml. It is the primary command for single-file conversion
+    operations.
 
     {1 Overview}
 
@@ -33,11 +33,10 @@ val cmd_convert_file : int Cmdliner.Cmd.t
 
 (** [cmd_convert_file] is the Cmdliner command definition for file conversion.
 
-    This command can be added to the CLI's command group to enable
-    single-file conversion functionality.
+    This command can be added to the CLI's command group to enable single-file
+    conversion functionality.
 
     @return A Cmdliner command that returns an exit code (0 for success) *)
-
 
 val cmd_convert_group : int Cmdliner.Cmd.t
 

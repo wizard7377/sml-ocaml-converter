@@ -5,6 +5,11 @@ open Astlib.Pprintast
 type input = Common.source
 type output = Common.target
 
+module Log = Common.Make (struct
+  let config = Common.mkOptions ()
+  let group = "process"
+end)
+
 class process ?(store = Context.create []) cfg_init =
   object (self)
     val mutable cfg : options = cfg_init
@@ -18,7 +23,8 @@ class process ?(store = Context.create []) cfg_init =
     method get_config () = cfg
     method get_store () = store
     method set_store s = store <- s
-    method private write_output (content : string) : bool = 
+
+    method private write_output (content : string) : bool =
       match get_output_file cfg with
       | FileOut path ->
           let oc = open_out path in
@@ -29,76 +35,118 @@ class process ?(store = Context.create []) cfg_init =
           print_string content;
           true
       | Silent -> true
+
     method run (input : input) : int =
-      try 
-      match input with
-      | File files ->
-          total <- List.length files;
-          let res = self#run_files files in
-          (if failures > 0 then (List.iteri (fun idx (file, err) ->
-            Common.log ~cfg ~level:High ~kind:Negative ~msg:(Printf.sprintf "#%d: %s in file %s" (idx + 1) err file) ()
-          )) errors_store else ();
-          res 
-          )
-      | StdIn -> assert false
-      with 
-        e -> 
-          Common.log ~cfg ~level:High ~kind:Negative ~msg:(Printf.sprintf "%s in %s" (Printexc.to_string e) (match input with File files -> String.concat ", " files | _ -> "standard input")) ();
-          has_errors <- true;
-          1
+      try
+        match input with
+        | File files ->
+            total <- List.length files;
+            let res = self#run_files files in
+            if failures > 0 then
+              (List.iteri (fun idx (file, err) ->
+                   Log.log ~level:High ~kind:Negative
+                     ~msg:
+                       (Printf.sprintf "#%d: %s in file %s" (idx + 1) err file)
+                     ()))
+                errors_store
+            else ();
+            res
+        | StdIn -> assert false
+      with e ->
+        Log.log ~level:High ~kind:Negative
+          ~msg:
+            (Printf.sprintf "%s in %s" (Printexc.to_string e)
+               (match input with
+               | File files -> String.concat ", " files
+               | _ -> "standard input"))
+          ();
+        has_errors <- true;
+        1
 
     method private run_files (files : string list) : int =
-      let res = List.mapi (fun idx file ->
-        Common.log ~cfg ~level:Medium ~kind:Neutral ~msg:(Printf.sprintf "Processing file %d of %d: %s" (idx + 1) (List.length files) file) ();
-        try 
-          let ocaml_code = self#run_single_file file in
-          let output_target = get_output_file cfg in
-          (match output_target with
-          | FileOut path ->
-              let contents = Bos.OS.File.read (Fpath.v path) in
-              let new_contents = match contents with
-              | Error _ -> 
-                ocaml_code
-              | Ok existing_content ->
-                existing_content ^ "\n\n" ^ ocaml_code in
-                Bos.OS.File.write (Fpath.v path) new_contents |> ignore
-          | StdOut ->
-              print_string ocaml_code
+      let res =
+        List.mapi
+          (fun idx file ->
+            Log.log ~level:Medium ~kind:Neutral
+              ~msg:
+                (Printf.sprintf "Processing file %d of %d: %s" (idx + 1)
+                   (List.length files) file)
+              ();
+            try
+              let ocaml_code = self#run_single_file file in
+              let output_target = get_output_file cfg in
+              (match output_target with
+              | FileOut path ->
+                  let contents = Bos.OS.File.read (Fpath.v path) in
+                  let new_contents =
+                    match contents with
+                    | Error _ -> ocaml_code
+                    | Ok existing_content ->
+                        existing_content ^ "\n\n" ^ ocaml_code
+                  in
+                  Bos.OS.File.write (Fpath.v path) new_contents |> ignore
+              | StdOut -> print_string ocaml_code
               | Silent -> ());
-          successes <- successes + 1;
-          ocaml_code
-        with 
-          e -> 
-            errors_store <- (file, Printexc.to_string e) :: errors_store;
-            has_errors <- true;
-            failures <- failures + 1;
-            raise e
-      ) files in 
-    let _ = if Common.get_concat_output cfg then (let _ = self#write_output @@ String.concat "\n\n\n" res in 0) else (List.iter (fun code -> let _ = self#write_output code in ()) res; 0) in
-    Common.log ~cfg ~level:High ~kind:(if failures == 0 then Positive else Negative) ~msg:(Printf.sprintf "Processing complete: %d successes, %d failures out of %d files." successes failures total) ();
-    Common.log ~cfg ~level:Medium ~kind:Neutral ~msg:(Printf.sprintf "Processed these files: %s" (String.concat ", " files)) ();
-    if failures = 0 then 0 else 1
+              successes <- successes + 1;
+              ocaml_code
+            with e ->
+              errors_store <- (file, Printexc.to_string e) :: errors_store;
+              has_errors <- true;
+              failures <- failures + 1;
+              raise e)
+          files
+      in
+      let _ =
+        if Common.get_concat_output cfg then
+          let _ = self#write_output @@ String.concat "\n\n\n" res in
+          0
+        else (
+          List.iter
+            (fun code ->
+              let _ = self#write_output code in
+              ())
+            res;
+          0)
+      in
+      Log.log ~level:High
+        ~kind:(if failures == 0 then Positive else Negative)
+        ~msg:
+          (Printf.sprintf
+             "Processing complete: %d successes, %d failures out of %d files."
+             successes failures total)
+        ();
+      Log.log ~level:Medium ~kind:Neutral
+        ~msg:
+          (Printf.sprintf "Processed these files: %s" (String.concat ", " files))
+        ();
+      if failures = 0 then 0 else 1
 
     method private run_single_file (file : string) : string =
-          Common.log ~cfg ~level:Medium ~kind:Positive ~msg:(Printf.sprintf "Processing file: %s" file) ();
-          let ic = open_in file in
-          let len = in_channel_length ic in
-          let content = really_input_string ic len in
-          let process = new process_file cfg in
-          close_in ic;
-          let sml_ast = process#parse_sml content in
-          if Common.get_verbosity_default cfg 0 > 2 then 
-            Common.log ~cfg ~level:Low ~kind:Neutral ~msg:"Finished parsing SML AST." ();
-          let ocaml_ast = process#convert_to_ocaml sml_ast in
-          if Common.get_verbosity_default cfg 0 > 2 then 
-            Common.log ~cfg ~level:Low ~kind:Neutral ~msg:"Finished converting to OCaml AST." ();
-          let ocaml_code' = process#print_ocaml ocaml_ast in
-          if Common.get_verbosity_default cfg 0 > 2 then 
-            Common.log ~cfg ~level:Low ~kind:Neutral ~msg:"Finished printing OCaml code." ();
-          let ocaml_code = Polish.polish ocaml_code' in
-          if Common.get_verbosity_default cfg 0 > 2 then 
-            Common.log ~cfg ~level:Low ~kind:Neutral ~msg:"Finished polishing OCaml code." ();
-          let checked = Process_common.check_output ~config:cfg ocaml_code in
-          let _  = checked in ocaml_code
+      Log.log ~level:Medium ~kind:Positive
+        ~msg:(Printf.sprintf "Processing file: %s" file)
+        ();
+      let ic = open_in file in
+      let len = in_channel_length ic in
+      let content = really_input_string ic len in
+      let process = new process_file cfg in
+      close_in ic;
+      let sml_ast = process#parse_sml content in
+      if Common.get_verbosity_default cfg 0 > 2 then
+        Log.log_with ~cfg ~level:Low ~kind:Neutral
+          ~msg:"Finished parsing SML AST." ();
+      let ocaml_ast = process#convert_to_ocaml sml_ast in
+      if Common.get_verbosity_default cfg 0 > 2 then
+        Log.log_with ~cfg ~level:Low ~kind:Neutral
+          ~msg:"Finished converting to OCaml AST." ();
+      let ocaml_code' = process#print_ocaml ocaml_ast in
+      if Common.get_verbosity_default cfg 0 > 2 then
+        Log.log_with ~cfg ~level:Low ~kind:Neutral
+          ~msg:"Finished printing OCaml code." ();
+      let ocaml_code = Polish.polish ocaml_code' in
+      if Common.get_verbosity_default cfg 0 > 2 then
+        Log.log_with ~cfg ~level:Low ~kind:Neutral
+          ~msg:"Finished polishing OCaml code." ();
+      let checked = Process_common.check_output ~config:cfg ocaml_code in
+      let _ = checked in
+      ocaml_code
   end
-

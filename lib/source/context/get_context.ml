@@ -1,4 +1,5 @@
-(** Traverse the AST to collect constructor information from con_specification nodes *)
+(** Traverse the AST to collect constructor information from con_specification
+    nodes *)
 
 open Ast
 
@@ -16,12 +17,10 @@ let rec idx_to_string (idx : idx) : string =
       |> List.map (fun n -> idx_to_string (unbox_node n))
       |> String.concat "."
 
-(** Process a con_specification node and collect constructor info.
-    Parameters:
+(** Process a con_specification node and collect constructor info. Parameters:
     - path: current module path context
     - type_name: the name of the datatype this constructor belongs to
-    - con_spec: the constructor specification node
-*)
+    - con_spec: the constructor specification node *)
 let rec process_con_specification ~(path : string list) ~(type_name : string)
     (con_spec : con_specification node) : Info.t =
   match unbox_node con_spec with
