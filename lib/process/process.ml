@@ -34,7 +34,7 @@ class process ?(store = Context.create []) cfg_init =
       | StdOut ->
           print_string content;
           true
-      | Silent -> true
+      | Silent -> print_string content ; true
 
     method run (input : input) : int =
       try
@@ -86,7 +86,7 @@ class process ?(store = Context.create []) cfg_init =
                   in
                   Bos.OS.File.write (Fpath.v path) new_contents |> ignore
               | StdOut -> print_string ocaml_code
-              | Silent -> ());
+              | Silent -> print_string ocaml_code);
               successes <- successes + 1;
               ocaml_code
             with e ->

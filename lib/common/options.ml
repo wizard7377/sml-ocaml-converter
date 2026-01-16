@@ -54,7 +54,7 @@ type options = {
 
 let mkOptions ?(input_file = StdIn) ?(output_file = Silent) ?(verbosity = None)
     ?(conversions = mkConversions ()) ?(concat_output = true) ?(force = false)
-    ?(quiet = false) ?(guess_var : string option = None)
+    ?(quiet = false) ?(guess_var : string option = Some "[A-Z]")
     ?(debug : string list = []) (_ : unit) : options =
   {
     input_file;

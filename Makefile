@@ -6,7 +6,7 @@ DEV ?=
 BUILD_DOC?=odig odoc
 DUNE_OPTS += $(if $(DEV), --profile dev, --profile release)
 TEST_OPTS+=
-
+DUNE_ROOT:=.
 
 .PHONY: test build install clean docs test_files format
 
@@ -16,7 +16,10 @@ test: build
 	@$(DUNE) exec $(DUNE_OPTS) $(UNIT_TEST_EXE) -- $(TEST_OPTS)
 
 test_files: 
-	./tests.sh $(TEST_OPTS)
+	DUNE_ROOT=1 dune runtest tests.t
+test_group:
+	dune exec shibboleth -- group --input $(DUNE_ROOT)/examples/twelf/src --force --output $(DUNE_ROOT)/examples/output/twelf     
+# DUNE_ROOT=1 dune runtest files.t
 build: 
 	@$(DUNE) build $(DUNE_OPTS) 
 

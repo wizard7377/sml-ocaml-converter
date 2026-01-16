@@ -1,7 +1,6 @@
 (library
  (public_name shibboleth.backend)
  (name backend)
- (inline_tests)
  (libraries re ast common context helpers ppxlib)
  (preprocess
   (pps ppxlib.metaquot)))

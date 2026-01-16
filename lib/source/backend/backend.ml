@@ -24,6 +24,7 @@ open Backend_sig
 include Helpers
 open Common
 module Debug = Ppxlib.Pprintast
+module ContextLib = Context  (* Library Context module before shadowing *)
 
 module Make (Context : CONTEXT) (Config : CONFIG) = struct
   let config = Config.config
@@ -39,6 +40,16 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
   let namer : Process_names.process_names =
     new Process_names.process_names (ref Config.config) (ref Context.context)
 
+  (* Track constructor names as they're declared *)
+  module StringSet = Set.Make(String)
+  let constructor_names : StringSet.t ref =
+    ref (StringSet.of_list [
+      "nil"; "SOME"; "NONE"; "true"; "false";
+      "LESS"; "EQUAL"; "GREATER"; "::";
+      "Chr"; "Div"; "Domain"; "Empty"; "Fail";
+      "Match"; "Option"; "Overflow"; "Size"; "Span"; "Subscript"
+    ])
+
   let renamed (original : string) (final : string) : string * string list =
     ("sml.renamed", [ original; final ])
 
@@ -51,7 +62,15 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
   (** Helper to get a Ppxlib.Longident.t from the name processor *)
   let process_name_to_longident ~(ctx : Process_names.context)
       (name_parts : string list) : Ppxlib.Longident.t =
-    namer#process_name ~ctx ~name:name_parts |> fst
+    let (res, changed) = namer#process_name ~ctx ~name:name_parts in 
+    if changed then 
+      Log.log ~level:Debug ~kind:Neutral
+        ~msg:
+          (Printf.sprintf "Renamed %s to %s"
+             (String.concat "." name_parts)
+             (Ppxlib.Longident.last_exn res |> Format.asprintf "%s"))
+        ();
+    res
 
   (** Helper to get a string from the name processor (uses last component) *)
   let process_name_to_string ~(ctx : Process_names.context)
@@ -151,8 +170,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     let res = f () in
     namer#pop_context note;
     res
-
-  let rec idx_to_name (idx : Ast.idx) : string list =
+  
+  let rec idx_to_name ?(ctx=Empty) (idx : Ast.idx) : string list =
     match idx with
     | Ast.IdxIdx s -> [ s.value ]
     | Ast.IdxVar s -> [ s.value ]
@@ -160,7 +179,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | Ast.IdxNum s -> [ s.value ]
     | Ast.IdxLong parts ->
         List.flatten
-          (List.map (fun (p : Ast.idx Ast.node) -> idx_to_name p.value) parts)
+          (List.map (fun (p : Ast.idx Ast.node) -> idx_to_name ~ctx p.value) parts)
 
   (** Process a type variable name, preserving the ' prefix *)
   let process_type_var_name (s : string) : Parsetree.core_type =
@@ -276,7 +295,6 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       @param ty The SML type to convert
       @return The corresponding OCaml core type *)
   let rec process_type (ty : Ast.typ node) : Parsetree.core_type =
-    scope_out @@ fun () ->
     trace_part ~level:2 ~ast:"typ" ~msg:"" (* ~msg:(Ast.show_typ ty) *)
       ~value:(fun () -> process_type_value ty)
 
@@ -376,7 +394,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   let rec process_exp (expression : Ast.expression Ast.node) :
       Parsetree.expression =
-    scope_out @@ fun () ->
+    
     labeller#cite Helpers.Attr.expression expression.pos
     @@
     match expression.value with
@@ -384,10 +402,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | ExpApp (e1, e2) when is_operator e2 ->
         let op_name =
           match e2.value with
-          | ExpIdx idx -> idx_to_name idx.value
+          | ExpIdx idx -> idx_to_name ~ctx:Operator idx.value
           | ParenExp e -> (
               match e.value with
-              | ExpIdx idx -> idx_to_name idx.value
+              | ExpIdx idx -> idx_to_name ~ctx:Operator idx.value
               | _ -> failwith "Expected operator identifier")
           | _ -> failwith "Expected operator identifier"
         in
@@ -400,17 +418,25 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         let e2' = process_exp e2 in
         Builder.pexp_apply e1' [ (Nolabel, e2') ]
     | ExpIdx idx ->
-        let scoped_name =
-          if Common.engaged @@ Common.get_convert_names config then
-            Common.map_last namer#get_name (idx_to_name idx.value)
-          else idx_to_name idx.value
+        let scoped_name = idx_to_name ~ctx:Empty idx.value in
+        (* Determine if this is a constructor or variable *)
+        let ctx =
+          match scoped_name with
+          | [] -> Value
+          | name_parts ->
+              let name_str = String.concat "." name_parts in
+              let last_part = List.nth name_parts (List.length name_parts - 1) in
+              (* Check if this name was declared as a constructor *)
+              let is_registered_constructor = StringSet.mem name_str !constructor_names in
+              if is_registered_constructor then Constructor
+              else if is_variable_identifier last_part then Value
+              else Constructor
         in
-        let name_longident = process_name_to_longident ~ctx:Value scoped_name in
-
+        let name_longident = process_name_to_longident ~ctx scoped_name in
         Builder.pexp_ident (ghost name_longident)
     | InfixApp (e1, op, e2) ->
         let op_longident =
-          process_name_to_longident ~ctx:Operator (idx_to_name op.value)
+          process_name_to_longident ~ctx:Operator (idx_to_name ~ctx:Operator op.value)
         in
         Builder.pexp_apply
           (Builder.pexp_ident (ghost op_longident))
@@ -427,7 +453,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
               match r.Ast.value with
               | Ast.Row (lab, expression, _) ->
                   let lab_longident =
-                    process_name_to_longident ~ctx:Label (idx_to_name lab.value)
+                    process_name_to_longident ~ctx:Label (idx_to_name ~ctx:Label lab.value)
                   in
                   (ghost lab_longident, process_exp expression))
             rows
@@ -436,7 +462,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | RecordSelector lab ->
         (* #label -> fun r -> r.label *)
         let lab_str =
-          process_name_to_string ~ctx:Label (idx_to_name lab.value)
+          process_name_to_string ~ctx:Label (idx_to_name ~ctx:Label lab.value)
         in
         let r_pat = Builder.ppat_var (ghost "r") in
         let r_exp = Builder.pexp_ident (ghost (Ppxlib.Longident.Lident "r")) in
@@ -465,7 +491,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | LetExp ([], exps) ->
         process_exp { value = SeqExp exps; pos = expression.pos }
     | LetExp (dec :: decs, exps) -> (
-        scope_out @@ fun () ->
+        
         (* First, flatten SeqDec to handle each declaration individually *)
         let flattened_decs =
           let rec flatten_dec d =
@@ -687,7 +713,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       @param m The match clause(s)
       @return A list of OCaml case expressions *)
   and process_matching (m : Ast.matching) : Parsetree.case list =
-    scope_out @@ fun () ->
+    
     match m with
     | Case (pat, expression, rest_opt) -> (
         let case_here =
@@ -766,11 +792,11 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
               let name_longident = process_name_to_longident ~ctx id_name in
               Builder.ppat_construct (ghost name_longident) None
             else
-              let name_str = process_name_to_string ~ctx:Value id_name in
+              let name_str = process_name_to_string ~ctx:PatternTail id_name in
               Builder.ppat_var (ghost name_str))
     | PatApp (wo, p) ->
         (* Constructor application: SOME x *)
-        let const_name = process_with_op wo.value in
+        let const_name = process_with_op ~ctx:Constructor wo.value in
         let arg_pat = process_pat p in
         Builder.ppat_construct
           (ghost (process_name_to_longident ~ctx:Constructor [ const_name ]))
@@ -810,7 +836,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | PatTyp (p, t) -> Builder.ppat_constraint (process_pat p) (process_type t)
     | PatAs (wo, t_opt, p) ->
         (* Layered pattern: x as SOME y *)
-        let var_str = process_with_op wo.value in
+        let var_str = process_with_op ~ctx:Value wo.value in
         let inner_pat = process_pat p in
         let final_pat =
           match t_opt with
@@ -979,7 +1005,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         (* Get the function name from the first match *)
         let fname_str =
           match fm.value with
-          | FunMatchPrefix (wo, _, _, _, _) -> process_with_op wo.value
+          | FunMatchPrefix (wo, _, _, _, _) -> process_with_op ~ctx:Value wo.value
           | FunMatchInfix (_, id, _, _, _, _) ->
               process_name_to_string ~ctx:Value (idx_to_name id.value)
           | FunMatchLow (_, id, _, _, _, _, _) ->
@@ -1189,11 +1215,15 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       Parsetree.constructor_declaration list =
     match cb with
     | ConBind (id, ty_opt, rest_opt) ->
+        let original_name = idx_to_name id.value in
+        let original_name_str = String.concat "." original_name in
+        (* Register this constructor name *)
+        constructor_names := StringSet.add original_name_str !constructor_names;
         let name_str =
-          process_name_to_string ~ctx:Constructor (idx_to_name id.value)
+          process_name_to_string ~ctx:Constructor original_name
         in
         Log.log ~level:Common.Debug ~kind:Neutral
-          ~msg:(Printf.sprintf "Processing constructor: %s" name_str)
+          ~msg:(Printf.sprintf "Processing constructor: %s (original: %s)" name_str original_name_str)
           ();
         let args =
           match ty_opt with
@@ -1233,8 +1263,12 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       Parsetree.extension_constructor list =
     match eb with
     | ExnBind (id, ty_opt, rest_opt) ->
+        let original_name = idx_to_name id.value in
+        let original_name_str = String.concat "." original_name in
+        (* Register this exception constructor name *)
+        constructor_names := StringSet.add original_name_str !constructor_names;
         let name_str =
-          process_name_to_string ~ctx:Constructor (idx_to_name id.value)
+          process_name_to_string ~ctx:Constructor original_name
         in
         let args =
           match ty_opt with
@@ -1271,14 +1305,15 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
       The [op] keyword in SML removes infix status: [op +] is prefix [+].
 
+      @param ctx The context for name processing (Constructor, Value, etc.)
       @param wo The identifier with or without [op]
       @return The processed identifier *)
-  and process_with_op (wo : Ast.with_op) : string =
+  and process_with_op ~(ctx : Process_names.context) (wo : Ast.with_op) : string =
     match wo with
     | WithOp id ->
-        process_name_to_string ~ctx:Constructor (idx_to_name id.value)
+        process_name_to_string ~ctx (idx_to_name id.value)
     | WithoutOp id ->
-        process_name_to_string ~ctx:Constructor (idx_to_name id.value)
+        process_name_to_string ~ctx (idx_to_name id.value)
 
   (** {1 Structure Processing}
 
@@ -1759,7 +1794,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       @return List of OCaml module declarations *)
   and process_str_specification (sd : Ast.str_specification) :
       Parsetree.module_declaration list =
-    trace_part ~level:2 ~ast:"str_specification"
+    let note = namer#push_context () in   
+    let res = trace_part ~level:2 ~ast:"str_specification"
       ~msg:"" (* ~msg:(Ast.show_str_specification sd) *) ~value:(fun () ->
         match sd with
         | StrDesc (id, s, rest_opt) ->
@@ -1778,6 +1814,9 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
               | Some r -> process_str_specification r.value
             in
             mdecl :: rest)
+          in 
+          let () = namer#pop_context note in
+          res
 
   (** {1 Program Processing}
 
@@ -1877,7 +1916,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       @param prog The SML program to convert
       @return An OCaml structure (list of structure items) *)
   and process_prog (prog : Ast.prog) : Parsetree.structure =
-    trace_part ~level:5 ~ast:"prog" ~msg:"" ~value:(fun () ->
+    let note = namer#push_context () in 
+    let res = trace_part ~level:5 ~ast:"prog" ~msg:"" ~value:(fun () ->
         match prog with
         | ProgDec declaration -> dec_to_structure_items declaration.value
         | ProgFun fb ->
@@ -1887,7 +1927,9 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
             let mtdecls = process_signature_binding sb.value in
             List.map (fun mtd -> Builder.pstr_modtype mtd) mtdecls
         | ProgSeq (p1, p2) -> process_prog p1.value @ process_prog p2.value
-        | ProgEmpty -> [])
+        | ProgEmpty -> []) in 
+    let () = namer#pop_context note in
+    res
 
   (** Convert SML functor bindings (parameterized modules).
 
@@ -1898,7 +1940,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       @return List of OCaml module bindings *)
   and process_functor_binding (fb : Ast.functor_binding) :
       Parsetree.module_binding list =
-    trace_part ~level:2 ~ast:"functor_binding"
+    let note = namer#push_context () in
+    let res = trace_part ~level:2 ~ast:"functor_binding"
       ~msg:"" (* ~msg:(Ast.show_functor_binding fb) *) ~value:(fun () ->
         let res =
           match fb with
@@ -2040,6 +2083,9 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
               binding :: rest
         in
         res)
+      in 
+    let () = namer#pop_context note in
+    res
 
   (** Convert SML signature bindings.
 
