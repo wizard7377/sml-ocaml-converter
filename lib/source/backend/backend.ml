@@ -26,6 +26,11 @@ open Common
 module Debug = Ppxlib.Pprintast
 module ContextLib = Context  (* Library Context module before shadowing *)
 
+(* Re-export helper modules for use within the functor *)
+module Idx_utils = Idx_utils
+module Type_var_utils = Type_var_utils
+module Capital_utils = Capital_utils
+
 module Make (Context : CONTEXT) (Config : CONFIG) = struct
   let config = Config.config
   let quoter = Ppxlib.Expansion_helpers.Quoter.create ()
@@ -115,84 +120,15 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         res
     | _ -> value ()
 
-  let debug_ocaml ~(format : Format.formatter -> 'a -> unit) (node : 'a) : unit
-      =
-    match get_verbosity config with
-    | Some v when v > 1 -> format Format.err_formatter node
-    | _ -> ()
-
-  (* Deprecated: Use process_name_to_longident instead *)
-
-  (** Convert a string identifier to a Ppxlib.Longident.t. Handles dotted paths
-      (e.g., "A.B.C" becomes Ldot(Ldot(Lident "A", "B"), "C")) *)
-  let string_to_longident (s : string) : Ppxlib.Longident.t =
-    match String.split_on_char '.' s with
-    | [] -> raise (mkBadAst "Empty identifier string")
-    | [ x ] -> Ppxlib.Longident.Lident x
-    | first :: rest ->
-        List.fold_left
-          (fun acc part -> Ppxlib.Longident.Ldot (acc, part))
-          (Ppxlib.Longident.Lident first) rest
-
-  (** Check if an identifier represents a variable (starts with lowercase or
-      underscore) rather than a constructor (starts with uppercase) *)
-  let is_variable_identifier (s : string) : bool =
-    if String.length s = 0 then false
-    else
-      let first_char = String.get s 0 in
-      (first_char >= 'a' && first_char <= 'z') || first_char = '_'
-
-  (** Extract a string from an idx value *)
-  let rec idx_to_string (idx : Ast.idx) : string =
-    match idx with
-    | Ast.IdxIdx s -> s.value
-    | Ast.IdxVar s -> s.value
-    | Ast.IdxLab s -> s.value
-    | Ast.IdxNum s -> s.value
-    | Ast.IdxLong parts ->
-        (* Convert long identifier to dot-separated string *)
-        String.concat "."
-          (List.map (fun (p : Ast.idx Ast.node) -> idx_to_string p.value) parts)
-
-  let process_lowercase (s : string) : string = String.uncapitalize_ascii s
-  let process_uppercase (s : string) : string = String.capitalize_ascii s
-  let process_caps (s : string) : string = String.uppercase_ascii s
-
-  type capital = Lowercase | Uppercase | Caps
-
-  let get_capital (s : string) : capital =
-    if s == process_caps s then Caps
-    else if s == process_uppercase s then Uppercase
-    else Lowercase
-
-  let scope_out (f : unit -> 'a) : 'a =
-    let note = namer#push_context () in
-    let res = f () in
-    namer#pop_context note;
-    res
+  (* Use helper modules for common operations *)
+  let is_variable_identifier = Capital_utils.is_variable_identifier
+  let idx_to_string = Idx_utils.idx_to_string
+  let process_lowercase = Capital_utils.process_lowercase
+  let process_uppercase = Capital_utils.process_uppercase
   
   let rec idx_to_name ?(ctx=Empty) (idx : Ast.idx) : string list =
-    match idx with
-    | Ast.IdxIdx s -> [ s.value ]
-    | Ast.IdxVar s -> [ s.value ]
-    | Ast.IdxLab s -> [ s.value ]
-    | Ast.IdxNum s -> [ s.value ]
-    | Ast.IdxLong parts ->
-        List.flatten
-          (List.map (fun (p : Ast.idx Ast.node) -> idx_to_name ~ctx p.value) parts)
-
-  (** Process a type variable name, preserving the ' prefix *)
-  let process_type_var_name (s : string) : Parsetree.core_type =
-    (* Type variables in SML can be 'a or ''a (equality type vars) *)
-    (* Strip leading quotes and process the name *)
-    let stripped =
-      if String.starts_with ~prefix:"''" s then
-        String.sub s 2 (String.length s - 2)
-      else if String.starts_with ~prefix:"'" s then
-        String.sub s 1 (String.length s - 1)
-      else s
-    in
-    Builder.ptyp_var stripped
+    ignore ctx;  (* ctx parameter kept for backward compatibility *)
+    Idx_utils.idx_to_name idx
 
   (** Main entry point for converting a complete SML program.
 
@@ -214,81 +150,20 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
       The main difference is that SML records are converted to OCaml objects. *)
 
-  (** Convert an SML type to an OCaml core type.
+  (* Instantiate type processor module with dependencies *)
+  module TypeDeps = struct
+    let labeller = labeller
+    let process_name_to_longident = process_name_to_longident
+    let process_name_to_string = process_name_to_string
+    let ghost = ghost
+  end
+  module Types = Backend_types.Make(TypeDeps)
 
-    This is the main type conversion function that handles all SML type forms:
-    - Type variables (['a], [''a] for equality types)
-    - Type constructors ([int], ['a list], [(int, string) either])
-    - Function types ([int -> bool])
-    - Tuple types ([int * string * bool])
-    - Record types ([{x: int, y: string}] → object types)
+  (** Convert an SML type to an OCaml core type. Delegated to Backend_types. *)
+  let process_type_value = Types.process_type_value
 
-    @param ty The SML type to convert
-    @return The corresponding OCaml {!Parsetree.core_type}
-
-    @example
-    {[
-      (* SML: 'a -> 'a list *)
-      process_type_value (TypFun (TypVar "a", TypCon ([TypVar "a"], "list")))
-      (* → OCaml Parsetree for: 'a -> 'a list *)
-    ]} *)
-  let rec process_type_value (ty : Ast.typ Ast.node) : Parsetree.core_type =
-    (labeller#cite Helpers.Attr.core_type ty.pos)
-      (match ty.value with
-      | TypVar name -> (
-          match name.value with
-          | Ast.IdxVar v -> process_type_var_name v.value
-          | _ -> failwith "Expected type variable")
-      | TypCon (args, head) ->
-          let head_longident =
-            process_name_to_longident ~ctx:Type (idx_to_name head.value)
-          in
-          let args' = List.map (fun arg -> process_type_value arg) args in
-          Builder.ptyp_constr (ghost head_longident) args'
-      | TypPar ty' ->
-          labeller#cite Helpers.Attr.core_type ty.pos (process_type_value ty')
-      | TypFun (ty1, ty2) ->
-          let ty1', ty2' = (process_type_value ty1, process_type_value ty2) in
-          Builder.ptyp_arrow Nolabel ty1' ty2'
-      | TypTuple tys ->
-          Builder.ptyp_tuple (List.map (fun t -> process_type_value t) tys)
-      | TypRecord fields ->
-          let fields' =
-            List.flatten
-              (List.map (fun f -> process_object_field_type f) fields)
-          in
-          Builder.ptyp_object fields' Closed)
-
-  (** Convert SML record type rows to OCaml object fields.
-
-    SML record types like [{name: string, age: int}] are converted to
-    OCaml object types like [< name: string; age: int >].
-
-    @param field A single type row (field) and its optional continuation
-    @return A list of OCaml object fields (tags with their types)
-
-    @example
-    {[
-      (* SML: {x: int, y: int} *)
-      process_object_field_type (TypRow ("x", TypCon ([], "int"),
-                                         Some (TypRow ("y", TypCon ([], "int"), None))))
-      (* → [Otag("x", int_type); Otag("y", int_type)] *)
-    ]} *)
-  and process_object_field_type (field : Ast.typ_row Ast.node) :
-      Parsetree.object_field list =
-    List.map (labeller#cite Helpers.Attr.object_field field.pos)
-    @@
-    match field.value with
-    | Ast.TypRow (name, ty, rest) -> (
-        let label_name =
-          process_name_to_string ~ctx:Label (idx_to_name name.value)
-        in
-        let here : Parsetree.object_field =
-          Builder.otag (ghost label_name) (process_type_value ty)
-        in
-        match rest with
-        | Some rest' -> here :: process_object_field_type rest'
-        | None -> [ here ])
+  (** Convert SML record type rows to OCaml object fields. Delegated to Backend_types. *)
+  let process_object_field_type = Types.process_object_field_type
 
   (** Wrapper function for {!process_type_value}.
 
@@ -308,43 +183,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       - SML has word literals ([0w42]), OCaml doesn't (need conversion)
       - SML character literals use [#"c"], OCaml uses ['c'] *)
 
-  (** Convert an SML constant to an OCaml constant.
-
-      Handles:
-      - Integer constants (decimal and hexadecimal)
-      - Word constants (unsigned integers, SML-specific)
-      - Floating-point constants
-      - Character constants ([#"a"] → ['a'])
-      - String constants
-
-      @param constant The SML constant to convert
-      @return The corresponding OCaml {!Parsetree.constant}
-      @raise Assert_failure For word constants (not supported in OCaml) *)
-  let rec process_con (constant : Ast.constant Ast.node) : Parsetree.constant =
-    match constant.value with
-    | ConInt i ->
-        (* SML uses ~ for negation, OCaml uses - *)
-        let i' = String.map (function '~' -> '-' | c -> c) i.value in
-        Pconst_integer (i', None)
-    | ConWord w ->
-        (* Words are unsigned integers in SML, not directly supported in OCaml *)
-        (* Convert to regular integer, stripping 0w or 0wx prefix *)
-        let w' =
-          if String.starts_with ~prefix:"0wx" w.value then
-            "0x" ^ String.sub w.value 3 (String.length w.value - 3)
-          else if String.starts_with ~prefix:"0w" w.value then
-            String.sub w.value 2 (String.length w.value - 2)
-          else w.value
-        in
-        Pconst_integer (w', None)
-    | ConFloat r ->
-        (* SML uses ~ for negation, OCaml uses - *)
-        let r' = String.map (function '~' -> '-' | c -> c) r.value in
-        Pconst_float (r', None)
-    | ConChar c ->
-        (* SML: #"a", OCaml: 'a' - the string should already be the character *)
-        Pconst_char (String.get c.value 0)
-    | ConString s -> Pconst_string (s.value, Location.none, None)
+  (** Convert an SML constant to an OCaml constant. Delegated to Backend_constants. *)
+  let rec process_con = Backend_constants.process_con
 
   let rec is_operator (s : expression Ast.node) : bool =
     match s.value with
@@ -354,10 +194,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | ParenExp e -> is_operator e
     | _ -> false
 
-  and is_operator_name (s : string) : bool =
-    let first = String.get s 0 in
-    List.mem first
-      [ '+'; '-'; '*'; '/'; '='; '<'; '>'; '@'; '^'; '|'; '&'; '%'; '~' ]
+  and is_operator_name = Capital_utils.is_operator_name
 
   (** {2 Expression Processing}
 
@@ -1137,22 +974,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         let name_str =
           process_name_to_string ~ctx:Type (idx_to_name id.value)
         in
-        let params =
-          List.map
-            (fun (tv : Ast.idx Ast.node) ->
-              (* Type variables already have the ' prefix, just strip it *)
-              let tv_str = idx_to_string tv.value in
-              let var_name =
-                if String.starts_with ~prefix:"''" tv_str then
-                  String.sub tv_str 2 (String.length tv_str - 2)
-                else if String.starts_with ~prefix:"'" tv_str then
-                  String.sub tv_str 1 (String.length tv_str - 1)
-                else tv_str
-              in
-              ( Builder.ptyp_var var_name,
-                (Asttypes.NoVariance, Asttypes.NoInjectivity) ))
-            tvars
-        in
+        let params = Type_var_utils.process_type_params tvars in
         let manifest = Some (process_type ty) in
         let tdecl =
           labeller#cite Helpers.Attr.type_declaration id.pos
@@ -1179,22 +1001,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         let name_str =
           process_name_to_string ~ctx:Type (idx_to_name id.value)
         in
-        let params =
-          List.map
-            (fun (tv : Ast.idx Ast.node) ->
-              (* Type variables already have the ' prefix, just strip it *)
-              let tv_str = idx_to_string tv.value in
-              let var_name =
-                if String.starts_with ~prefix:"''" tv_str then
-                  String.sub tv_str 2 (String.length tv_str - 2)
-                else if String.starts_with ~prefix:"'" tv_str then
-                  String.sub tv_str 1 (String.length tv_str - 1)
-                else tv_str
-              in
-              ( Builder.ptyp_var var_name,
-                (Asttypes.NoVariance, Asttypes.NoInjectivity) ))
-            tvars
-        in
+        let params = Type_var_utils.process_type_params tvars in
         let constructors = process_con_bind cb.value in
         let tdecl =
           labeller#cite Helpers.Attr.type_declaration id.pos
@@ -1654,22 +1461,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
             let name_str =
               process_name_to_string ~ctx:Type (idx_to_name id.value)
             in
-            let params =
-              List.map
-                (fun (tv : Ast.idx Ast.node) ->
-                  (* Type variables already have the ' prefix, just strip it *)
-                  let tv_str = idx_to_string tv.value in
-                  let var_name =
-                    if String.starts_with ~prefix:"''" tv_str then
-                      String.sub tv_str 2 (String.length tv_str - 2)
-                    else if String.starts_with ~prefix:"'" tv_str then
-                      String.sub tv_str 1 (String.length tv_str - 1)
-                    else tv_str
-                  in
-                  ( Builder.ptyp_var var_name,
-                    (Asttypes.NoVariance, Asttypes.NoInjectivity) ))
-                tvars
-            in
+            let params = Type_var_utils.process_type_params tvars in
             let tdecl =
               labeller#cite Helpers.Attr.type_declaration id.pos
                 (Builder.type_declaration ~name:(ghost name_str) ~params
@@ -1696,22 +1488,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
             let name_str =
               process_name_to_string ~ctx:Type (idx_to_name id.value)
             in
-            let params =
-              List.map
-                (fun (tv : Ast.idx Ast.node) ->
-                  (* Type variables already have the ' prefix, just strip it *)
-                  let tv_str = idx_to_string tv.value in
-                  let var_name =
-                    if String.starts_with ~prefix:"''" tv_str then
-                      String.sub tv_str 2 (String.length tv_str - 2)
-                    else if String.starts_with ~prefix:"'" tv_str then
-                      String.sub tv_str 1 (String.length tv_str - 1)
-                    else tv_str
-                  in
-                  ( Builder.ptyp_var var_name,
-                    (Asttypes.NoVariance, Asttypes.NoInjectivity) ))
-                tvars
-            in
+            let params = Type_var_utils.process_type_params tvars in
             let constructors = process_con_specification cd.value in
             let tdecl =
               labeller#cite Helpers.Attr.type_declaration id.pos
