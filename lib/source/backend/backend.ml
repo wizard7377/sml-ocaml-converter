@@ -629,7 +629,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                   |> labeller#cite Helpers.Attr.expression expression.pos
                 in
                 Builder.pexp_let Nonrecursive binding body)
-        | ExpDec _ -> assert false)
+        | _ -> assert false)
     | TypedExp (e, ty) ->
         Builder.pexp_constraint (process_exp e) (process_type ty)
     | RaiseExp e ->

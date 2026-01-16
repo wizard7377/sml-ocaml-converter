@@ -25,8 +25,6 @@ end
 module Make (C : S) : LOG = struct
   let get_should_print ?(cfg : Options.options = C.config) (level : level) :
       bool =
-    Format.eprintf "Should print %s \n %s \n" C.group
-      (Options.get_debug cfg |> String.concat ", ");
     if Options.get_debug cfg |> List.mem C.group then true
     else
       let verbosity = Options.get_verbosity_default cfg 0 in
