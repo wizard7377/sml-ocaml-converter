@@ -222,6 +222,13 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
             in
             let res = map_last process_uppercase mapped_name in
             (res, name' <> res)
+            | Operator -> begin 
+              let name0 = match name' with
+                | [ "~" ] -> [ "~- "]
+                | _ -> name' in
+              let res = name0 in
+              (res, name' <> res)
+            end
         | _ -> (name', false)
         )
           in 

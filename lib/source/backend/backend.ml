@@ -52,7 +52,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
   (* For direct namer access when needed *)
   let namer : Process_names.process_names =
     new Process_names.process_names (ref Config.config) (ref Context.context)
-
+  let get_signature_attr pos = let attrs = labeller#until pos in List.map (fun attr -> Parsetree.Psig_attribute attr) attrs
+  let get_structure_attr pos = let attrs = labeller#until pos in List.map (fun attr -> Parsetree.Pstr_attribute attr) attrs
   (* Track constructor names as they're declared *)
   module StringSet = Set.Make(String)
   let constructor_names : StringSet.t ref =
@@ -240,9 +241,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
   let rec process_exp (expression : Ast.expression Ast.node) :
       Parsetree.expression =
     
-    labeller#cite Helpers.Attr.expression expression.pos
-    @@
-    match expression.value with
+    
+    let res = begin match expression.value with
     | ExpCon c -> Builder.pexp_constant (process_con c)
     | ExpApp (e1, e2) when is_operator e2 ->
         let op_name =
@@ -529,7 +529,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | FnExp cases ->
         (* fn match -> function ... *)
         Builder.pexp_function (process_matching cases.value)
-
+    end in 
+    labeller#cite Helpers.Attr.expression expression.pos res
   (** {2 Expression Rows and Matching}
 
       Helper functions for expression-related constructs. *)
@@ -542,12 +543,13 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       @return A pair of field identifier and expression *)
   and process_row (row : Ast.row Ast.node) :
       Ppxlib.Longident.t Location.loc * Parsetree.expression =
-    match row.value with
+    let res = match row.value with
     | Row (lab, expression, rest_opt) ->
         let lab_longident =
           process_name_to_longident ~ctx:Label (idx_to_name lab.value)
         in
-        (ghost lab_longident, process_exp expression)
+        (ghost lab_longident, process_exp expression) in
+    res
 
   (** Convert SML match clauses to OCaml case list.
 
@@ -559,7 +561,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       @return A list of OCaml case expressions *)
   and process_matching (m : Ast.matching) : Parsetree.case list =
     
-    match m with
+    let res = begin match m with
     | Case (pat, expression, rest_opt) -> (
         let case_here =
           Builder.case ~lhs:(process_pat pat) ~guard:None
@@ -568,7 +570,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         match rest_opt with
         | None -> [ case_here ]
         | Some rest -> case_here :: process_matching rest.value)
-
+      end in res
   (** {1 Pattern Processing}
 
       Functions for converting SML patterns to OCaml patterns.
@@ -612,9 +614,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     ]} *)
   and process_pat ?(is_head = false) (pat : Ast.pat Ast.node) :
       Parsetree.pattern =
-    labeller#cite Helpers.Attr.pattern pat.pos
-    @@
-    match pat.value with
+    let res = begin match pat.value with
     | PatCon c -> Builder.ppat_constant (process_con c)
     | PatWildcard -> Builder.ppat_any
     | PatIdx wo -> (
@@ -690,7 +690,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         in
         labeller#cite Helpers.Attr.pattern pat.pos
         @@ Builder.ppat_alias final_pat (ghost var_str)
-
+    end in labeller#cite Helpers.Attr.pattern pat.pos res
   (** Convert SML pattern rows (record pattern fields) to OCaml record patterns.
 
       SML record patterns have three forms:
@@ -702,7 +702,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       @return A list of field-pattern pairs
       @raise Assert_failure Currently unimplemented *)
   and process_pat_row (row : Ast.pat_row) : (string * Parsetree.pattern) list =
-    match row with
+    let res = begin match row with
     | PatRowPoly ->
         (* Wildcard row - matches remaining fields *)
         (* No explicit field bindings for wildcard, return empty list *)
@@ -738,7 +738,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         match rest_opt with
         | None -> [ here ]
         | Some rest -> here :: process_pat_row rest.value)
-
+    end in res
   (** {1 Declaration Processing}
 
       Functions for converting SML declarations to OCaml structure items.
@@ -763,7 +763,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       @return A list of OCaml value bindings *)
   and process_value_dec (declaration : Ast.declaration) :
       Parsetree.value_binding list =
-    
+    let res = begin
     match declaration with
     | ValDec (tvars, vb) ->
         (* Type variables in 'val' are currently ignored in conversion *)
@@ -804,7 +804,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | FixityDec (fix, ids) ->
         (* Fixity declarations don't produce value bindings *)
         raise (mkBadAst "FixityDec is not value decleration")
-
+    end in res
   (** Convert SML fixity declarations to string representation.
 
       SML fixity: [infix 6 +], [infixr 5 ::], [nonfix f]
@@ -1167,7 +1167,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       @param structure The SML structure to convert
       @return List of OCaml structure items *)
   and process_str (structure : Ast.structure) : Parsetree.structure_item list =
-    match structure with
+    let res = begin match structure with
     | StrIdx id ->
         let name =
           process_name_to_longident ~ctx:ModuleValue (idx_to_name id.value)
@@ -1204,7 +1204,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | LocalDec (declaration, s) ->
         (* Local declarations in structure *)
         dec_to_structure_items declaration.value @ process_str s.value
-
+    end in 
+    res
   (** Convert SML signature annotation type.
 
       - Transparent ([:]): Type equalities visible

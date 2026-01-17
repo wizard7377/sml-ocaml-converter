@@ -64,7 +64,7 @@ class process_label opts lexbuf =
       let inside, outside =
         List.partition
           (fun (_, comment_start, comment_end) ->
-            comment_start >= start_range && comment_end <= end_range)
+            comment_end <= end_range)
           comments
       in
       comments <- outside;
@@ -143,7 +143,10 @@ class process_label opts lexbuf =
             let comments = self#retrieve_comments start_pos end_pos in
             let comments' = List.map self#comment_attr comments in
             List.fold_left tag x comments'
-
+    method until : Lexing.position -> Attr.attr list =
+      fun end_pos ->
+        let comments = self#retrieve_comments (Lexing.dummy_pos) (end_pos) in
+        List.map self#comment_attr comments
     method cite_exact : 'a. 'a citer -> string -> string list -> 'a -> 'a =
       fun tag name payload x ->
         let payload_str = payload in
