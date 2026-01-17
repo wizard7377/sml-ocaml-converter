@@ -59,15 +59,20 @@ class process_label opts lexbuf =
       lexbuf (* TODO Change this so it ignores things already used *)
 
     method private take_within (pos : int * int) : string list =
+      let start_range, end_range = pos in
+      (* Find comments that are strictly within the given range *)
       let inside, outside =
         List.partition
-          (fun (_, start_pos, end_pos) ->
-            let start_range, end_range = pos in
-            end_pos <= end_range)
+          (fun (_, comment_start, comment_end) ->
+            comment_start >= start_range && comment_end <= end_range)
           comments
       in
       comments <- outside;
-      List.map (fun (s, _, _) -> s) inside
+      (* Sort by start position to maintain source order *)
+      let sorted_inside = 
+        List.sort (fun (_, s1, _) (_, s2, _) -> compare s1 s2) inside 
+      in
+      List.map (fun (s, _, _) -> s) sorted_inside
 
     method private string_to_tag (s : string) : atag = s
 

@@ -136,6 +136,7 @@ rule token = parse
   | ']'           { RBRACKET }
   | ','           { COMMA }
   | ';'           { SEMICOLON }
+  | "::"          { CONS }
   | ":>"          { COLON_GT }
   | ':'           { COLON }
   | '='           { EQUAL }

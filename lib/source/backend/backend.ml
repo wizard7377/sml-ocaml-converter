@@ -42,6 +42,14 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     let group = "backend"
   end)
 
+  (* Use centralized name processor *)
+  module NameConfig = struct
+    let config = Config.config
+    let context = Context.context
+  end
+  module Names = Name_processor.Make(NameConfig)
+
+  (* For direct namer access when needed *)
   let namer : Process_names.process_names =
     new Process_names.process_names (ref Config.config) (ref Context.context)
 
@@ -64,10 +72,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | None -> ("sml.name.check", [ original ])
     | Some s -> ("sml.name.changeto", [ original; s ])
 
-  (** Helper to get a Ppxlib.Longident.t from the name processor *)
+  (** Helper to get a Ppxlib.Longident.t from the name processor - delegates to Names module *)
   let process_name_to_longident ~(ctx : Process_names.context)
       (name_parts : string list) : Ppxlib.Longident.t =
-    let (res, changed) = namer#process_name ~ctx ~name:name_parts in 
+    let (res, changed) = Names.process_name ~ctx name_parts in 
     if changed then 
       Log.log ~level:Debug ~kind:Neutral
         ~msg:
@@ -77,10 +85,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         ();
     res
 
-  (** Helper to get a string from the name processor (uses last component) *)
+  (** Helper to get a string from the name processor - delegates to Names module *)
   let process_name_to_string ~(ctx : Process_names.context)
       (name_parts : string list) : string =
-    Ppxlib.Longident.last_exn (namer#process_name ~ctx ~name:name_parts |> fst)
+    Names.to_string ~ctx name_parts
 
   type res = Parsetree.toplevel_phrase list
 
@@ -755,6 +763,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       @return A list of OCaml value bindings *)
   and process_value_dec (declaration : Ast.declaration) :
       Parsetree.value_binding list =
+    
     match declaration with
     | ValDec (tvars, vb) ->
         (* Type variables in 'val' are currently ignored in conversion *)
@@ -819,7 +828,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | ValBind (pat, expression, rest_opt) ->
         let pat' = process_pat pat in
         let expression' = process_exp expression in
-        let binding = Builder.value_binding ~pat:pat' ~expr:expression' in
+        let binding =
+          labeller#cite Helpers.Attr.value_binding pat.pos
+            (Builder.value_binding ~pat:pat' ~expr:expression')
+        in
         let rest =
           match rest_opt with None -> [] | Some r -> process_val_bind r.value
         in
@@ -851,7 +863,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
         (* Process all match clauses *)
         let clauses = process_fun_match fm.value in
-
+        let single_arg (clauses : (Parsetree.pattern list * Parsetree.expression) list) : bool = 
+          List.for_all (fun (pats, _) -> List.length pats = 1) clauses in
         (* Build the function body *)
         let body =
           match clauses with
@@ -861,6 +874,20 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
               List.fold_right
                 (fun pat acc -> Builder.pexp_fun Nolabel None pat acc)
                 pats expression
+          | clauses when single_arg clauses ->
+              (* Multiple clauses with single argument - use function *)
+              let cases =
+                List.map
+                  (fun (pats, expression) ->
+                    let pat =
+                      match pats with
+                      | [ p ] -> p
+                      | _ -> failwith "Expected single pattern"
+                    in
+                    Builder.case ~lhs:pat ~guard:None ~rhs:expression)
+                  clauses
+              in
+              Builder.pexp_function cases
           | _ ->
               (* Multiple clauses - need pattern matching *)
               (* All clauses should have same number of parameters *)
@@ -872,7 +899,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
               (* Generate fresh parameter patterns *)
               let param_pats =
                 List.init num_params (fun i ->
-                    Builder.ppat_var (ghost (Printf.sprintf "__arg__%d" i)))
+                    Builder.ppat_var (ghost (Printf.sprintf "arg__%d" i)))
               in
               (* Build function expression *)
               List.fold_right
@@ -885,7 +912,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                           Builder.pexp_ident
                             (ghost
                                (Ppxlib.Longident.Lident
-                                  (Printf.sprintf "__arg__%d" i)))))
+                                  (Printf.sprintf "arg__%d" i)))))
                  in
                  let cases =
                    List.map
@@ -898,7 +925,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         in
 
         let pat = Builder.ppat_var (ghost fname_str) in
-        let binding = Builder.value_binding ~pat ~expr:body in
+        let binding =
+          labeller#cite Helpers.Attr.value_binding fm.pos
+            (Builder.value_binding ~pat ~expr:body)
+        in
 
         let rest =
           match rest_opt with None -> [] | Some r -> process_fun_bind r.value
@@ -1116,11 +1146,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       @param wo The identifier with or without [op]
       @return The processed identifier *)
   and process_with_op ~(ctx : Process_names.context) (wo : Ast.with_op) : string =
-    match wo with
-    | WithOp id ->
-        process_name_to_string ~ctx (idx_to_name id.value)
-    | WithoutOp id ->
-        process_name_to_string ~ctx (idx_to_name id.value)
+    Names.process_with_op ~ctx wo
 
   (** {1 Structure Processing}
 
@@ -1201,7 +1227,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         let longid =
           process_name_to_longident ~ctx:ModuleValue (idx_to_name id.value)
         in
-        Builder.pmod_ident (ghost longid)
+        labeller#cite Helpers.Attr.module_expr id.pos
+          (Builder.pmod_ident (ghost longid))
     | StructStr declaration ->
         (* struct ... end - convert declarations to structure *)
         let items = dec_to_structure_items declaration.value in
@@ -1308,7 +1335,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
             let longid =
               process_name_to_longident ~ctx:ModuleType (idx_to_name id.value)
             in
-            Builder.pmty_ident (ghost longid)
+            labeller#cite Helpers.Attr.module_type id.pos
+              (Builder.pmty_ident (ghost longid))
         | SignSig specification ->
             (* sig specification end - process specifications *)
             let specification' =
@@ -1390,7 +1418,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
             let ext_constrs = process_exn_specification ed.value in
             List.map
               (fun ec ->
-                let type_exn = Builder.type_exception ec in
+                let type_exn =
+                  labeller#cite Helpers.Attr.exception_declaration ed.pos
+                    (Builder.type_exception ec)
+                in
                 Builder.psig_exception type_exn)
               ext_constrs
         | SpecStr sd ->
@@ -1399,7 +1430,11 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         | SpecSeq (s1, s2) -> List.append (process_spec s1) (process_spec s2)
         | SpecInclude s ->
             let module_type = process_sign s.value in
-            [ Builder.psig_include (Builder.include_infos module_type) ]
+            let incl_info =
+              labeller#cite Helpers.Attr.include_infos specification'.pos
+                (Builder.include_infos module_type)
+            in
+            [ Builder.psig_include incl_info ]
         | SpecIncludeIdx ids ->
             List.concat
               (List.map
@@ -1409,7 +1444,11 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                        (idx_to_name id.value)
                    in
                    let module_type = Builder.pmty_ident (ghost longid) in
-                   [ Builder.psig_include (Builder.include_infos module_type) ])
+                   let incl_info =
+                     labeller#cite Helpers.Attr.include_infos id.pos
+                       (Builder.include_infos module_type)
+                   in
+                   [ Builder.psig_include incl_info ])
                  ids)
         | SpecSharingTyp (s, _ids) ->
             (* Type sharing: SML [spec sharing type t1 = t2 = ...]
@@ -1659,7 +1698,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
             let exn_constrs = process_exn_bind eb.value in
             List.map
               (fun ec ->
-                let type_exn = Builder.type_exception ec in
+                let type_exn =
+                  labeller#cite Helpers.Attr.exception_declaration eb.pos
+                    (Builder.type_exception ec)
+                in
                 Builder.pstr_exception type_exn)
               exn_constrs
         | StrDec sb ->
@@ -1679,8 +1721,11 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                     (idx_to_name id.value)
                 in
                 let module_expr = Builder.pmod_ident (ghost longid) in
-                Builder.pstr_open
-                  (Builder.open_infos ~override:Asttypes.Fresh ~expr:module_expr))
+                let open_info =
+                  labeller#cite Helpers.Attr.open_infos id.pos
+                    (Builder.open_infos ~override:Asttypes.Fresh ~expr:module_expr)
+                in
+                Builder.pstr_open open_info)
               ids
         | ExpDec exp ->
             (* Top-level expression - convert to a structure item *)
@@ -1881,8 +1926,9 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
             in
             let module_type = process_sign s.value in
             let mtdecl =
-              Builder.module_type_declaration ~name:(ghost name_str)
-                ~type_:(Some module_type)
+              labeller#cite Helpers.Attr.module_type_declaration id.pos
+                (Builder.module_type_declaration ~name:(ghost name_str)
+                   ~type_:(Some module_type))
             in
             let rest =
               match rest_opt with
