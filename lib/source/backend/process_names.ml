@@ -1,3 +1,13 @@
+(** Name processing for SML to OCaml conversion.
+    
+    This module provides contextual name transformation, handling:
+    - Keyword escaping (SML identifiers that are OCaml keywords)
+    - Capitalization adjustments (constructors, types, values)
+    - Scoped name tracking for let bindings and modules
+    - SML basis library constructor mapping (SOME -> Some, etc.)
+    
+    Uses {!Capital_utils} for low-level capitalization functions. *)
+
 type context = ..
 type context += PatternHead
 type context += PatternTail
@@ -25,8 +35,16 @@ let show_context (ctx : context) : string =
   | Operator -> "Operator"
   | Empty -> "Empty"
   | _ -> "Unknown"
+
 open! Ppxlib
 module StringMap = Map.Make(String)
+
+(* Re-export capitalization utilities for convenience *)
+let process_lowercase = Capital_utils.process_lowercase
+let process_uppercase = Capital_utils.process_uppercase
+let process_caps = Capital_utils.process_caps
+let is_lowercase = Capital_utils.is_variable_identifier
+
 type is_constructor = YesItIs of int | NoItsNot
 type note = int
 type scope = string StringMap.t Stack.t
@@ -35,20 +53,19 @@ let get_scope_level (input:string) (name:string option) (scope:string StringMap.
   match name with
   | Some n -> Some n 
   | None -> StringMap.find_opt input scope
+
 let last (lst:'a list) : 'a =
   assert (List.length lst > 0);
   List.nth lst (List.length lst - 1)
+
 let rec map_last (f : 'a -> 'a) (lst : 'a list) : 'a list =
   match lst with
   | [] -> []
   | [ x ] -> [ f x ]
   | first :: rest -> first :: map_last f rest
+
 let rec get_in_scope (scope:scope) (name:string) : string option =
   Stack.fold (get_scope_level name) None scope
-let process_lowercase (s : string) : string = String.uncapitalize_ascii s
-let process_uppercase (s : string) : string = String.capitalize_ascii s
-let process_caps (s : string) : string = String.uppercase_ascii s
-let is_lowercase (s : string) : bool = try let fst_char = String.get s 0 in (fst_char >= 'a' && fst_char <= 'z') || fst_char = '_' with Invalid_argument _ -> false
 
 module Log = Common.Make (struct 
     let config = Common.mkOptions ()
@@ -60,7 +77,13 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
     val config : Common.options ref = config
     val mutable current_depth : int = 0 
     val mutable context_stack : string StringMap.t Stack.t = Stack.create () 
-    
+    val mutable global_map : string StringMap.t = StringMap.empty
+    method private guess_matches (n : string) : bool =
+      match Common.get_guess_var !config with
+      | Some pattern ->
+          let regex = Re.Str.regexp pattern in
+          Re.Str.string_match regex n 0
+      | None -> false
     method push_context () : note =
       let depth = current_depth + 1 in
       current_depth <- depth ;
@@ -71,11 +94,16 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
       assert (not (Stack.is_empty context_stack)) ;
       ignore (Stack.pop context_stack) ;
       current_depth <- current_depth - 1 
-    method add_name ~(from : string) ~(res : string) : unit =
+    method add_name ?(global=false) ~(from : string) ~(res : string) () : unit =
+      if global then begin 
       assert (not (Stack.is_empty context_stack)) ;
       let current_map = Stack.pop context_stack in
       let updated_map = StringMap.add from res current_map in
       Stack.push updated_map context_stack
+      end else begin
+        global_map <- StringMap.add from res global_map ; 
+        ()
+      end
     method get_name (from : string) : string =
       match get_in_scope context_stack from with
       | Some name -> name
@@ -91,10 +119,7 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
       in
       aux s
     method private is_operator (s : string) : bool =
-      String.length s > 0
-      &&
-      let c = String.get s 0 in
-      not ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c = '_')
+      Capital_utils.is_operator_name s
     (** Check if a string is an operator (non-alphanumeric identifier) *)
 
     method private build_longident (parts : string list) : Longident.t =
@@ -135,11 +160,22 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
 
       in
       res
-    method process_name ?(ctx : context = Empty) ~(name : string list) =
+    method private process_op (input : string) : string =
+      let is_op = String.starts_with "op" input && (if String.length input > 2 then
+          let c = String.get input 2 in
+          not ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c = '_')
+        else false) in
+      if is_op then String.sub input 2 (String.length input - 2) else input
+
+    method process_name ?(ctx : context = Empty)  ~(name : string list) =
       assert (List.length name > 0);
       assert (not @@ String.starts_with "(" @@ List.nth name 0);
       assert (not @@ String.ends_with ")" @@ List.nth name (List.length name - 1));
-      let name' = map_last (fun s -> self#get_name s) name in
+      let without_op = map_last (fun s -> self#process_op s) name in 
+      let name'' = map_last (fun s -> self#get_name s) without_op in
+      let name' = match name'' with
+        | [ name''' ] -> if StringMap.mem name''' global_map then [ StringMap.find name''' global_map ] else [ name''' ]
+        | name''' -> name''' in
       let (res, b) =
         (match ctx with
         | Type when Common.is_flag_enabled (Common.get_rename_types !config) -> (
@@ -162,15 +198,38 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
             let new_name = process_parts name' in
             (new_name, true)
           )
-        | PatternHead -> let res = map_last process_uppercase name' in (res, name' == res)
-        | PatternTail -> (match Common.get_guess_var !config with 
-            | Some v -> let regex = Re.Str.regexp v in if Re.Str.string_match regex (last name') 0 then 
-                let new_name = (map_last (fun s -> if s = last name' then process_lowercase s else s) name') in
-                self#add_name ~from:(last name') ~res:(last new_name);
-                (new_name, true)
-              else (name', false)
-            | None -> (name', false))
-        | _ -> (name', false) (* TODO TOMMOROW: NAMESPACING WITH THESE *)
+        | PatternHead when Common.is_flag_enabled (Common.get_guess_pattern !config) -> let res = map_last process_uppercase name' in (res, name' <> res)
+        | PatternTail when Common.is_flag_enabled (Common.get_convert_names !config) -> begin match name' with
+            | [ last ] -> let res = process_lowercase last in ( [ res ], last <> res)
+            | _ -> (name', false)
+          end
+        | Value when Common.is_flag_enabled (Common.get_convert_names !config) -> begin match name' with
+            | [ last ] -> let res = process_lowercase last in ( [ res ], last <> res)
+            | _ -> (name', false)
+          end
+        | Constructor when Common.is_flag_enabled (Common.get_convert_names !config) ->
+            (* Map SML basis constructors to OCaml equivalents *)
+            let mapped_name = match name' with
+              | ["SOME"] -> ["Some"]
+              | ["NONE"] -> ["None"]
+              | ["true"] -> ["true"]
+              | ["false"] -> ["false"]
+              | ["nil"] -> ["[]"]
+              | ["LESS"] -> ["Less"]
+              | ["EQUAL"] -> ["Equal"]
+              | ["GREATER"] -> ["Greater"]
+              | _ -> name'
+            in
+            let res = map_last process_uppercase mapped_name in
+            (res, name' <> res)
+            | Operator -> begin 
+              let name0 = match name' with
+                | [ "~" ] -> [ "~- "]
+                | _ -> name' in
+              let res = name0 in
+              (res, name' <> res)
+            end
+        | _ -> (name', false)
         )
           in 
       let (scope, basename) = self#split_name res in

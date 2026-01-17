@@ -25,6 +25,7 @@ class process_file ?(store = Context.create []) cfg_init =
           let oc = open_out path in
           Format.formatter_of_out_channel oc
       | StdOut -> Format.std_formatter
+      | Silent -> Format.std_formatter
 
     method parse_sml (s : string) : sml_code =
       lexbuf <- s;

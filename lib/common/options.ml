@@ -18,8 +18,8 @@ type conversions = {
 
 let mkConversions ?(convert_names = Disable) ?(convert_comments = Warn)
     ?(add_line_numbers = Disable) ?(convert_keywords = Warn)
-    ?(rename_types = Warn) ?(make_make_functor = Warn)
-    ?(rename_constructors = Note) ?(guess_pattern = Warn) (_ : unit) :
+    ?(rename_types = Warn) ?(make_make_functor = Disable)
+    ?(rename_constructors = Disable) ?(guess_pattern = Disable) (_ : unit) :
     conversions =
   {
     convert_names;
@@ -50,12 +50,13 @@ type options = {
   quiet : bool;
   guess_var : string option;
   debug : string list;
+  check_ocaml : bool;
 }
 
 let mkOptions ?(input_file = StdIn) ?(output_file = Silent) ?(verbosity = None)
     ?(conversions = mkConversions ()) ?(concat_output = true) ?(force = false)
     ?(quiet = false) ?(guess_var : string option = None)
-    ?(debug : string list = []) (_ : unit) : options =
+    ?(debug : string list = []) ?(check_ocaml = false) (_ : unit) : options =
   {
     input_file;
     output_file;
@@ -66,6 +67,7 @@ let mkOptions ?(input_file = StdIn) ?(output_file = Silent) ?(verbosity = None)
     quiet;
     guess_var;
     debug;
+    check_ocaml;
   }
 
 let get_verbosity opts = opts.verbosity
@@ -89,6 +91,7 @@ let get_rename_constructors opts = opts.conversions.rename_constructors
 let get_guess_pattern opts = opts.conversions.guess_pattern
 let get_guess_var opts = opts.guess_var
 let get_debug opts = opts.debug
+let get_check_ocaml opts = opts.check_ocaml
 let engaged = function Enable | Warn -> true | _ -> false
 let noted = function Warn | Note -> true | _ -> false
 

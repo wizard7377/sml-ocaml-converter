@@ -90,6 +90,7 @@
 %token SEMICOLON ";"
 %token COLON ":"
 %token COLON_GT ":>"
+%token CONS "::"
 %token EQUAL "="
 %token BAR "|"
 %token ELLIPSIS "..."
@@ -130,6 +131,7 @@
 %right ORELSE
 %right ANDALSO
 %right AS
+%right CONS
 %right ARROW
 %nonassoc EQUAL
 %right STAR
@@ -267,6 +269,8 @@ op_eq_ident:
   | op_longid { $1 }
   | EQUAL { WithoutOp (b (IdxIdx (b "="))) }
   | "op" EQUAL { WithOp (b (IdxIdx (b "="))) }
+  | CONS { WithoutOp (b (IdxIdx (b "::"))) }
+  | "op" CONS { WithOp (b (IdxIdx (b "::"))) }
 ;
 
 eq_ident_seq1:
@@ -385,6 +389,7 @@ expression:
   | expression COLON typ { TypedExp (bp $1 $startpos $endpos, bp $3 $startpos($3) $endpos($3)) }
   | expression "andalso" expression { AndExp (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3)) }
   | expression "orelse" expression { OrExp (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3)) }
+  | expression CONS expression { InfixApp (bp $1 $startpos($1) $endpos($1), b (IdxIdx (b "::")), bp $3 $startpos($3) $endpos($3)) }
   | e=expression "handle" m=match_clause { HandleExp (bp e $startpos(e) $endpos(e), bp m $startpos(m) $endpos(m)) }
   | "raise" e=expression { RaiseExp (bp e $startpos(e) $endpos(e)) }
   | "if" c=expression "then" t=expression "else" f=expression { IfExp (bp c $startpos(c) $endpos(c), bp t $startpos(t) $endpos(t), bp f $startpos(f) $endpos(f)) }
@@ -471,11 +476,12 @@ pat:
             (match acc with
              | PatIdx w -> w
              | PatApp (w, _) -> w
-             | _ -> b (WithoutOp (b (IdxIdx (b "?"))))), arg)) op.value args
+             | _ -> failwith "invalid pattern application"), arg)) op.value args
 
       | _ -> failwith "impossible: invalid pattern sequence"
     }
   | pat COLON typ { PatTyp (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3)) }
+  | pat CONS pat { PatInfix (bp $1 $startpos($1) $endpos($1), b (IdxIdx (b "::")), bp $3 $startpos($3) $endpos($3)) }
   | pat "as" pat {
       match $1 with
       | PatIdx op -> PatAs (op, None, bp $3 $startpos($3) $endpos($3))

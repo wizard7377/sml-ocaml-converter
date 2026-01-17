@@ -11,5 +11,6 @@ class process_label : Common.options -> string -> object
     'a. 'a citer -> (Lexing.position * Lexing.position) option -> 'a -> 'a
 
   method cite_exact : 'a. 'a citer -> string -> string list -> 'a -> 'a
+  method until : Lexing.position -> attr list
   method destruct : unit -> bool
 end
