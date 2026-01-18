@@ -39,4 +39,6 @@ class process_names : Common.options ref -> Context.t ref -> object
   method pop_context : note -> unit
   method add_name : ?global:bool -> from:string -> res:string -> unit -> unit
   method get_name : string -> string
+
+
 end

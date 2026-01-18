@@ -39,6 +39,8 @@ module Make (Config : CONFIG) : sig
 
   (** Get the processed name for a given input *)
   val get_name : string -> string
+
+  val matches_pattern : string -> bool
 end
 
 (** Re-exported context type *)

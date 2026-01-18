@@ -52,8 +52,16 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
   (* For direct namer access when needed *)
   let namer : Process_names.process_names =
     new Process_names.process_names (ref Config.config) (ref Context.context)
-  let get_signature_attr pos = let attrs = labeller#until pos in List.map (fun attr -> Parsetree.Psig_attribute attr) attrs
-  let get_structure_attr pos = let attrs = labeller#until pos in List.map (fun attr -> Parsetree.Pstr_attribute attr) attrs
+  let get_signature_attr pos = 
+    let attrs = labeller#until pos in 
+    List.map (fun attr -> 
+      { Parsetree.psig_desc = Parsetree.Psig_attribute attr; 
+        Parsetree.psig_loc = Location.none }) attrs
+  let get_structure_attr pos = 
+    let attrs = labeller#until pos in 
+    List.map (fun attr -> 
+      { Parsetree.pstr_desc = Parsetree.Pstr_attribute attr;
+        Parsetree.pstr_loc = Location.none }) attrs
   (* Track constructor names as they're declared *)
   module StringSet = Set.Make(String)
   let constructor_names : StringSet.t ref =
@@ -240,8 +248,6 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   let rec process_exp (expression : Ast.expression Ast.node) :
       Parsetree.expression =
-    
-    
     let res = begin match expression.value with
     | ExpCon c -> Builder.pexp_constant (process_con c)
     | ExpApp (e1, e2) when is_operator e2 ->
@@ -491,7 +497,16 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                     value = LetExp (inner_decs @ rest_decs, exps);
                     pos = expression.pos;
                   }
-            | ValDec _ | FunDec _ ->
+            | ValDec _ ->
+                (* Handle value declarations in let expressions *)
+                let binding = process_value_dec first_dec.value in
+                let body =
+                  process_exp
+                    { value = LetExp (rest_decs, exps); pos = expression.pos }
+                  |> labeller#cite Helpers.Attr.expression expression.pos
+                in
+                Builder.pexp_let Nonrecursive binding body
+            | FunDec _ ->
                 (* Handle value and function declarations *)
                 let binding = process_value_dec first_dec.value in
                 let body =
@@ -499,7 +514,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                     { value = LetExp (rest_decs, exps); pos = expression.pos }
                   |> labeller#cite Helpers.Attr.expression expression.pos
                 in
-                Builder.pexp_let Nonrecursive binding body)
+                Builder.pexp_let Recursive binding body)
         | _ -> assert false)
     | TypedExp (e, ty) ->
         Builder.pexp_constraint (process_exp e) (process_type ty)
@@ -529,8 +544,12 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | FnExp cases ->
         (* fn match -> function ... *)
         Builder.pexp_function (process_matching cases.value)
-    end in 
-    labeller#cite Helpers.Attr.expression expression.pos res
+    end in
+    (* Still call cite to accumulate comments, won't attach as attributes *)
+    let result = labeller#cite Helpers.Attr.expression expression.pos res in
+    (* Exit accumulation mode *)
+    labeller#exit_accumulate_context;
+    result
   (** {2 Expression Rows and Matching}
 
       Helper functions for expression-related constructs. *)
@@ -614,6 +633,9 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     ]} *)
   and process_pat ?(is_head = false) (pat : Ast.pat Ast.node) :
       Parsetree.pattern =
+    (* Enter accumulation mode for comment hoisting *)
+    labeller#enter_accumulate_context;
+
     let res = begin match pat.value with
     | PatCon c -> Builder.ppat_constant (process_con c)
     | PatWildcard -> Builder.ppat_any
@@ -622,7 +644,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         | WithOp op ->
             let op_name = idx_to_name op.value in
             let op_str = idx_to_string op.value in
-            if is_head || not (is_variable_identifier op_str) then
+            if (is_head || not (is_variable_identifier op_str)) then
               let ctx = if is_head then PatternHead else Constructor in
               let name_longident = process_name_to_longident ~ctx op_name in
               Builder.ppat_construct (ghost name_longident) None
@@ -690,7 +712,12 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         in
         labeller#cite Helpers.Attr.pattern pat.pos
         @@ Builder.ppat_alias final_pat (ghost var_str)
-    end in labeller#cite Helpers.Attr.pattern pat.pos res
+    end in
+    (* Still call cite to accumulate comments, won't attach as attributes *)
+    let result = labeller#cite Helpers.Attr.pattern pat.pos res in
+    (* Exit accumulation mode *)
+    labeller#exit_accumulate_context;
+    result
   (** Convert SML pattern rows (record pattern fields) to OCaml record patterns.
 
       SML record patterns have three forms:
@@ -1739,7 +1766,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       @param prog The SML program to convert
       @return An OCaml structure (list of structure items) *)
   and process_prog (prog : Ast.prog) : Parsetree.structure =
-    let note = namer#push_context () in 
+    let note = namer#push_context () in
     let res = trace_part ~level:5 ~ast:"prog" ~msg:"" ~value:(fun () ->
         match prog with
         | ProgDec declaration -> dec_to_structure_items declaration.value
@@ -1750,7 +1777,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
             let mtdecls = process_signature_binding sb.value in
             List.map (fun mtd -> Builder.pstr_modtype mtd) mtdecls
         | ProgSeq (p1, p2) -> process_prog p1.value @ process_prog p2.value
-        | ProgEmpty -> []) in 
+        | ProgEmpty -> []) in
     let () = namer#pop_context note in
     res
 

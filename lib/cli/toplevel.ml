@@ -29,7 +29,13 @@ let convert_file ~(input_files : path list) ?(output_file : path option)
       ~verbosity:(Common.get_verbosity options)
       ~conversions:(Common.get_conversions options)
       ~concat_output:(Common.get_concat_output options)
-      ~force:(Common.get_force options) ()
+      ~force:(Common.get_force options)
+      ~quiet:(Common.get_quiet options)
+      ~guess_var:(Common.get_guess_var options)
+      ~debug:(Common.get_debug options)
+      ~check_ocaml:(Common.get_check_ocaml options)
+      ~variable_regex:(Common.get_variable_regex options)
+      ()
   in
   let process = new process cfg in
   let res = process#run input_files'' in
