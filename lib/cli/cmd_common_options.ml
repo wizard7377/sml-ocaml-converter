@@ -143,6 +143,7 @@ let conversion_flags : (bool * Common.conversions) Term.t =
     in
     Arg.(value & flag & info [ "force" ] ~doc)
   in
+  
   let+ convert_names = convert_names_flag
   and+ convert_comments = convert_comments_flag
   and+ add_line_numbers = add_line_numbers_flag
@@ -151,7 +152,7 @@ let conversion_flags : (bool * Common.conversions) Term.t =
   and+ make_make_functor = make_make_functor_flag
   and+ rename_constructors = rename_constructors_flag
   and+ guess_pattern = guess_pattern_flag
-  and+ force = convert_force_flag in
+  and+ force = convert_force_flag in 
   ( force,
     Common.mkConversions ~convert_names ~convert_comments ~add_line_numbers
       ~convert_keywords ~rename_types ~make_make_functor ~rename_constructors
@@ -191,14 +192,22 @@ let debug : string list Term.t =
   Common categories: 'parser', 'lexer', 'backend', 'names', 'types'.
   |}
   in
-  Arg.(value & opt_all string [] & info [ "debug" ] ~docv:"CATEGORY" ~doc)
-
+  Arg.(value & opt (list string) [] & info [ "debug" ] ~docv:"CATEGORY" ~doc)
+let variable_regex_doc =
+    {|
+  A regular expression pattern to identify variable names that should be converted to lowercase in patterns.
+  This is useful for converting SML variable names (which often start with uppercase letters) to OCaml conventions.
+  The regex is applied to the last part of the variable name.
+  |} 
+let variable_regex_flag : string Term.t =
+    Arg.(value & opt string "" & info [ "variable-regex" ] ~doc:variable_regex_doc)
 let common_options : Common.options Cmdliner.Term.t =
   let+ v = verb
   and+ force, c = conversion_flags
   and+ co = concat_output
   and+ q = quiet
   and+ ip = infer_pattern
-  and+ dbg = debug in
+  and+ dbg = debug 
+  and+ var_reg = variable_regex_flag in
   Common.mkOptions ~verbosity:(Some v) ~conversions:c ~concat_output:co ~force
-    ~quiet:q ~guess_var:ip ~debug:dbg ()
+    ~quiet:q ~guess_var:ip ~debug:dbg ~variable_regex:var_reg ()

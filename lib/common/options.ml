@@ -51,12 +51,13 @@ type options = {
   guess_var : string option;
   debug : string list;
   check_ocaml : bool;
+  variable_regex : string; 
 }
 
 let mkOptions ?(input_file = StdIn) ?(output_file = Silent) ?(verbosity = None)
     ?(conversions = mkConversions ()) ?(concat_output = true) ?(force = false)
-    ?(quiet = false) ?(guess_var : string option = None)
-    ?(debug : string list = []) ?(check_ocaml = false) (_ : unit) : options =
+    ?(quiet = false) ?(guess_var : string option = None) 
+    ?(debug : string list = []) ?(check_ocaml = false) ?(variable_regex : string = "")  (_ : unit) : options =
   {
     input_file;
     output_file;
@@ -68,6 +69,7 @@ let mkOptions ?(input_file = StdIn) ?(output_file = Silent) ?(verbosity = None)
     guess_var;
     debug;
     check_ocaml;
+    variable_regex;
   }
 
 let get_verbosity opts = opts.verbosity
@@ -92,6 +94,7 @@ let get_guess_pattern opts = opts.conversions.guess_pattern
 let get_guess_var opts = opts.guess_var
 let get_debug opts = opts.debug
 let get_check_ocaml opts = opts.check_ocaml
+let get_variable_regex opts = opts.variable_regex
 let engaged = function Enable | Warn -> true | _ -> false
 let noted = function Warn | Note -> true | _ -> false
 

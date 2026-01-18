@@ -18,7 +18,7 @@ test: build
 test_files: 
 	DUNE_ROOT=1 dune runtest tests.t
 test_group:
-	dune exec shibboleth -- group --input $(DUNE_ROOT)/examples/twelf/src --force --output $(DUNE_ROOT)/examples/output/twelf     
+	dune exec shibboleth -- group $(TEST_OPTS) --infer-pattern "[A-Z]\(\(s\)?\([0-9]\)\|'\)?" --input $(DUNE_ROOT)/examples/twelf/src --force --output $(DUNE_ROOT)/examples/output/twelf     
 # DUNE_ROOT=1 dune runtest files.t
 build: 
 	@$(DUNE) build $(DUNE_OPTS) 

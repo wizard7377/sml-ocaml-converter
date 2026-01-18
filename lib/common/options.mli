@@ -30,6 +30,7 @@ val mkOptions :
   ?guess_var:string option ->
   ?debug:string list ->
   ?check_ocaml:bool ->
+  ?variable_regex:string ->
   unit ->
   options
 
@@ -52,7 +53,7 @@ val get_debug : options -> string list
 val get_rename_constructors : options -> convert_flag
 val get_guess_pattern : options -> convert_flag
 val get_check_ocaml : options -> bool
-
+val get_variable_regex : options -> string
 val engaged : convert_flag -> bool
 (** [engaged flag] returns true if the conversion flag is not Disable. *)
 

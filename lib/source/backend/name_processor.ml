@@ -49,10 +49,20 @@ module Make (Config : CONFIG) = struct
   (** Check if a name is valid for the given context (e.g., constructors uppercase) *)
   let is_valid ~(ctx : context) (name : string list) : bool =
     namer#is_good ~ctx ~name
-
+  let in_core_lang (ctx : context) : bool = match ctx with
+    | ModuleValue | ModuleType | Functor -> false
+    | _ -> true
   (** Process a name and return both the result and whether it was changed *)
   let process_name ~(ctx : context) (name : string list) : Ppxlib.Longident.t * bool =
-    namer#process_name ~ctx ~name
+    match name with 
+    | [ name ] when in_core_lang ctx -> 
+        let regex = Common.get_variable_regex Config.config in 
+        (* prerr_endline ("Checking variable regex: " ^ regex ^ " against name: " ^ name); *)
+        if Re.Str.string_match (Re.Str.regexp ("$" ^ regex ^ "^") ) name 0 then 
+          (Longident.Lident (String.cat "__" name)) , true
+        else 
+          namer#process_name ~ctx ~name:[name]
+    | _ -> namer#process_name ~ctx ~name
 
   (** Push a new naming context scope *)
   let push_context () : note = namer#push_context ()
@@ -66,6 +76,11 @@ module Make (Config : CONFIG) = struct
 
   (** Get the processed name for a given input *)
   let get_name (from : string) : string = namer#get_name from
+
+  let matches_pattern (name : string) : bool =
+    let regex = Common.get_variable_regex Config.config in 
+        (* prerr_endline ("Checking variable regex: " ^ regex ^ " against name: " ^ name); *)
+    Re.Str.string_match (Re.Str.regexp ("$" ^ regex ^ "^") ) name 0  
 end
 
 (** Re-export context type and constructors for convenience *)
