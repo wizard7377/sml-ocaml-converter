@@ -93,6 +93,14 @@ class process ?(store = Context.create []) cfg_init =
               errors_store <- (file, Printexc.to_string e) :: errors_store;
               has_errors <- true;
               failures <- failures + 1;
+              begin match get_output_file cfg with
+              | FileOut out_path -> begin 
+                let content = Bos.OS.File.read (Fpath.v file) in
+                match content with
+                | Ok existing_content -> Bos.OS.File.write (Fpath.v (out_path ^ ".error")) existing_content |> ignore
+                | Error _ -> ()
+              end
+              | _ -> () end ;
               raise e)
           files
       in

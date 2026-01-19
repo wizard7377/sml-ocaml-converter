@@ -14,6 +14,11 @@ val mkConversions :
   ?make_make_functor:convert_flag ->
   ?rename_constructors:convert_flag ->
   ?guess_pattern:convert_flag ->
+  ?deref_pattern:convert_flag ->
+  ?curry_expressions:convert_flag ->
+  ?curry_types:convert_flag ->
+  ?tuple_select:convert_flag ->
+  ?toplevel_names:convert_flag ->
   unit ->
   conversions
 
@@ -54,6 +59,11 @@ val get_rename_constructors : options -> convert_flag
 val get_guess_pattern : options -> convert_flag
 val get_check_ocaml : options -> bool
 val get_variable_regex : options -> string
+val get_deref_pattern : options -> convert_flag
+val get_curry_expressions : options -> convert_flag
+val get_curry_types : options -> convert_flag
+val get_tuple_select : options -> convert_flag
+val get_toplevel_names : options -> convert_flag
 val engaged : convert_flag -> bool
 (** [engaged flag] returns true if the conversion flag is not Disable. *)
 

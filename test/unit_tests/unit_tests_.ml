@@ -6,13 +6,12 @@ let b = Ast.box_node
 
 (** Test configuration *)
 module TestConfig : Common.CONFIG = struct
-  let config =
-    {
-      Common.input_file = "";
-      output_file = None;
-      verbosity = Some 3;
-      conversions = Cli.test_config.conversions;
-    }
+  let config = Common.mkOptions
+    ~input_file:Common.StdIn
+    ~output_file:Common.Silent
+    ~verbosity:(Some 3)
+    ~conversions:(Common.mkConversions ())
+    ()
 end
 
 module TestContext (* TODO *) = struct
@@ -630,7 +629,7 @@ let test_process_val_bind_simple () =
         b (ExpCon (b (ConInt (b "42")))),
         None )
   in
-  let result = process_value_bind (b input) in
+  let result = process_val_bind input in
   check int "simple value binding" 1 (List.length result)
 
 let test_process_val_bind_multiple () =
@@ -645,7 +644,7 @@ let test_process_val_bind_multiple () =
                   b (ExpCon (b (ConInt (b "2")))),
                   None ))) )
   in
-  let result = process_val_bind (b input) in
+  let result = process_val_bind input in
   check int "multiple value bindings (and)" 2 (List.length result)
 
 (** Test cases for process_fun_bind *)
@@ -662,7 +661,7 @@ let test_process_fun_bind_simple () =
                None )),
         None )
   in
-  let result = process_fun_bind (b input) in
+  let result = process_fun_bind input in
   check int "simple function binding" 1 (List.length result)
 
 let test_process_fun_bind_pattern_match () =
@@ -684,7 +683,7 @@ let test_process_fun_bind_pattern_match () =
                          None ))) )),
         None )
   in
-  let result = process_fun_bind (b input) in
+  let result = process_fun_bind input in
   check int "function with pattern matching" 1 (List.length result)
 
 (** Test cases for process_typ_bind *)
@@ -694,7 +693,7 @@ let test_process_typ_bind_simple () =
     TypBind
       ([], b (IdxIdx (b "myint")), b (TypCon ([], b (IdxIdx (b "int")))), None)
   in
-  let result = process_typ_bind (b input) in
+  let result = process_typ_bind input in
   check int "simple type abbreviation" 1 (List.length result)
 
 let test_process_typ_bind_parametric () =
@@ -709,7 +708,7 @@ let test_process_typ_bind_parametric () =
              ]),
         None )
   in
-  let result = process_typ_bind (b input) in
+  let result = process_typ_bind input in
   check int "parametric type abbreviation" 1 (List.length result)
 
 (** Test cases for process_dat_bind *)
@@ -726,7 +725,7 @@ let test_process_dat_bind_simple () =
                Some (b (ConBind (b (IdxIdx (b "False")), None, None))) )),
         None )
   in
-  let result = process_dat_bind (b input) in
+  let result = process_dat_bind input in
   check int "simple datatype declaration" 1 (List.length result)
 
 let test_process_dat_bind_option () =
@@ -746,14 +745,14 @@ let test_process_dat_bind_option () =
                          None ))) )),
         None )
   in
-  let result = process_dat_bind (b input) in
+  let result = process_dat_bind input in
   check int "option datatype declaration" 1 (List.length result)
 
 (** Test cases for process_exn_bind *)
 
 let test_process_exn_bind_simple () =
   let input = ExnBind (b (IdxIdx (b "Overflow")), None, None) in
-  let result = process_exn_bind (b input) in
+  let result = process_exn_bind input in
   check int "simple exception declaration" 1 (List.length result)
 
 let test_process_exn_bind_with_arg () =
@@ -763,7 +762,7 @@ let test_process_exn_bind_with_arg () =
         Some (b (TypCon ([], b (IdxIdx (b "string"))))),
         None )
   in
-  let result = process_exn_bind (b input) in
+  let result = process_exn_bind input in
   check int "exception with argument" 1 (List.length result)
 
 (** Test cases for process_prog *)
@@ -780,7 +779,7 @@ let test_process_prog_simple_val () =
                      b (ExpCon (b (ConInt (b "42")))),
                      None )) )))
   in
-  let result = process_prog (b input) in
+  let result = process_prog input in
   check int "simple program with value declaration" 1 (List.length result)
 
 let test_process_prog_fun () =
@@ -799,7 +798,7 @@ let test_process_prog_fun () =
                            None )),
                     None )))))
   in
-  let result = process_prog (b input) in
+  let result = process_prog input in
   check int "program with function declaration" 1 (List.length result)
 
 let test_process_prog_datatype () =
@@ -828,7 +827,7 @@ let test_process_prog_datatype () =
                      None )),
               None )))
   in
-  let result = process_prog (b input) in
+  let result = process_prog input in
   check int "program with datatype declaration" 1 (List.length result)
 
 let test_process_prog_sequence () =
@@ -855,7 +854,7 @@ let test_process_prog_sequence () =
                             b (ExpCon (b (ConInt (b "2")))),
                             None )) )))) )
   in
-  let result = process_prog (b input) in
+  let result = process_prog input in
   check int "program with sequential declarations" 2 (List.length result)
 
 (** Test cases for complex types *)
@@ -1299,7 +1298,7 @@ let test_val_declaration_structure () =
         b (ExpCon (b (ConInt (b "42")))),
         None )
   in
-  let result = process_val_bind (b input) in
+  let result = process_val_bind input in
   match result with
   | [ binding ] -> (
       match binding.pvb_expr.pexp_desc with
@@ -1319,7 +1318,7 @@ let test_fun_declaration_structure () =
                None )),
         None )
   in
-  let result = process_fun_bind (b input) in
+  let result = process_fun_bind input in
   match result with
   | [ binding ] -> (
       match binding.pvb_expr.pexp_desc with
@@ -1339,7 +1338,7 @@ let test_datatype_declaration_structure () =
                Some (b (ConBind (b (IdxIdx (b "False")), None, None))) )),
         None )
   in
-  let result = process_dat_bind (b input) in
+  let result = process_dat_bind input in
   match result with
   | [ decl ] -> (
       match decl.ptype_kind with
@@ -1349,7 +1348,7 @@ let test_datatype_declaration_structure () =
 
 let test_exception_declaration_structure () =
   let input = ExnBind (b (IdxIdx (b "Overflow")), None, None) in
-  let result = process_exn_bind (b input) in
+  let result = process_exn_bind input in
   match result with
   | [ ext_cons ] -> (
       (* Check that we got an extension constructor (for exceptions) *)
@@ -1421,6 +1420,137 @@ let pattern_matching_tests =
       test_exception_declaration_structure );
   ]
 
+(** {1 Comment Preservation Tests} *)
+
+(** Helper to count comments in SML source *)
+let count_sml_comments (source : string) : int =
+  let rec find_all_occurrences str pattern start acc =
+    try
+      let idx = String.index_from str start '(' in
+      if idx + 1 < String.length str && str.[idx + 1] = '*' then
+        find_all_occurrences str pattern (idx + 2) (acc + 1)
+      else
+        find_all_occurrences str pattern (idx + 1) acc
+    with Not_found -> acc
+  in
+  find_all_occurrences source "(*" 0 0
+
+(** Helper to recursively count comment attributes in Parsetree *)
+let rec count_parsetree_comments (structure : Parsetree.structure) : int =
+  let rec count_structure_item item =
+    match item.Parsetree.pstr_desc with
+    | Pstr_attribute _ -> 1  (* Count all Pstr_attribute as comments *)
+    | Pstr_value (_, bindings) ->
+        List.fold_left (+) 0 (List.map count_value_binding bindings)
+    | Pstr_eval (expr, _) -> count_expression expr
+    | Pstr_module _ -> 0
+    | Pstr_type _ -> 0
+    | Pstr_exception _ -> 0
+    | _ -> 0
+  and count_value_binding vb =
+    count_expression vb.Parsetree.pvb_expr + count_pattern vb.Parsetree.pvb_pat
+  and count_expression expr =
+    match expr.Parsetree.pexp_desc with
+      | Pexp_let (_, bindings, body) ->
+          List.fold_left (+) (count_expression body)
+            (List.map count_value_binding bindings)
+      | Pexp_sequence (e1, e2) -> count_expression e1 + count_expression e2
+      | Pexp_apply (e, args) ->
+          count_expression e +
+          List.fold_left (+) 0 (List.map (fun (_, e) -> count_expression e) args)
+      | Pexp_tuple exprs ->
+          List.fold_left (+) 0 (List.map count_expression exprs)
+      | Pexp_match (e, cases) ->
+          count_expression e +
+          List.fold_left (+) 0 (List.map count_case cases)
+      | Pexp_ifthenelse (e1, e2, e3_opt) ->
+          count_expression e1 + count_expression e2 +
+          (match e3_opt with Some e3 -> count_expression e3 | None -> 0)
+      | Pexp_fun (_, _, pat, e) ->
+          count_pattern pat + count_expression e
+      | Pexp_constraint (e, _) -> count_expression e
+      | _ -> 0
+  and count_pattern _pat = 0  (* Patterns should not have comments after hoisting *)
+  and count_case case =
+    count_pattern case.Parsetree.pc_lhs + count_expression case.Parsetree.pc_rhs
+  in
+  List.fold_left (+) 0 (List.map count_structure_item structure)
+
+(** Test that all comments are preserved after conversion *)
+let test_all_comments_preserved () =
+  let source = "(* A *)\nval x = 1 (* B *)\n(* C *)\nval y = 2\n(* D *)" in
+  let expected_count = 4 in  (* A, B, C, D *)
+
+  let module TestCtx = struct
+    let lexbuf = source
+    let context = Context.basis_context
+  end in
+  let module TestBE = Backend.Make(TestCtx)(TestConfig) in
+
+  let ast = Frontend.parse source in
+  let result = TestBE.process_prog ast in
+  let actual_count = count_parsetree_comments result in
+
+  check int "all comments preserved" expected_count actual_count
+
+(** Test that comments are hoisted to structure items *)
+let test_comments_hoisted_to_structure () =
+  let source = "val x = 1 (* inline comment *)" in
+
+  let module TestCtx = struct
+    let lexbuf = source
+    let context = Context.basis_context
+  end in
+  let module TestBE = Backend.Make(TestCtx)(TestConfig) in
+
+  let ast = Frontend.parse source in
+  let result = TestBE.process_prog ast in
+
+  (* Count structure-level comment attributes *)
+  let structure_comment_count =
+    List.fold_left
+      (fun acc item ->
+        match item.Parsetree.pstr_desc with
+        | Pstr_attribute _ -> acc + 1
+        | _ -> acc)
+      0 result
+  in
+
+  (* Should have at least one structure-level comment *)
+  check bool "comment hoisted to structure level"
+    true (structure_comment_count > 0)
+
+(** Test with multiple declarations and comments *)
+let test_multiple_declarations_with_comments () =
+  let source =
+    "(* Header comment *)\n" ^
+    "val x = 1\n" ^
+    "(* Middle comment *)\n" ^
+    "val y = 2\n" ^
+    "(* Trailing comment *)"
+  in
+  let expected_count = 3 in
+
+  let module TestCtx = struct
+    let lexbuf = source
+    let context = Context.basis_context
+  end in
+  let module TestBE = Backend.Make(TestCtx)(TestConfig) in
+
+  let ast = Frontend.parse source in
+  let result = TestBE.process_prog ast in
+  let actual_count = count_parsetree_comments result in
+
+  check int "multiple comments preserved" expected_count actual_count
+
+(** Comment preservation test suite *)
+let comment_preservation_tests =
+  [
+    ("all comments preserved", `Quick, test_all_comments_preserved);
+    ("comments hoisted to structure items", `Quick, test_comments_hoisted_to_structure);
+    ("multiple declarations with comments", `Quick, test_multiple_declarations_with_comments);
+  ]
+
 (** Main test runner *)
 
 let run_unit_tests () : unit =
@@ -1435,6 +1565,7 @@ let run_unit_tests () : unit =
       ("Program Processing", program_tests);
       ("Complex Type Processing", complex_type_tests);
       ("Pattern Matching (AST Structure)", pattern_matching_tests);
+      ("Comment Preservation", comment_preservation_tests);
     ]
 
 let () = run_unit_tests ()

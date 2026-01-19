@@ -18,7 +18,78 @@ end
 (** Functor to create a name processor with specific configuration *)
 module Make (Config : CONFIG) = struct
   open Process_names
-  
+
+  (* 
+  eqtype unit 	General
+eqtype int 	Int
+eqtype word 	Word
+type real 	Real
+eqtype char 	Char
+eqtype string 	String
+type substring 	Substring
+type exn 	General
+eqtype 'a array 	Array
+eqtype 'a vector 	Vector
+eqtype 'a ref 	primitive
+datatype bool = false | true 	primitive
+datatype 'a option = NONE | SOME of 'a 	Option
+datatype order = LESS | EQUAL | GREATER 	General
+datatype 'a list = nil | :: of ('a * 'a list) 	primitive
+val ! : 'a ref -> 'a 	General.!
+val := : 'a ref * 'a -> unit 	General.:=
+val @ : ('a list * 'a list) -> 'a list 	List.@
+val ^ : string * string -> string 	String.^
+val app : ('a -> unit) -> 'a list -> unit 	List.app
+val before : 'a * unit -> 'a 	General.before
+val ceil : real -> int 	Real.ceil
+val chr : int -> char 	Char.chr
+val concat : string list -> string 	String.concat
+val exnMessage : exn -> string 	General.exnMessage
+val exnName : exn -> string 	General.exnName
+val explode : string -> char list 	String.explode
+val floor : real -> int 	Real.floor
+val foldl : ('a*'b->'b)-> 'b -> 'a list -> 'b 	List.foldl
+val foldr : ('a*'b->'b)-> 'b -> 'a list -> 'b 	List.foldr
+val getOpt : ('a option * 'a) -> 'a 	Option.getOpt
+val hd : 'a list -> 'a 	List.hd
+val ignore : 'a -> unit 	General.ignore
+val implode : char list -> string 	String.implode
+val isSome : 'a option -> bool 	Option.isSome
+val length : 'a list -> int 	List.length
+val map : ('a -> 'b) -> 'a list -> 'b list 	List.map
+val not : bool -> bool 	Bool.not
+val null : 'a list -> bool 	List.null
+val o : ('a->'b) * ('c->'a) -> 'c->'b 	General.o
+val ord : char -> int 	Char.ord
+val print : string -> unit 	TextIO.print
+val real : int -> real 	Real.fromInt
+val ref : 'a -> 'a ref 	primitive
+val rev : 'a list -> 'a list 	List.rev
+val round : real -> int 	Real.round
+val size : string -> int 	String.size
+val str : char -> string 	String.str
+val substring : string * int * int -> string 	String.substring
+val tl : 'a list -> 'a list 	List.tl
+val trunc : real -> int 	Real.trunc
+val use : string -> unit 	implementation dependent
+val valOf : 'a option -> 'a 	Option.valOf
+val vector : 'a list -> 'a vector 	Vector.fromList
+
+  *)
+  let process_special (name : string list) : string list option = 
+    if not @@ Common.engaged @@ Common.get_toplevel_names Config.config then 
+      None 
+    else 
+      match name with 
+      | [ "true" ] -> Some [ "true" ]
+      | [ "false" ] -> Some [ "false" ]
+      | [ "nil" ] -> Some [ "[]" ]
+      | [ "::" ] -> Some [ "::" ]
+      | [ "SOME" ] -> Some [ "Some" ]
+      | [ "NONE" ] -> Some [ "None" ]
+      | [ "ref" ] -> Some [ "ref" ]
+      | [ "hd" ] -> Some [ "List" ; "hd" ]
+      | _ -> None 
   let namer : process_names =
     new process_names (ref Config.config) (ref Config.context)
 
