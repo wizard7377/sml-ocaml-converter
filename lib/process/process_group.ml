@@ -70,7 +70,7 @@ class process_group path cfg_init =
         in
         interface_output ^ "\n" ^ implementation_output ^ "\n" ^ exports_output
       with e ->
-        Format.eprintf "Error: %s in processing group members.@."
+        Stdlib.Format.eprintf "Error: %s in processing group members.@."
           (Printexc.to_string e);
         raise e
   end

@@ -1,5 +1,4 @@
 open Common
-open Astlib.Pprintast
 
 type sml_code = Ast.prog
 type ocaml_code = Parsetree.toplevel_phrase list
@@ -23,9 +22,9 @@ class process_file ?(store = Context.create []) cfg_init =
       match get_output_file cfg with
       | FileOut path ->
           let oc = open_out path in
-          Format.formatter_of_out_channel oc
-      | StdOut -> Format.std_formatter
-      | Silent -> Format.std_formatter
+          Stdlib.Format.formatter_of_out_channel oc
+      | StdOut -> Stdlib.Format.std_formatter
+      | Silent -> Stdlib.Format.std_formatter
 
     method parse_sml (s : string) : sml_code =
       lexbuf <- s;
@@ -54,9 +53,9 @@ class process_file ?(store = Context.create []) cfg_init =
 
     method print_ocaml (ocaml_code : ocaml_code) : string =
       let buffer = Buffer.create 256 in
-      let fmt = Format.formatter_of_buffer buffer in
-      List.iter (Astlib.Pprintast.top_phrase fmt) ocaml_code;
-      Format.pp_print_flush fmt ();
+      let fmt = Stdlib.Format.formatter_of_buffer buffer in
+      List.iter (Common.Format.toplevel_phrase fmt) ocaml_code;
+      Stdlib.Format.pp_print_flush fmt ();
       Buffer.contents buffer
 
     method process_file (input : string) : string =

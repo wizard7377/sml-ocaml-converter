@@ -89,12 +89,12 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
   let process_name_to_longident ~(ctx : Process_names.context)
       (name_parts : string list) : Ppxlib.Longident.t =
     let (res, changed) = Names.process_name ~ctx name_parts in 
-    if changed then 
+    if changed then
       Log.log ~level:Debug ~kind:Neutral
         ~msg:
           (Printf.sprintf "Renamed %s to %s"
              (String.concat "." name_parts)
-             (Ppxlib.Longident.last_exn res |> Format.asprintf "%s"))
+             (Ppxlib.Longident.last_exn res |> Stdlib.Format.asprintf "%s"))
         ();
     res
 
@@ -130,13 +130,13 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         depth := indent + 1;
         let _ =
           Log.log ~level:Debug ~kind:Neutral
-            ~msg:(Format.sprintf "%dEntering %s %s" !depth ast msg)
+            ~msg:(Stdlib.Format.sprintf "%dEntering %s %s" !depth ast msg)
         in
         let res = value () in
         depth := indent;
         let _ =
           Log.log ~level:Debug ~kind:Neutral
-            ~msg:(Format.sprintf "%dExiting %s %s" !depth ast msg)
+            ~msg:(Stdlib.Format.sprintf "%dExiting %s %s" !depth ast msg)
         in
         res
     | _ -> value ()
@@ -688,6 +688,17 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       process_pat ~is_head:false (PatIdx (WithoutOp "y"))
       (* → Variable pattern *)
     ]} *)
+  and pat_head_eq_ref (pat : Ast.with_op Ast.node) : bool =
+    match pat.value with
+    | WithOp _ -> false
+    | WithoutOp id -> begin match id.value with
+      | IdxIdx n -> n.value = "ref"
+      | IdxLong [ n ] -> begin match n.value with
+        | IdxIdx name -> name.value = "ref"
+        | _ -> false
+      end
+      | _ -> false
+    end
   and process_pat ?(is_arg = false) ?(is_head = false) (pat : Ast.pat Ast.node) :
       Parsetree.pattern =
     (* Enter accumulation mode for comment hoisting *)
@@ -718,6 +729,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
             else
               let name_str = process_name_to_string ~ctx:PatternTail id_name in
               Builder.ppat_var (ghost name_str))
+    | PatApp (node, p) when pat_head_eq_ref node -> let loc = Ppxlib.Location.none in ([%pat? { contents = [%p process_pat ~is_arg ~is_head p] }])
     | PatApp (wo, p) ->
         (* Constructor application: SOME x *)
         let const_name = process_with_op ~ctx:Constructor wo.value in
@@ -771,6 +783,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         in
         labeller#cite Helpers.Attr.pattern pat.pos
         @@ Builder.ppat_alias final_pat (ghost var_str)
+        | PatOr(p1, p2) -> 
+            let p1' = process_pat ~is_arg ~is_head p1 in
+            let p2' = process_pat ~is_arg ~is_head p2 in
+            Builder.ppat_or p1' p2'
     end in
     (* Still call cite to accumulate comments, won't attach as attributes *)
     let result = labeller#cite Helpers.Attr.pattern pat.pos res in
@@ -2055,7 +2071,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     let output_src =
       match Common.get_verbosity config with None -> false | Some n -> n >= 2
     in
-    if output_src then Format.eprintf "@,Lexical source: @[%s@]@," lexbuf;
+    if output_src then Stdlib.Format.eprintf "@,Lexical source: @[%s@]@," lexbuf;
     let structure = process_prog prog in
     let _ = labeller#destruct () in
     [ Parsetree.Ptop_def structure ]
