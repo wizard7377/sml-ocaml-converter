@@ -18,7 +18,78 @@ end
 (** Functor to create a name processor with specific configuration *)
 module Make (Config : CONFIG) = struct
   open Process_names
-  
+
+  (* 
+  eqtype unit 	General
+eqtype int 	Int
+eqtype word 	Word
+type real 	Real
+eqtype char 	Char
+eqtype string 	String
+type substring 	Substring
+type exn 	General
+eqtype 'a array 	Array
+eqtype 'a vector 	Vector
+eqtype 'a ref 	primitive
+datatype bool = false | true 	primitive
+datatype 'a option = NONE | SOME of 'a 	Option
+datatype order = LESS | EQUAL | GREATER 	General
+datatype 'a list = nil | :: of ('a * 'a list) 	primitive
+val ! : 'a ref -> 'a 	General.!
+val := : 'a ref * 'a -> unit 	General.:=
+val @ : ('a list * 'a list) -> 'a list 	List.@
+val ^ : string * string -> string 	String.^
+val app : ('a -> unit) -> 'a list -> unit 	List.app
+val before : 'a * unit -> 'a 	General.before
+val ceil : real -> int 	Real.ceil
+val chr : int -> char 	Char.chr
+val concat : string list -> string 	String.concat
+val exnMessage : exn -> string 	General.exnMessage
+val exnName : exn -> string 	General.exnName
+val explode : string -> char list 	String.explode
+val floor : real -> int 	Real.floor
+val foldl : ('a*'b->'b)-> 'b -> 'a list -> 'b 	List.foldl
+val foldr : ('a*'b->'b)-> 'b -> 'a list -> 'b 	List.foldr
+val getOpt : ('a option * 'a) -> 'a 	Option.getOpt
+val hd : 'a list -> 'a 	List.hd
+val ignore : 'a -> unit 	General.ignore
+val implode : char list -> string 	String.implode
+val isSome : 'a option -> bool 	Option.isSome
+val length : 'a list -> int 	List.length
+val map : ('a -> 'b) -> 'a list -> 'b list 	List.map
+val not : bool -> bool 	Bool.not
+val null : 'a list -> bool 	List.null
+val o : ('a->'b) * ('c->'a) -> 'c->'b 	General.o
+val ord : char -> int 	Char.ord
+val print : string -> unit 	TextIO.print
+val real : int -> real 	Real.fromInt
+val ref : 'a -> 'a ref 	primitive
+val rev : 'a list -> 'a list 	List.rev
+val round : real -> int 	Real.round
+val size : string -> int 	String.size
+val str : char -> string 	String.str
+val substring : string * int * int -> string 	String.substring
+val tl : 'a list -> 'a list 	List.tl
+val trunc : real -> int 	Real.trunc
+val use : string -> unit 	implementation dependent
+val valOf : 'a option -> 'a 	Option.valOf
+val vector : 'a list -> 'a vector 	Vector.fromList
+
+  *)
+  let process_special (name : string list) : string list option = 
+    if not @@ Common.engaged @@ Common.get_toplevel_names Config.config then 
+      None 
+    else 
+      match name with 
+      | [ "true" ] -> Some [ "true" ]
+      | [ "false" ] -> Some [ "false" ]
+      | [ "nil" ] -> Some [ "[]" ]
+      | [ "::" ] -> Some [ "::" ]
+      | [ "SOME" ] -> Some [ "Some" ]
+      | [ "NONE" ] -> Some [ "None" ]
+      | [ "ref" ] -> Some [ "ref" ]
+      | [ "hd" ] -> Some [ "List" ; "hd" ]
+      | _ -> None 
   let namer : process_names =
     new process_names (ref Config.config) (ref Config.context)
 
@@ -54,16 +125,25 @@ module Make (Config : CONFIG) = struct
     | _ -> true
   (** Process a name and return both the result and whether it was changed *)
   let process_name ~(ctx : context) (name : string list) : Ppxlib.Longident.t * bool =
-    match name with 
-    | [ name ] when in_core_lang ctx -> 
-        let regex = Common.get_variable_regex Config.config in 
-        (* prerr_endline ("Checking variable regex: " ^ regex ^ " against name: " ^ name); *)
-        if Re.Str.string_match (Re.Str.regexp ("$" ^ regex ^ "^") ) name 0 then 
-          (Longident.Lident (String.cat "__" name)) , true
-        else 
-          namer#process_name ~ctx ~name:[name]
-    | _ -> namer#process_name ~ctx ~name
+    let name = if List.exists (fun s -> String.ends_with s ~suffix:"_") name then List.map (fun s -> s ^ "__") name else name in
+    begin match process_special name with
+      | Some res -> Option.get (Longident.unflatten res), true
+      | None -> 
+    match name with
+    | [ name ] when in_core_lang ctx ->
+        (match Common.get_guess_var Config.config with
+        | Some regex ->
 
+            (* Check if the variable name matches the regex pattern *)
+            
+            if Re.Str.string_match (Re.Str.regexp ("^" ^ regex ^ "$")) name 0 then
+              let newname = String.uncapitalize_ascii name ^ "_" in
+              (Longident.Lident newname, true)
+            else
+              namer#process_name ~ctx ~name:[name]
+        | None -> namer#process_name ~ctx ~name:[name])
+    | _ -> namer#process_name ~ctx ~name
+            end
   (** Push a new naming context scope *)
   let push_context () : note = namer#push_context ()
 
@@ -78,9 +158,10 @@ module Make (Config : CONFIG) = struct
   let get_name (from : string) : string = namer#get_name from
 
   let matches_pattern (name : string) : bool =
-    let regex = Common.get_variable_regex Config.config in 
-        (* prerr_endline ("Checking variable regex: " ^ regex ^ " against name: " ^ name); *)
-    Re.Str.string_match (Re.Str.regexp ("$" ^ regex ^ "^") ) name 0  
+    match Common.get_guess_var Config.config with
+    | Some regex ->
+        Re.Str.string_match (Re.Str.regexp ("^" ^ regex ^ "$")) name 0
+    | None -> false  
 end
 
 (** Re-export context type and constructors for convenience *)

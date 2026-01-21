@@ -1,7 +1,7 @@
 (lang dune 3.20)
 
 (name shibboleth)
-(version v0.0.1-4-g3d6bd2c-dirty)
+(version 0.0.4)
 
 (generate_opam_files true)
 

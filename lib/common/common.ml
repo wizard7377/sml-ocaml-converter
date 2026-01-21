@@ -25,3 +25,4 @@ let rec map_last (f : 'a -> 'a) (lst : 'a list) : 'a list =
 
 include Options
 include Logger
+module Format = Format

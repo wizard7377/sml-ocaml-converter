@@ -165,7 +165,11 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
           let c = String.get input 2 in
           not ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c = '_')
         else false) in
-      if is_op then String.sub input 2 (String.length input - 2) else input
+      let res0 = if is_op then String.sub input 2 (String.length input - 2) else input in 
+      let res1 = match res0 with
+        | "~" -> "~-"
+        | _ -> res0 in
+      res1
 
     method process_name ?(ctx : context = Empty)  ~(name : string list) =
       assert (List.length name > 0);
@@ -182,7 +186,7 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
             let rec process_parts parts =
               match parts with
               | [] -> []
-              | [ last ] -> if is_lowercase last then  [last] else [ "__" ^ last ]
+              | [ last ] -> if is_lowercase last then  [last] else [ String.uncapitalize_ascii last ^ "_" ]
               | first :: rest -> first :: process_parts rest
             in
             let new_name = process_parts name' in
@@ -198,6 +202,7 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
             let new_name = process_parts name' in
             (new_name, true)
           )
+        | Functor -> (name', false)
         | PatternHead when Common.is_flag_enabled (Common.get_guess_pattern !config) -> let res = map_last process_uppercase name' in (res, name' <> res)
         | PatternTail when Common.is_flag_enabled (Common.get_convert_names !config) -> begin match name' with
             | [ last ] -> let res = process_lowercase last in ( [ res ], last <> res)
@@ -234,7 +239,7 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
           in 
       let (scope, basename) = self#split_name res in
       let (res0, res1) = (if Ppxlib.Keyword.is_keyword basename && Common.is_flag_enabled (Common.get_convert_keywords !config) then
-        let new_basename = basename ^ "__" in
+        let new_basename = basename ^ "_" in
         let full_name = scope @ [ new_basename ] in
         (self#build_longident full_name, b)
       else
