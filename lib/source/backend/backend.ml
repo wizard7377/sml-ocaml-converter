@@ -36,7 +36,11 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
   let quoter = Ppxlib.Expansion_helpers.Quoter.create ()
   let labeller = new Process_label.process_label config Context.lexbuf
   let lexbuf = Context.lexbuf
-
+  let current_temp : int ref = ref 0 
+  let get_current_then (i : int) : int =
+    let res = !current_temp in
+    current_temp := !current_temp + i;
+    res
   module Log = Common.Make (struct
     let config = Config.config
     let group = "backend"
@@ -85,12 +89,12 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
   let process_name_to_longident ~(ctx : Process_names.context)
       (name_parts : string list) : Ppxlib.Longident.t =
     let (res, changed) = Names.process_name ~ctx name_parts in 
-    if changed then 
+    if changed then
       Log.log ~level:Debug ~kind:Neutral
         ~msg:
           (Printf.sprintf "Renamed %s to %s"
              (String.concat "." name_parts)
-             (Ppxlib.Longident.last_exn res |> Format.asprintf "%s"))
+             (Ppxlib.Longident.last_exn res |> Stdlib.Format.asprintf "%s"))
         ();
     res
 
@@ -126,13 +130,13 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         depth := indent + 1;
         let _ =
           Log.log ~level:Debug ~kind:Neutral
-            ~msg:(Format.sprintf "%dEntering %s %s" !depth ast msg)
+            ~msg:(Stdlib.Format.sprintf "%dEntering %s %s" !depth ast msg)
         in
         let res = value () in
         depth := indent;
         let _ =
           Log.log ~level:Debug ~kind:Neutral
-            ~msg:(Format.sprintf "%dExiting %s %s" !depth ast msg)
+            ~msg:(Stdlib.Format.sprintf "%dExiting %s %s" !depth ast msg)
         in
         res
     | _ -> value ()
@@ -173,6 +177,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     let process_name_to_longident = process_name_to_longident
     let process_name_to_string = process_name_to_string
     let ghost = ghost
+    let config = config
   end
   module Types = Backend_types.Make(TypeDeps)
 
@@ -321,6 +326,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
           Builder.pexp_field r_exp (ghost (Ppxlib.Longident.Lident lab_str))
         in
         Builder.pexp_fun Nolabel None r_pat field_exp
+    | ArrayExp exps -> Builder.pexp_array (List.map process_exp exps) 
     | ListExp exps ->
         (* Build list from right to left using :: *)
         List.fold_right
@@ -543,13 +549,65 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         Builder.pexp_match (process_exp e) (process_matching cases.value)
     | FnExp cases ->
         (* fn match -> function ... *)
-        Builder.pexp_function (process_matching cases.value)
+        process_fun_exp cases.value
     end in
     (* Still call cite to accumulate comments, won't attach as attributes *)
     let result = labeller#cite Helpers.Attr.expression expression.pos res in
     (* Exit accumulation mode *)
     labeller#exit_accumulate_context;
     result
+
+  and process_fun_exp (cases : Ast.matching) :
+      Parsetree.expression = if not @@ engaged @@ Common.get_curry_expressions config then
+    Builder.pexp_function (process_matching cases)
+      else 
+        (* Curry mode: convert fn (x, y) => ... to fun x y -> ... *)
+        match cases with
+        | Case (pat, body, None) ->
+            (* Single case - can curry if pattern is a tuple *)
+            let pats = extract_curryable_pats pat in
+            build_curried_fun pats (process_exp body)
+        | Case (_, _, Some _) ->
+            (* Multiple cases - fall back to function *)
+            Builder.pexp_function (process_matching cases)
+
+  (** Extract patterns that can be curried from a pattern.
+      If the pattern is a tuple (possibly nested in parens or type constraints),
+      returns the individual tuple element patterns.
+      Otherwise returns the pattern as a single-element list. *)
+  and extract_curryable_pats (pat : Ast.pat Ast.node) : Ast.pat Ast.node list =
+    match pat.value with
+    | PatParen inner -> extract_curryable_pats inner
+    | PatTyp (inner, _) -> extract_curryable_pats inner
+    | PatTuple pats when List.length pats > 0 -> pats
+    | _ -> [pat]
+
+  (** Build a curried function from a list of patterns and a body.
+      [fun p1 -> fun p2 -> ... -> body] *)
+  and build_curried_fun (pats : Ast.pat Ast.node list) (body : Parsetree.expression) : Parsetree.expression =
+    List.fold_right
+      (fun pat acc -> Builder.pexp_fun Nolabel None (process_pat ~is_arg:true pat) acc)
+      pats
+      body
+
+  and process_app (e1 : Ast.expression Ast.node) (e2 : Ast.expression Ast.node) :
+      Parsetree.expression = if not @@ engaged @@ Common.get_curry_expressions config then
+    Builder.pexp_apply (process_exp e1) [ (Nolabel, process_exp e2) ]
+  else
+    match e2.value with 
+    | ParenExp inner_e -> process_app e1 inner_e 
+    | TypedExp (inner_e, _) -> process_app e1 inner_e
+    | TupleExp es -> 
+        process_apps e1 es
+    | _ -> Builder.pexp_apply (process_exp e1) [ (Nolabel, process_exp e2) ]
+  
+  and process_apps (e1 : Ast.expression Ast.node)
+      (es : Ast.expression Ast.node list) : Parsetree.expression =
+    match es with 
+    | [] -> process_exp e1
+    | e2 :: rest ->
+        let app = process_app e1 e2 in
+        process_apps (Ast.{ value = ExpApp (e1, e2); pos = e1.pos }) rest
   (** {2 Expression Rows and Matching}
 
       Helper functions for expression-related constructs. *)
@@ -631,7 +689,18 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       process_pat ~is_head:false (PatIdx (WithoutOp "y"))
       (* → Variable pattern *)
     ]} *)
-  and process_pat ?(is_head = false) (pat : Ast.pat Ast.node) :
+  and pat_head_eq_ref (pat : Ast.with_op Ast.node) : bool =
+    match pat.value with
+    | WithOp _ -> false
+    | WithoutOp id -> begin match id.value with
+      | IdxIdx n -> n.value = "ref"
+      | IdxLong [ n ] -> begin match n.value with
+        | IdxIdx name -> name.value = "ref"
+        | _ -> false
+      end
+      | _ -> false
+    end
+  and process_pat ?(is_arg = false) ?(is_head = false) (pat : Ast.pat Ast.node) :
       Parsetree.pattern =
     (* Enter accumulation mode for comment hoisting *)
     labeller#enter_accumulate_context;
@@ -661,6 +730,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
             else
               let name_str = process_name_to_string ~ctx:PatternTail id_name in
               Builder.ppat_var (ghost name_str))
+    | PatApp (node, p) when pat_head_eq_ref node -> let loc = Ppxlib.Location.none in ([%pat? { contents = [%p process_pat ~is_arg ~is_head p] }])
     | PatApp (wo, p) ->
         (* Constructor application: SOME x *)
         let const_name = process_with_op ~ctx:Constructor wo.value in
@@ -680,7 +750,9 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | PatParen p -> process_pat p
     | PatTuple [] ->
         Builder.ppat_construct (ghost (Ppxlib.Longident.Lident "()")) None
-    | PatTuple ps -> Builder.ppat_tuple (List.map (fun p -> process_pat p) ps)
+    | PatTuple ps -> 
+        let pat_list = process_tuple_pat is_arg ps in
+        pat_list
     | PatRecord rows ->
         let fields =
           List.flatten (List.map (fun r -> process_pat_row r.Ast.value) rows)
@@ -691,20 +763,21 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                (ghost (process_name_to_longident ~ctx:Label [ lab ]), pat))
              fields)
           Closed
+    | PatArray pats -> Builder.ppat_array (List.map (fun p -> process_pat ~is_arg ~is_head p) pats)
     | PatList pats ->
         (* Build list pattern from right to left *)
         List.fold_right
           (fun p acc ->
             Builder.ppat_construct
               (ghost (Ppxlib.Longident.Lident "::"))
-              (Some (Builder.ppat_tuple [ process_pat p; acc ])))
+              (Some (Builder.ppat_tuple [ process_pat ~is_arg ~is_head p; acc ])))
           pats
           (Builder.ppat_construct (ghost (Ppxlib.Longident.Lident "[]")) None)
-    | PatTyp (p, t) -> Builder.ppat_constraint (process_pat p) (process_type t)
+    | PatTyp (p, t) -> Builder.ppat_constraint (process_pat ~is_arg ~is_head p) (process_type t)
     | PatAs (wo, t_opt, p) ->
         (* Layered pattern: x as SOME y *)
         let var_str = process_with_op ~ctx:Value wo.value in
-        let inner_pat = process_pat p in
+        let inner_pat = process_pat ~is_arg ~is_head p in
         let final_pat =
           match t_opt with
           | None -> inner_pat
@@ -712,6 +785,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         in
         labeller#cite Helpers.Attr.pattern pat.pos
         @@ Builder.ppat_alias final_pat (ghost var_str)
+        | PatOr(p1, p2) -> 
+            let p1' = process_pat ~is_arg ~is_head p1 in
+            let p2' = process_pat ~is_arg ~is_head p2 in
+            Builder.ppat_or p1' p2'
     end in
     (* Still call cite to accumulate comments, won't attach as attributes *)
     let result = labeller#cite Helpers.Attr.pattern pat.pos res in
@@ -766,6 +843,15 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         | None -> [ here ]
         | Some rest -> here :: process_pat_row rest.value)
     end in res
+  and process_tuple_pat (is_arg : bool)
+      (pats : Ast.pat Ast.node list) : Parsetree.pattern = Builder.ppat_tuple
+    (List.map (fun p -> process_pat ~is_arg p) pats)
+
+  and process_pat_many (pat : Ast.pat Ast.node) : Parsetree.pattern list =
+    match pat.value with
+    | PatTuple ps ->
+        List.flatten (List.map (fun p -> process_pat_many p) ps)
+    | _ -> [ process_pat pat ]
   (** {1 Declaration Processing}
 
       Functions for converting SML declarations to OCaml structure items.
@@ -874,6 +960,11 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
       @param fb The function binding(s)
       @return List of OCaml value bindings *)
+  
+  (** Check if all clauses have exactly one argument pattern *)
+  and single_arg (clauses : (Parsetree.pattern list * Parsetree.expression) list) : bool =
+    List.for_all (fun (pats, _) -> List.length pats = 1) clauses
+
   and process_fun_bind (fb : Ast.function_binding) :
       Parsetree.value_binding list =
     match fb with
@@ -890,8 +981,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
         (* Process all match clauses *)
         let clauses = process_fun_match fm.value in
-        let single_arg (clauses : (Parsetree.pattern list * Parsetree.expression) list) : bool = 
-          List.for_all (fun (pats, _) -> List.length pats = 1) clauses in
+        
         (* Build the function body *)
         let body =
           match clauses with
@@ -923,10 +1013,11 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                 | (pats, _) :: _ -> List.length pats
                 | [] -> 0
               in
+              let get_temp = get_current_then num_params in
               (* Generate fresh parameter patterns *)
               let param_pats =
                 List.init num_params (fun i ->
-                    Builder.ppat_var (ghost (Printf.sprintf "arg__%d" i)))
+                    Builder.ppat_var (ghost (Printf.sprintf "arg__%d" (get_temp + i))))
               in
               (* Build function expression *)
               List.fold_right
@@ -939,7 +1030,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                           Builder.pexp_ident
                             (ghost
                                (Ppxlib.Longident.Lident
-                                  (Printf.sprintf "arg__%d" i)))))
+                                  (Printf.sprintf "arg__%d" (get_temp + i))))))
                  in
                  let cases =
                    List.map
@@ -961,7 +1052,11 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
           match rest_opt with None -> [] | Some r -> process_fun_bind r.value
         in
         binding :: rest
-
+  and 
+  get_arity (pat : Ast.pat) : int = match pat with
+    | PatTuple ps -> List.length ps
+    | PatParen p -> get_arity p.value
+    | _ -> 1
   (** Convert SML function match clauses.
 
       Helper for {!process_fun_bind}.
@@ -970,10 +1065,21 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       @return List of pattern-expression pairs *)
   and process_fun_match (fm : Ast.fun_match) :
       (Parsetree.pattern list * Parsetree.expression) list =
+    (* Helper to process patterns with optional currying *)
+    let process_pats_with_curry (pats : Ast.pat Ast.node list) : Parsetree.pattern list =
+      if engaged @@ Common.get_curry_expressions config then
+        (* Unfold tuple patterns for currying *)
+        List.concat_map (fun p -> 
+          let unfolded = extract_curryable_pats p in
+          List.map (fun pat -> process_pat ~is_arg:true pat) unfolded
+        ) pats
+      else
+        List.map (fun p -> process_pat p) pats
+    in
     match fm with
     | FunMatchPrefix (wo, pats, ty_opt, expression, rest_opt) ->
         (* fun f pat1 pat2 ... = expression *)
-        let pats' = List.map (fun p -> process_pat p) pats in
+        let pats' = process_pats_with_curry pats in
         let expression' = process_exp expression in
         let exp_with_type =
           match ty_opt with
@@ -987,25 +1093,21 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         here :: rest
     | FunMatchInfix (p1, id, p2, ty_opt, expression, rest_opt) ->
         (* fun p1 op p2 = expression - infix function *)
-        let p1' = process_pat p1 in
-        let p2' = process_pat p2 in
+        let pats' = process_pats_with_curry [p1; p2] in
         let expression' = process_exp expression in
         let exp_with_type =
           match ty_opt with
           | None -> expression'
           | Some ty -> Builder.pexp_constraint expression' (process_type ty)
         in
-        let here = ([ p1'; p2' ], exp_with_type) in
+        let here = (pats', exp_with_type) in
         let rest =
           match rest_opt with None -> [] | Some r -> process_fun_match r.value
         in
         here :: rest
     | FunMatchLow (p1, id, p2, pats, ty_opt, expression, rest_opt) ->
         (* fun (p1 op p2) pat3 ... = expression - curried infix *)
-        let p1' = process_pat p1 in
-        let p2' = process_pat p2 in
-        let pats' = List.map (fun p -> process_pat p) pats in
-        let all_pats = p1' :: p2' :: pats' in
+        let all_pats = process_pats_with_curry (p1 :: p2 :: pats) in
         let expression' = process_exp expression in
         let exp_with_type =
           match ty_opt with
@@ -1971,7 +2073,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     let output_src =
       match Common.get_verbosity config with None -> false | Some n -> n >= 2
     in
-    if output_src then Format.eprintf "@,Lexical source: @[%s@]@," lexbuf;
+    if output_src then Stdlib.Format.eprintf "@,Lexical source: @[%s@]@," lexbuf;
     let structure = process_prog prog in
     let _ = labeller#destruct () in
     [ Parsetree.Ptop_def structure ]

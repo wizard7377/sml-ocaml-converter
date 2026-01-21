@@ -6,6 +6,7 @@ module type TYPE_DEPS = sig
   val process_name_to_longident : ctx:Process_names.context -> string list -> Ppxlib.Longident.t
   val process_name_to_string : ctx:Process_names.context -> string list -> string
   val ghost : 'a -> 'a Location.loc
+  val config : Common.options
 end
 
 (** Module type for type processing interface *)

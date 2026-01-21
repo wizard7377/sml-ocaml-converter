@@ -1,0 +1,15 @@
+(test
+ (name comment_tests)
+ (libraries
+  cli
+  alcotest
+  shibboleth
+  ast
+  backend
+  helpers
+  compiler-libs.common
+  ppxlib)
+ (modules
+  comment_tests
+  common_tests
+  comment_test_1))

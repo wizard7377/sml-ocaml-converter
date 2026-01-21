@@ -14,6 +14,7 @@ module type TYPE_DEPS = sig
   val process_name_to_longident : ctx:Process_names.context -> string list -> Ppxlib.Longident.t
   val process_name_to_string : ctx:Process_names.context -> string list -> string
   val ghost : 'a -> 'a Location.loc
+  val config : Common.options
 end
 
 (** Module type for type processing interface *)
@@ -27,6 +28,7 @@ end
 module Make (Deps : TYPE_DEPS) : TYPE_PROCESSOR = struct
   open Deps
 
+  
   (** Convert an SML type to an OCaml core type. *)
   let rec process_type_value (ty : Ast.typ Ast.node) : Parsetree.core_type =
     (labeller#cite Helpers.Attr.core_type ty.pos)
@@ -43,9 +45,7 @@ module Make (Deps : TYPE_DEPS) : TYPE_PROCESSOR = struct
           Builder.ptyp_constr (ghost head_longident) args'
       | TypPar ty' ->
           labeller#cite Helpers.Attr.core_type ty.pos (process_type_value ty')
-      | TypFun (ty1, ty2) ->
-          let ty1', ty2' = (process_type_value ty1, process_type_value ty2) in
-          Builder.ptyp_arrow Nolabel ty1' ty2'
+      | TypFun (ty1, ty2) -> make_arrow ty1 ty2
       | TypTuple tys ->
           Builder.ptyp_tuple (List.map (fun t -> process_type_value t) tys)
       | TypRecord fields ->
@@ -71,7 +71,23 @@ module Make (Deps : TYPE_DEPS) : TYPE_PROCESSOR = struct
         match rest with
         | Some rest' -> here :: process_object_field_type rest'
         | None -> [ here ])
-
+  and make_arrow (ty1 : Ast.typ Ast.node) (ty2 : Ast.typ Ast.node) = 
+    if not @@ Common.engaged @@ Common.get_curry_types config then 
+      Builder.ptyp_arrow Nolabel (process_type_value ty1) (process_type_value ty2)
+    else
+    begin match ty1.value with
+          | TypPar inner_ty -> make_arrow inner_ty ty2
+          | TypTuple tys ->  
+            make_arrows tys ty2
+          | _ -> 
+              let ty1', ty2' = (process_type_value ty1, process_type_value ty2) in
+              Builder.ptyp_arrow Nolabel ty1' ty2'
+          end 
+  and make_arrows (ty1s : Ast.typ Ast.node list) (ty2 : Ast.typ Ast.node) =
+    match ty1s with
+    | [] -> process_type_value ty2
+    | ty1 :: rest -> 
+        Builder.ptyp_arrow Nolabel (process_type_value ty1) (make_arrows rest ty2)
   (** Wrapper function for process_type_value. *)
   let process_type (ty : Ast.typ Ast.node) : Parsetree.core_type =
     process_type_value ty

@@ -109,7 +109,7 @@ let conversion_flags : (bool * Common.conversions) Term.t =
   in
   let make_make_functor_flag : Common.convert_flag Term.t =
     Arg.value
-    @@ convert_flag_arg Common.Warn
+    @@ convert_flag_arg Common.Note
          (Cmdliner.Arg.info [ "make-make-functor" ] ~doc:make_make_functor_doc)
   in
   let rename_constructors_doc =
@@ -122,7 +122,47 @@ let conversion_flags : (bool * Common.conversions) Term.t =
     Arg.value
     @@ convert_flag_arg Common.Note
          (Cmdliner.Arg.info [ "rename-constructors" ]
-            ~doc:rename_constructors_doc)
+            ~doc:rename_constructors_doc) in
+  let deref_pattern_doc =
+    {|
+  Dereference patterns to match OCaml's pattern matching semantics.
+  This helps in converting SML patterns that involve references.
+  |}  
+  in
+  let deref_pattern_flag : Common.convert_flag Term.t =
+    Arg.value
+    @@ convert_flag_arg Common.Enable
+         (Cmdliner.Arg.info [ "deref-pattern" ] ~doc:deref_pattern_doc)
+  in let curry_expressions_doc =
+    {|
+  Curry expressions to match OCaml's function application style.
+  This transforms multi-argument functions into curried functions.
+  |}  
+  in
+  let curry_expressions_flag : Common.convert_flag Term.t =
+    Arg.value
+    @@ convert_flag_arg Common.Enable
+          (Cmdliner.Arg.info [ "curry-expressions" ] ~doc:curry_expressions_doc)
+  in let curry_types_doc =
+    {|
+  Curry types to match OCaml's type system.
+  This transforms multi-argument type constructors into curried types.
+  |}  
+  in
+  let curry_types_flag : Common.convert_flag Term.t =
+    Arg.value
+    @@ convert_flag_arg Common.Enable
+          (Cmdliner.Arg.info [ "curry-types" ] ~doc:curry_types_doc)
+  in let tuple_select_doc =
+    {|
+  Enable tuple selection transformations.
+  This allows for converting SML tuple selections to OCaml's equivalent.
+  |}  
+  in
+  let tuple_select_flag : Common.convert_flag Term.t =
+    Arg.value
+    @@ convert_flag_arg Common.Enable
+          (Cmdliner.Arg.info [ "tuple-select" ] ~doc:tuple_select_doc)
   in
   let guess_pattern_doc =
     {|
@@ -152,11 +192,16 @@ let conversion_flags : (bool * Common.conversions) Term.t =
   and+ make_make_functor = make_make_functor_flag
   and+ rename_constructors = rename_constructors_flag
   and+ guess_pattern = guess_pattern_flag
-  and+ force = convert_force_flag in 
+  and+ force = convert_force_flag 
+  and+ deref_pattern = deref_pattern_flag
+  and+ curry_expressions = curry_expressions_flag
+  and+ curry_types = curry_types_flag
+  and+ tuple_select = tuple_select_flag in
   ( force,
     Common.mkConversions ~convert_names ~convert_comments ~add_line_numbers
       ~convert_keywords ~rename_types ~make_make_functor ~rename_constructors
-      ~guess_pattern () )
+      ~guess_pattern ~deref_pattern ~curry_expressions ~curry_types
+      ~tuple_select () )
 
 let concat_output : bool Term.t =
   let doc =
@@ -174,15 +219,16 @@ let quiet : bool Term.t =
   |} in
   Arg.(value & flag & info [ "q"; "quiet" ] ~doc)
 
-let infer_pattern : string option Term.t =
+let guess_var : string option Term.t =
   let doc =
     {|
-  A regular expression pattern to identify variable names that should be converted to lowercase in patterns.
-  This is useful for converting SML variable names (which often start with uppercase letters) to OCaml conventions.
-  The regex is applied to the last part of the variable name.
+  A regular expression pattern to identify variable names that should be converted to __<NAME> format.
+  For example, --guess-var="[A-Z]'?" will convert variables like X, Y', etc. to __X, __Y'.
+  Module names and qualified names (Module.x) are not affected.
+  The regex is applied to the entire variable name.
   |}
   in
-  Arg.(value & opt (some string) None & info [ "infer-pattern" ] ~doc)
+  Arg.(value & opt (some string) None & info [ "guess-var" ] ~doc)
 
 let debug : string list Term.t =
   let doc =
@@ -201,13 +247,22 @@ let variable_regex_doc =
   |} 
 let variable_regex_flag : string Term.t =
     Arg.(value & opt string "" & info [ "variable-regex" ] ~doc:variable_regex_doc)
+
+let check_ocaml_doc =
+  {|
+  Enable checking of the generated OCaml code for syntax errors using the OCaml compiler.
+  This helps ensure that the converted code is syntactically valid OCaml.
+  |}
+let check_ocaml_flag : bool Term.t =
+  Arg.(value & flag & info [ "check-ocaml" ] ~doc:check_ocaml_doc)  
 let common_options : Common.options Cmdliner.Term.t =
   let+ v = verb
   and+ force, c = conversion_flags
   and+ co = concat_output
   and+ q = quiet
-  and+ ip = infer_pattern
-  and+ dbg = debug 
-  and+ var_reg = variable_regex_flag in
+  and+ gv = guess_var
+  and+ dbg = debug
+  and+ var_reg = variable_regex_flag
+  and+ check_ocaml = check_ocaml_flag in
   Common.mkOptions ~verbosity:(Some v) ~conversions:c ~concat_output:co ~force
-    ~quiet:q ~guess_var:ip ~debug:dbg ~variable_regex:var_reg ()
+    ~quiet:q ~guess_var:gv ~debug:dbg ~variable_regex:var_reg ~check_ocaml:check_ocaml ()

@@ -99,6 +99,7 @@
 %token UNDERSCORE "_"
 %token HASH "#"
 %token STAR "*"
+%token HASH_OPEN "#["
 
 (* Literals *)
 %token<string> STRING_LIT
@@ -123,7 +124,7 @@
 %left SEMICOLON
 %right AND
 %nonassoc BIGARROW
-%nonassoc BAR
+%left BAR
 %nonassoc ELSE
 %nonassoc DO
 %nonassoc RAISE
@@ -137,6 +138,7 @@
 %right STAR
 %left COLON COLON_GT
 %left PROGRAM_PREC 
+
 (* ========================================================================= *)
 (* Type declarations for nonterminals                                        *)
 (* ========================================================================= *)
@@ -413,7 +415,9 @@ atomic_exp:
   | "(" exp_comma_seq2 ")" { TupleExp $2 }
   | "(" exp_semicolon_seq2 ")" { SeqExp $2 }
   | LBRACE exprow_opt RBRACE { RecordExp $2 }
+  | HASH_OPEN exp_comma_seq0 RBRACKET { ArrayExp $2 }
   | LBRACKET exp_comma_seq0 RBRACKET { ListExp $2 }
+  
 ;
 
 exp_semicolon_exp:
@@ -480,6 +484,9 @@ pat:
 
       | _ -> failwith "impossible: invalid pattern sequence"
     }
+  | p0=pat BAR p1=pat {
+      PatOr (bp p0 $startpos(p0) $endpos(p0), bp p1 $startpos(p1) $endpos(p1))
+    }
   | pat COLON typ { PatTyp (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3)) }
   | pat CONS pat { PatInfix (bp $1 $startpos($1) $endpos($1), b (IdxIdx (b "::")), bp $3 $startpos($3) $endpos($3)) }
   | pat "as" pat {
@@ -503,6 +510,7 @@ atomic_pat:
   | "(" pat ")" { PatParen (bp $2 $startpos($2) $endpos($2)) }
   | "(" ")" { PatTuple [] }
   | "(" pat_comma_seq2 ")" { PatTuple $2 }
+  | HASH_OPEN pat_comma_seq0 RBRACKET { PatArray $2 }
   | LBRACKET pat_comma_seq0 RBRACKET { PatList $2 }
 ;
 

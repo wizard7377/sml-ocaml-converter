@@ -77,3 +77,9 @@ val map_last : ('a -> 'a) -> 'a list -> 'a list
 
 include module type of Options
 include module type of Logger
+
+(** {1 Pretty Printing}
+
+    OCaml Parsetree pretty-printing using Fmt-style interfaces. *)
+
+module Format = Format

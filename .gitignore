@@ -4,6 +4,7 @@ _build/
 examples/**
 !examples/TestSetup.mk
 *.opam
+!shibboleth.opam
 .github/
 .claude/
 *~ 

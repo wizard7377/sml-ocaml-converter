@@ -14,12 +14,19 @@ type conversions = {
   make_make_functor : convert_flag;
   rename_constructors : convert_flag;
   guess_pattern : convert_flag;
+  deref_pattern : convert_flag;
+  curry_expressions : convert_flag;
+  curry_types : convert_flag;
+  tuple_select : convert_flag;
+  toplevel_names : convert_flag;
 }
 
 let mkConversions ?(convert_names = Disable) ?(convert_comments = Warn)
     ?(add_line_numbers = Disable) ?(convert_keywords = Warn)
     ?(rename_types = Warn) ?(make_make_functor = Disable)
-    ?(rename_constructors = Disable) ?(guess_pattern = Disable) (_ : unit) :
+    ?(rename_constructors = Disable) ?(guess_pattern = Disable)
+    ?(deref_pattern = Disable) ?(curry_expressions = Disable)
+    ?(curry_types = Disable) ?(tuple_select = Disable) ?(toplevel_names = Enable) () :
     conversions =
   {
     convert_names;
@@ -30,6 +37,11 @@ let mkConversions ?(convert_names = Disable) ?(convert_comments = Warn)
     make_make_functor;
     rename_constructors;
     guess_pattern;
+    deref_pattern;
+    curry_expressions;
+    curry_types;
+    tuple_select;
+    toplevel_names;
   }
 
 type options = {
@@ -52,6 +64,7 @@ type options = {
   debug : string list;
   check_ocaml : bool;
   variable_regex : string; 
+  
 }
 
 let mkOptions ?(input_file = StdIn) ?(output_file = Silent) ?(verbosity = None)
@@ -95,6 +108,12 @@ let get_guess_var opts = opts.guess_var
 let get_debug opts = opts.debug
 let get_check_ocaml opts = opts.check_ocaml
 let get_variable_regex opts = opts.variable_regex
+let get_deref_pattern opts = opts.conversions.deref_pattern
+let get_curry_expressions opts = opts.conversions.curry_expressions
+let get_curry_types opts = opts.conversions.curry_types
+let get_tuple_select opts = opts.conversions.tuple_select
+let get_toplevel_names opts = opts.conversions.toplevel_names
+
 let engaged = function Enable | Warn -> true | _ -> false
 let noted = function Warn | Note -> true | _ -> false
 
