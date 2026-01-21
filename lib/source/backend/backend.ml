@@ -90,7 +90,9 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       (name_parts : string list) : Ppxlib.Longident.t =
     let (res, changed) = Names.process_name ~ctx name_parts in 
     if changed then
-      Log.log ~level:Debug ~kind:Neutral
+      Log.log 
+        ~subgroup:"names" 
+        ~level:Debug ~kind:Neutral
         ~msg:
           (Printf.sprintf "Renamed %s to %s"
              (String.concat "." name_parts)
@@ -128,16 +130,14 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         (* TODO use level *)
         let indent = !depth in
         depth := indent + 1;
-        let _ =
-          Log.log ~level:Debug ~kind:Neutral
-            ~msg:(Stdlib.Format.sprintf "%dEntering %s %s" !depth ast msg)
-        in
+        Log.log ~subgroup:"trace" ~level:Debug ~kind:Neutral
+          ~msg:(Stdlib.Format.sprintf "%dEntering %s %s" !depth ast msg)
+          ();
         let res = value () in
         depth := indent;
-        let _ =
-          Log.log ~level:Debug ~kind:Neutral
-            ~msg:(Stdlib.Format.sprintf "%dExiting %s %s" !depth ast msg)
-        in
+        Log.log ~subgroup:"trace" ~level:Debug ~kind:Neutral
+          ~msg:(Stdlib.Format.sprintf "%dExiting %s %s" !depth ast msg)
+          ();
         res
     | _ -> value ()
 
@@ -192,6 +192,9 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       @param ty The SML type to convert
       @return The corresponding OCaml core type *)
   let rec process_type (ty : Ast.typ node) : Parsetree.core_type =
+    Log.log ~subgroup:"type" ~level:Debug ~kind:Neutral
+      ~msg:"Processing type conversion"
+      ();
     trace_part ~level:2 ~ast:"typ" ~msg:"" (* ~msg:(Ast.show_typ ty) *)
       ~value:(fun () -> process_type_value ty)
 
@@ -253,6 +256,31 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   let rec process_exp (expression : Ast.expression Ast.node) :
       Parsetree.expression =
+    Log.log ~subgroup:"expression" ~level:Debug ~kind:Neutral
+      ~msg:(Printf.sprintf "Processing expression: %s"
+        (match expression.value with
+         | ExpCon _ -> "ExpCon"
+         | ExpApp _ -> "ExpApp"
+         | ExpIdx _ -> "ExpIdx"
+         | InfixApp _ -> "InfixApp"
+         | ParenExp _ -> "ParenExp"
+         | TupleExp _ -> "TupleExp"
+         | RecordExp _ -> "RecordExp"
+         | RecordSelector _ -> "RecordSelector"
+         | ArrayExp _ -> "ArrayExp"
+         | ListExp _ -> "ListExp"
+         | SeqExp _ -> "SeqExp"
+         | LetExp _ -> "LetExp"
+         | TypedExp _ -> "TypedExp"
+         | RaiseExp _ -> "RaiseExp"
+         | HandleExp _ -> "HandleExp"
+         | AndExp _ -> "AndExp"
+         | OrExp _ -> "OrExp"
+         | IfExp _ -> "IfExp"
+         | WhileExp _ -> "WhileExp"
+         | CaseExp _ -> "CaseExp"
+         | FnExp _ -> "FnExp"))
+      ();
     let res = begin match expression.value with
     | ExpCon c -> Builder.pexp_constant (process_con c)
     | ExpApp (e1, e2) when is_operator e2 ->
@@ -363,6 +391,23 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         match all_decs with
         | [] -> process_exp { value = SeqExp exps; pos = expression.pos }
         | first_dec :: rest_decs -> (
+            Log.log ~subgroup:"let-expr" ~level:Debug ~kind:Neutral
+              ~msg:(Printf.sprintf "Processing LetExp with declaration: %s"
+                (match first_dec.value with
+                 | ExnDec _ -> "ExnDec"
+                 | DatDec _ -> "DatDec"
+                 | TypDec _ -> "TypDec"
+                 | LocalDec _ -> "LocalDec"
+                 | OpenDec _ -> "OpenDec"
+                 | FixityDec _ -> "FixityDec"
+                 | DataDecAlias _ -> "DataDecAlias"
+                 | AbstractDec _ -> "AbstractDec"
+                 | StrDec _ -> "StrDec"
+                 | SeqDec _ -> "SeqDec"
+                 | ValDec _ -> "ValDec"
+                 | FunDec _ -> "FunDec"
+                 | ExpDec _ -> "ExpDec"))
+              ();
             match first_dec.value with
             | ExnDec eb ->
                 (* Handle exception declarations in let expressions *)
@@ -578,7 +623,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
   and extract_curryable_pats (pat : Ast.pat Ast.node) : Ast.pat Ast.node list =
     match pat.value with
     | PatParen inner -> extract_curryable_pats inner
-    | PatTyp (inner, _) -> extract_curryable_pats inner
+    | PatTyp (inner, _) -> [pat]
     | PatTuple pats when List.length pats > 0 -> pats
     | _ -> [pat]
 
@@ -702,6 +747,24 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     end
   and process_pat ?(is_arg = false) ?(is_head = false) (pat : Ast.pat Ast.node) :
       Parsetree.pattern =
+    Log.log ~subgroup:"pattern" ~level:Debug ~kind:Neutral
+      ~msg:(Printf.sprintf "Processing pattern: %s (is_head=%b, is_arg=%b)"
+        (match pat.value with
+         | PatCon _ -> "PatCon"
+         | PatWildcard -> "PatWildcard"
+         | PatIdx _ -> "PatIdx"
+         | PatApp _ -> "PatApp"
+         | PatInfix _ -> "PatInfix"
+         | PatParen _ -> "PatParen"
+         | PatTuple _ -> "PatTuple"
+         | PatRecord _ -> "PatRecord"
+         | PatArray _ -> "PatArray"
+         | PatList _ -> "PatList"
+         | PatTyp _ -> "PatTyp"
+         | PatAs _ -> "PatAs"
+         | PatOr _ -> "PatOr")
+        is_head is_arg)
+      ();
     (* Enter accumulation mode for comment hoisting *)
     labeller#enter_accumulate_context;
 
@@ -776,7 +839,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | PatTyp (p, t) -> Builder.ppat_constraint (process_pat ~is_arg ~is_head p) (process_type t)
     | PatAs (wo, t_opt, p) ->
         (* Layered pattern: x as SOME y *)
-        let var_str = process_with_op ~ctx:Value wo.value in
+        let var_str = process_with_op ~ctx:PatternTail wo.value in
         let inner_pat = process_pat ~is_arg ~is_head p in
         let final_pat =
           match t_opt with
@@ -937,6 +1000,9 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       @param vb The value binding(s)
       @return List of OCaml value bindings *)
   and process_val_bind (vb : Ast.value_binding) : Parsetree.value_binding list =
+    Log.log ~subgroup:"binding" ~level:Debug ~kind:Neutral
+      ~msg:"Processing value binding"
+      ();
     match vb with
     | ValBind (pat, expression, rest_opt) ->
         let pat' = process_pat pat in
@@ -967,6 +1033,9 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   and process_fun_bind (fb : Ast.function_binding) :
       Parsetree.value_binding list =
+    Log.log ~subgroup:"function" ~level:Debug ~kind:Neutral
+      ~msg:"Processing function binding"
+      ();
     match fb with
     | FunBind (fm, rest_opt) ->
         (* Get the function name from the first match *)
@@ -978,6 +1047,9 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
           | FunMatchLow (_, id, _, _, _, _, _) ->
               process_name_to_string ~ctx:Value (idx_to_name id.value)
         in
+        Log.log ~subgroup:"function" ~level:Debug ~kind:Neutral
+          ~msg:(Printf.sprintf "Function name: %s" fname_str)
+          ();
 
         (* Process all match clauses *)
         let clauses = process_fun_match fm.value in
@@ -1069,10 +1141,11 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     let process_pats_with_curry (pats : Ast.pat Ast.node list) : Parsetree.pattern list =
       if engaged @@ Common.get_curry_expressions config then
         (* Unfold tuple patterns for currying *)
-        List.concat_map (fun p -> 
-          let unfolded = extract_curryable_pats p in
-          List.map (fun pat -> process_pat ~is_arg:true pat) unfolded
-        ) pats
+        match pats with 
+        | [ single_pat ] ->
+            let pats' = extract_curryable_pats single_pat in
+            List.map (fun p -> process_pat ~is_arg:true p) pats'
+        | _ -> List.map (fun p -> process_pat p) pats
       else
         List.map (fun p -> process_pat p) pats
     in
@@ -1092,6 +1165,11 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         in
         here :: rest
     | FunMatchInfix (p1, id, p2, ty_opt, expression, rest_opt) ->
+        Log.log ~level:Common.Debug ~kind:Neutral
+          ~msg:
+            (Printf.sprintf "Processing infix function match with operator: %s"
+               (idx_to_string id.value))
+          ();
         (* fun p1 op p2 = expression - infix function *)
         let pats' = process_pats_with_curry [p1; p2] in
         let expression' = process_exp expression in
@@ -1106,6 +1184,12 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         in
         here :: rest
     | FunMatchLow (p1, id, p2, pats, ty_opt, expression, rest_opt) ->
+        Log.log ~level:Common.Debug ~kind:Neutral
+          ~msg:
+            (Printf.sprintf
+               "Processing low-precedence infix function match with operator: %s"
+               (idx_to_string id.value))
+          ();
         (* fun (p1 op p2) pat3 ... = expression - curried infix *)
         let all_pats = process_pats_with_curry (p1 :: p2 :: pats) in
         let expression' = process_exp expression in
@@ -1155,11 +1239,17 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       @return List of OCaml type declarations *)
   and process_dat_bind (db : Ast.data_binding) : Parsetree.type_declaration list
       =
+    Log.log ~subgroup:"datatype" ~level:Debug ~kind:Neutral
+      ~msg:"Processing datatype binding"
+      ();
     match db with
     | DatBind (tvars, id, cb, rest_opt) ->
         let name_str =
           process_name_to_string ~ctx:Type (idx_to_name id.value)
         in
+        Log.log ~subgroup:"datatype" ~level:Debug ~kind:Neutral
+          ~msg:(Printf.sprintf "Datatype name: %s" name_str)
+          ();
         let params = Type_var_utils.process_type_params tvars in
         let constructors = process_con_bind cb.value in
         let tdecl =
@@ -1296,6 +1386,16 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       @param structure The SML structure to convert
       @return List of OCaml structure items *)
   and process_str (structure : Ast.structure) : Parsetree.structure_item list =
+    Log.log ~subgroup:"structure" ~level:Debug ~kind:Neutral
+      ~msg:(Printf.sprintf "Processing structure: %s"
+        (match structure with
+         | StrIdx _ -> "StrIdx"
+         | StructStr _ -> "StructStr"
+         | AnotateStr _ -> "AnotateStr"
+         | FunctorApp _ -> "FunctorApp"
+         | FunctorAppAnonymous _ -> "FunctorAppAnonymous"
+         | LocalDec _ -> "LocalDec"))
+      ();
     let res = begin match structure with
     | StrIdx id ->
         let name =
@@ -1456,6 +1556,13 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       @param signature The SML signature to convert
       @return List of OCaml signature items *)
   and process_sign (signature : Ast.signature) : Parsetree.module_type =
+    Log.log ~subgroup:"signature" ~level:Debug ~kind:Neutral
+      ~msg:(Printf.sprintf "Processing signature: %s"
+        (match signature with
+         | SignIdx _ -> "SignIdx"
+         | SignSig _ -> "SignSig"
+         | SignWhere _ -> "SignWhere"))
+      ();
     trace_part ~level:2 ~ast:"signature"
       ~msg:"" (* ~msg:(Ast.show_sign signature) *) ~value:(fun () ->
         match signature with
@@ -1777,6 +1884,23 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       process_prog. *)
   and dec_to_structure_items (declaration : Ast.declaration) :
       Parsetree.structure_item list =
+    Log.log ~subgroup:"declaration" ~level:Debug ~kind:Neutral
+      ~msg:(Printf.sprintf "Converting declaration to structure items: %s"
+        (match declaration with
+         | ValDec _ -> "ValDec"
+         | FunDec _ -> "FunDec"
+         | TypDec _ -> "TypDec"
+         | DatDec _ -> "DatDec"
+         | DataDecAlias _ -> "DataDecAlias"
+         | AbstractDec _ -> "AbstractDec"
+         | ExnDec _ -> "ExnDec"
+         | StrDec _ -> "StrDec"
+         | SeqDec _ -> "SeqDec"
+         | LocalDec _ -> "LocalDec"
+         | OpenDec _ -> "OpenDec"
+         | ExpDec _ -> "ExpDec"
+         | FixityDec _ -> "FixityDec"))
+      ();
     trace_part ~level:5 ~ast:"declaration"
       ~msg:"" (* ~msg:(Ast.show_dec declaration) *) ~value:(fun () ->
         match declaration with
@@ -1868,6 +1992,15 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       @param prog The SML program to convert
       @return An OCaml structure (list of structure items) *)
   and process_prog (prog : Ast.prog) : Parsetree.structure =
+    Log.log ~subgroup:"program" ~level:Medium ~kind:Neutral
+      ~msg:(Printf.sprintf "Processing program: %s"
+        (match prog with
+         | ProgDec _ -> "ProgDec"
+         | ProgFun _ -> "ProgFun"
+         | ProgStr _ -> "ProgStr"
+         | ProgSeq _ -> "ProgSeq"
+         | ProgEmpty -> "ProgEmpty"))
+      ();
     let note = namer#push_context () in
     let res = trace_part ~level:5 ~ast:"prog" ~msg:"" ~value:(fun () ->
         match prog with
@@ -1892,6 +2025,13 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       @return List of OCaml module bindings *)
   and process_functor_binding (fb : Ast.functor_binding) :
       Parsetree.module_binding list =
+    Log.log ~subgroup:"functor" ~level:Debug ~kind:Neutral
+      ~msg:(Printf.sprintf "Processing functor binding: %s"
+        (match fb with
+         | FctBind _ -> "FctBind"
+         | FctBindOpen _ -> "FctBindOpen"
+         | FctGen _ -> "FctGen"))
+      ();
     let note = namer#push_context () in
     let res = trace_part ~level:2 ~ast:"functor_binding"
       ~msg:"" (* ~msg:(Ast.show_functor_binding fb) *) ~value:(fun () ->
