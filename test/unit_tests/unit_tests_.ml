@@ -324,7 +324,48 @@ let test_process_exp_infix () =
   in
   let result = process_exp (b input) in
   let result_str = expression_to_string result in
-  check bool "infix application expression" true (String.length result_str > 0)
+  (* Verify the output contains the infix operator in the correct form *)
+  check bool "infix application expression" true
+    (String.contains result_str '+' && String.contains result_str 'x' && String.contains result_str 'y')
+
+let test_process_exp_infix_multiply () =
+  let input =
+    InfixApp
+      ( b (ExpCon (b (ConInt (b "3")))),
+        b (IdxIdx (b "*")),
+        b (ExpCon (b (ConInt (b "4")))) )
+  in
+  let result = process_exp (b input) in
+  let result_str = expression_to_string result in
+  check bool "infix multiply expression" true
+    (String.contains result_str '*')
+
+let test_process_exp_infix_cons () =
+  let input =
+    InfixApp
+      ( b (ExpIdx (b (IdxIdx (b "x")))),
+        b (IdxIdx (b "::")),
+        b (ExpIdx (b (IdxIdx (b "xs")))) )
+  in
+  let result = process_exp (b input) in
+  let result_str = expression_to_string result in
+  check bool "infix cons expression" true
+    (String.contains result_str ':')
+
+let test_process_exp_infix_nested () =
+  let input =
+    InfixApp
+      ( b (InfixApp
+          ( b (ExpCon (b (ConInt (b "1")))),
+            b (IdxIdx (b "+")),
+            b (ExpCon (b (ConInt (b "2")))) )),
+        b (IdxIdx (b "*")),
+        b (ExpCon (b (ConInt (b "3")))) )
+  in
+  let result = process_exp (b input) in
+  let result_str = expression_to_string result in
+  check bool "nested infix expression" true
+    (String.contains result_str '+' && String.contains result_str '*')
 
 let test_process_exp_constant () =
   let input = ExpCon (b (ConInt (b "42"))) in
@@ -619,6 +660,36 @@ let test_process_pat_as () =
   let result_str = pattern_to_string result in
   check bool "as pattern (layered pattern)" true
     (String.contains result_str 'x')
+
+let test_process_pat_ref () =
+  let input =
+    PatApp
+      ( b (WithoutOp (b (IdxIdx (b "ref")))),
+        b (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))) )
+  in
+  let result = process_pat (b input) in
+  let result_str = pattern_to_string result in
+  (* ref x should become { contents = x } *)
+  check bool "ref pattern converted to record" true
+    (String.contains result_str '{' && String.contains result_str 'c')
+
+let test_process_pat_ref_nested () =
+  let input =
+    PatTuple
+      [
+        b (PatApp
+          ( b (WithoutOp (b (IdxIdx (b "ref")))),
+            b (PatIdx (b (WithoutOp (b (IdxIdx (b "a")))))) ));
+        b (PatApp
+          ( b (WithoutOp (b (IdxIdx (b "ref")))),
+            b (PatIdx (b (WithoutOp (b (IdxIdx (b "b")))))) ))
+      ]
+  in
+  let result = process_pat (b input) in
+  let result_str = pattern_to_string result in
+  (* (ref a, ref b) should become ({ contents = a }, { contents = b }) *)
+  check bool "nested ref patterns in tuple" true
+    (String.contains result_str '{' && String.contains result_str 'a')
 
 (** Test cases for process_val_bind *)
 
@@ -963,6 +1034,9 @@ let expression_tests =
     ("identifier expression", `Quick, test_process_exp_idx);
     ("function application", `Quick, test_process_exp_app);
     ("infix application", `Quick, test_process_exp_infix);
+    ("infix multiply", `Quick, test_process_exp_infix_multiply);
+    ("infix cons (::)", `Quick, test_process_exp_infix_cons);
+    ("nested infix", `Quick, test_process_exp_infix_nested);
     ("constant expression", `Quick, test_process_exp_constant);
     ("unit expression (empty tuple)", `Quick, test_process_exp_tuple_empty);
     ("tuple expression", `Quick, test_process_exp_tuple);
@@ -1002,6 +1076,8 @@ let pattern_tests =
     ("list pattern", `Quick, test_process_pat_list);
     ("typed pattern", `Quick, test_process_pat_typed);
     ("as pattern (layered pattern)", `Quick, test_process_pat_as);
+    ("ref pattern", `Quick, test_process_pat_ref);
+    ("nested ref patterns", `Quick, test_process_pat_ref_nested);
   ]
 
 let declaration_tests =

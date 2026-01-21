@@ -145,6 +145,7 @@ rule token = parse
   | "=>"          { BIGARROW }
   | "->"          { ARROW }
   | '_'           { UNDERSCORE }
+  | "#["        { HASH_OPEN }
   | '#'           { HASH }
 
   (* Type variables: 'a, ''a (equality type variables) *)
@@ -246,6 +247,7 @@ and string = parse
 (* Character literal lexer: expects content after #" and ending with " *)
 and char_lit = parse
   | "\\n" '"'     { CHAR_LIT "\n" }
+  | "\\" (_ as c) '"' { CHAR_LIT (String.make 1 c) }
   | "\\t" '"'     { CHAR_LIT "\t" }
   | "\\r" '"'     { CHAR_LIT "\r" }
   | "\\\\" '"'    { CHAR_LIT "\\" }

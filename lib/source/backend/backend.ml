@@ -326,6 +326,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
           Builder.pexp_field r_exp (ghost (Ppxlib.Longident.Lident lab_str))
         in
         Builder.pexp_fun Nolabel None r_pat field_exp
+    | ArrayExp exps -> Builder.pexp_array (List.map process_exp exps) 
     | ListExp exps ->
         (* Build list from right to left using :: *)
         List.fold_right
@@ -762,6 +763,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                (ghost (process_name_to_longident ~ctx:Label [ lab ]), pat))
              fields)
           Closed
+    | PatArray pats -> Builder.ppat_array (List.map (fun p -> process_pat ~is_arg ~is_head p) pats)
     | PatList pats ->
         (* Build list pattern from right to left *)
         List.fold_right
@@ -1015,7 +1017,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
               (* Generate fresh parameter patterns *)
               let param_pats =
                 List.init num_params (fun i ->
-                    Builder.ppat_var (ghost (Printf.sprintf "__%d__" (get_temp + i))))
+                    Builder.ppat_var (ghost (Printf.sprintf "arg__%d" (get_temp + i))))
               in
               (* Build function expression *)
               List.fold_right
@@ -1028,7 +1030,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                           Builder.pexp_ident
                             (ghost
                                (Ppxlib.Longident.Lident
-                                  (Printf.sprintf "__%d__" (get_temp + i))))))
+                                  (Printf.sprintf "arg__%d" (get_temp + i))))))
                  in
                  let cases =
                    List.map

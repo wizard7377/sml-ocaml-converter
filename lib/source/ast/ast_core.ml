@@ -1065,6 +1065,8 @@ and expression =
           @see PatRecord Record pattern matching
           @see TupleExp Tuple expressions
           @see ExpApp Function application *)
+
+  | ArrayExp of expression node list
   | ListExp of expression node list
       (** List expression - homogeneous sequential collection.
 
@@ -3755,6 +3757,7 @@ and pat =
             (* SML: [a, b, c] *)
             PatList [a_pat; b_pat; c_pat]
           ]} *)
+  | PatArray of pat node list
   | PatTyp of pat node * typ node
       (** Type-annotated pattern: [pat : typ].
 
@@ -3784,7 +3787,7 @@ and pat =
               node_app_pat
             )
           ]} *)
-
+  | PatOr of pat node * pat node
 (** Pattern rows in record patterns.
 
     {[

@@ -16,9 +16,11 @@ class process ?(store = Context.create []) cfg_init =
     val mutable store : Context.t = store
     val mutable successes : int = 0
     val mutable failures : int = 0
+    val mutable warnings : int = 0
     val mutable total : int = 0
     val mutable has_errors : bool = false
     val mutable errors_store : (string * string) list = []
+    val mutable warning_store : (string * string) list = []
     method set_config c = cfg <- c
     method get_config () = cfg
     method get_store () = store
@@ -73,8 +75,9 @@ class process ?(store = Context.create []) cfg_init =
                    (List.length files) file)
               ();
             try
-              let ocaml_code = self#run_single_file file in
+              let (ocaml_code, checked) = self#run_single_file file in
               let output_target = get_output_file cfg in
+
               (match output_target with
               | FileOut path ->
                   let contents = Bos.OS.File.read (Fpath.v path) in
@@ -87,7 +90,16 @@ class process ?(store = Context.create []) cfg_init =
                   Bos.OS.File.write (Fpath.v path) new_contents |> ignore
               | StdOut -> print_string ocaml_code
               | Silent -> print_string ocaml_code);
-              successes <- successes + 1;
+              begin match checked with
+              | Process_common.Good -> successes <- successes + 1
+              | Process_common.Bad err -> 
+                  warning_store <- (file, Printexc.to_string (Syntaxerr.Error err)) :: warning_store;
+                  warnings <- warnings + 1
+              | Process_common.Err e ->
+                errors_store <- (file, Printexc.to_string e) :: errors_store;
+                has_errors <- true;
+                failures <- failures + 1 ;
+              end ;
               ocaml_code
             with e ->
               errors_store <- (file, Printexc.to_string e) :: errors_store;
@@ -120,8 +132,8 @@ class process ?(store = Context.create []) cfg_init =
         ~kind:(if failures == 0 then Positive else Negative)
         ~msg:
           (Printf.sprintf
-             "Processing complete: %d successes, %d failures out of %d files."
-             successes failures total)
+             "Processing complete: %d successes, %d warnings, %d failures out of %d files."
+             successes warnings failures total)
         ();
       Log.log ~level:Medium ~kind:Neutral
         ~msg:
@@ -129,7 +141,7 @@ class process ?(store = Context.create []) cfg_init =
         ();
       if failures = 0 then 0 else 1
 
-    method private run_single_file (file : string) : string =
+    method private run_single_file (file : string) : (string * Process_common.check_result) =
       Log.log ~level:Medium ~kind:Positive
         ~msg:(Printf.sprintf "Processing file: %s" file)
         ();
@@ -154,7 +166,7 @@ class process ?(store = Context.create []) cfg_init =
       if Common.get_verbosity_default cfg 0 > 2 then
         Log.log_with ~cfg ~level:Low ~kind:Neutral
           ~msg:"Finished polishing OCaml code." ();
-      let checked = Process_common.check_output ~config:cfg ocaml_code in
+      let checked = if Common.get_check_ocaml cfg then Process_common.check_output ~config:cfg ocaml_code else Process_common.Good in
       let _ = checked in
-      ocaml_code
+      (ocaml_code, checked)
   end

@@ -64,6 +64,7 @@ type options = {
   debug : string list;
   check_ocaml : bool;
   variable_regex : string; 
+  
 }
 
 let mkOptions ?(input_file = StdIn) ?(output_file = Silent) ?(verbosity = None)

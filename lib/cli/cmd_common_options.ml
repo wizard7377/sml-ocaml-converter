@@ -219,15 +219,16 @@ let quiet : bool Term.t =
   |} in
   Arg.(value & flag & info [ "q"; "quiet" ] ~doc)
 
-let infer_pattern : string option Term.t =
+let guess_var : string option Term.t =
   let doc =
     {|
-  A regular expression pattern to identify variable names that should be converted to lowercase in patterns.
-  This is useful for converting SML variable names (which often start with uppercase letters) to OCaml conventions.
-  The regex is applied to the last part of the variable name.
+  A regular expression pattern to identify variable names that should be converted to __<NAME> format.
+  For example, --guess-var="[A-Z]'?" will convert variables like X, Y', etc. to __X, __Y'.
+  Module names and qualified names (Module.x) are not affected.
+  The regex is applied to the entire variable name.
   |}
   in
-  Arg.(value & opt (some string) None & info [ "infer-pattern" ] ~doc)
+  Arg.(value & opt (some string) None & info [ "guess-var" ] ~doc)
 
 let debug : string list Term.t =
   let doc =
@@ -246,13 +247,22 @@ let variable_regex_doc =
   |} 
 let variable_regex_flag : string Term.t =
     Arg.(value & opt string "" & info [ "variable-regex" ] ~doc:variable_regex_doc)
+
+let check_ocaml_doc =
+  {|
+  Enable checking of the generated OCaml code for syntax errors using the OCaml compiler.
+  This helps ensure that the converted code is syntactically valid OCaml.
+  |}
+let check_ocaml_flag : bool Term.t =
+  Arg.(value & flag & info [ "check-ocaml" ] ~doc:check_ocaml_doc)  
 let common_options : Common.options Cmdliner.Term.t =
   let+ v = verb
   and+ force, c = conversion_flags
   and+ co = concat_output
   and+ q = quiet
-  and+ ip = infer_pattern
-  and+ dbg = debug 
-  and+ var_reg = variable_regex_flag in
+  and+ gv = guess_var
+  and+ dbg = debug
+  and+ var_reg = variable_regex_flag
+  and+ check_ocaml = check_ocaml_flag in
   Common.mkOptions ~verbosity:(Some v) ~conversions:c ~concat_output:co ~force
-    ~quiet:q ~guess_var:ip ~debug:dbg ~variable_regex:var_reg ()
+    ~quiet:q ~guess_var:gv ~debug:dbg ~variable_regex:var_reg ~check_ocaml:check_ocaml ()

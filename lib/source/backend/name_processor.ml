@@ -125,16 +125,25 @@ val vector : 'a list -> 'a vector 	Vector.fromList
     | _ -> true
   (** Process a name and return both the result and whether it was changed *)
   let process_name ~(ctx : context) (name : string list) : Ppxlib.Longident.t * bool =
-    match name with 
-    | [ name ] when in_core_lang ctx -> 
-        let regex = Common.get_variable_regex Config.config in 
-        (* prerr_endline ("Checking variable regex: " ^ regex ^ " against name: " ^ name); *)
-        if Re.Str.string_match (Re.Str.regexp ("$" ^ regex ^ "^") ) name 0 then 
-          (Longident.Lident (String.cat "__" name)) , true
-        else 
-          namer#process_name ~ctx ~name:[name]
-    | _ -> namer#process_name ~ctx ~name
+    let name = if List.exists (fun s -> String.ends_with s ~suffix:"_") name then List.map (fun s -> s ^ "__") name else name in
+    begin match process_special name with
+      | Some res -> Option.get (Longident.unflatten res), true
+      | None -> 
+    match name with
+    | [ name ] when in_core_lang ctx ->
+        (match Common.get_guess_var Config.config with
+        | Some regex ->
 
+            (* Check if the variable name matches the regex pattern *)
+            
+            if Re.Str.string_match (Re.Str.regexp ("^" ^ regex ^ "$")) name 0 then
+              let newname = String.uncapitalize_ascii name ^ "_" in
+              (Longident.Lident newname, true)
+            else
+              namer#process_name ~ctx ~name:[name]
+        | None -> namer#process_name ~ctx ~name:[name])
+    | _ -> namer#process_name ~ctx ~name
+            end
   (** Push a new naming context scope *)
   let push_context () : note = namer#push_context ()
 
@@ -149,9 +158,10 @@ val vector : 'a list -> 'a vector 	Vector.fromList
   let get_name (from : string) : string = namer#get_name from
 
   let matches_pattern (name : string) : bool =
-    let regex = Common.get_variable_regex Config.config in 
-        (* prerr_endline ("Checking variable regex: " ^ regex ^ " against name: " ^ name); *)
-    Re.Str.string_match (Re.Str.regexp ("$" ^ regex ^ "^") ) name 0  
+    match Common.get_guess_var Config.config with
+    | Some regex ->
+        Re.Str.string_match (Re.Str.regexp ("^" ^ regex ^ "$")) name 0
+    | None -> false  
 end
 
 (** Re-export context type and constructors for convenience *)
