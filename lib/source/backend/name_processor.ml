@@ -93,14 +93,40 @@ val vector : 'a list -> 'a vector 	Vector.fromList
   let namer : process_names =
     new process_names (ref Config.config) (ref Config.context)
 
-  (** Convert name parts to a Longident.t with context-aware processing *)
-  let to_longident ~(ctx : context) (name_parts : string list) : Ppxlib.Longident.t =
-    let (res, _changed) = namer#process_name ~ctx ~name:name_parts in
-    res
+  let in_core_lang (ctx : context) : bool = match ctx with
+    | ModuleValue | ModuleType | Functor -> false
+    | _ -> true
+
+  (** Process a name and return both the result and whether it was changed *)
+  let process_name ~(ctx : context) (name : string list) : Ppxlib.Longident.t * bool =
+    let name = if List.exists (fun s -> String.ends_with s ~suffix:"_") name then List.map (fun s -> s ^ "__") name else name in
+    begin match process_special name with
+      | Some res -> Option.get (Longident.unflatten res), true
+      | None ->
+    match name with
+    | [ name ] when in_core_lang ctx ->
+        (match Common.get_guess_var Config.config with
+        | Some regex ->
+
+            (* Check if the variable name matches the regex pattern *)
+
+            if Re.Str.string_match (Re.Str.regexp ("^" ^ regex ^ "$")) name 0 then
+              let newname = String.uncapitalize_ascii name ^ "_" in
+              (Longident.Lident newname, true)
+            else
+              namer#process_name ~ctx ~name:[name]
+        | None -> namer#process_name ~ctx ~name:[name])
+    | _ -> namer#process_name ~ctx ~name
+            end
 
   (** Convert name parts to a string (last component only) *)
   let to_string ~(ctx : context) (name_parts : string list) : string =
-    Ppxlib.Longident.last_exn (namer#process_name ~ctx ~name:name_parts |> fst)
+    Ppxlib.Longident.last_exn (process_name ~ctx name_parts |> fst)
+
+  (** Convert name parts to a Longident.t with context-aware processing *)
+  let to_longident ~(ctx : context) (name_parts : string list) : Ppxlib.Longident.t =
+    let (res, _changed) = process_name ~ctx name_parts in
+    res
 
   (** Convert an AST idx to a Longident.t with context-aware processing *)
   let idx_to_longident ~(ctx : context) (idx : Ast.idx) : Ppxlib.Longident.t =
@@ -120,30 +146,6 @@ val vector : 'a list -> 'a vector 	Vector.fromList
   (** Check if a name is valid for the given context (e.g., constructors uppercase) *)
   let is_valid ~(ctx : context) (name : string list) : bool =
     namer#is_good ~ctx ~name
-  let in_core_lang (ctx : context) : bool = match ctx with
-    | ModuleValue | ModuleType | Functor -> false
-    | _ -> true
-  (** Process a name and return both the result and whether it was changed *)
-  let process_name ~(ctx : context) (name : string list) : Ppxlib.Longident.t * bool =
-    let name = if List.exists (fun s -> String.ends_with s ~suffix:"_") name then List.map (fun s -> s ^ "__") name else name in
-    begin match process_special name with
-      | Some res -> Option.get (Longident.unflatten res), true
-      | None -> 
-    match name with
-    | [ name ] when in_core_lang ctx ->
-        (match Common.get_guess_var Config.config with
-        | Some regex ->
-
-            (* Check if the variable name matches the regex pattern *)
-            
-            if Re.Str.string_match (Re.Str.regexp ("^" ^ regex ^ "$")) name 0 then
-              let newname = String.uncapitalize_ascii name ^ "_" in
-              (Longident.Lident newname, true)
-            else
-              namer#process_name ~ctx ~name:[name]
-        | None -> namer#process_name ~ctx ~name:[name])
-    | _ -> namer#process_name ~ctx ~name
-            end
   (** Push a new naming context scope *)
   let push_context () : note = namer#push_context ()
 

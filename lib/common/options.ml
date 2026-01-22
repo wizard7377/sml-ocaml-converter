@@ -64,13 +64,15 @@ type options = {
   debug : string list;
   check_ocaml : bool;
   variable_regex : string; 
-  
+  dash_to_underscore : bool;
 }
 
 let mkOptions ?(input_file = StdIn) ?(output_file = Silent) ?(verbosity = None)
     ?(conversions = mkConversions ()) ?(concat_output = true) ?(force = false)
     ?(quiet = false) ?(guess_var : string option = None) 
-    ?(debug : string list = []) ?(check_ocaml = false) ?(variable_regex : string = "")  (_ : unit) : options =
+    ?(debug : string list = []) ?(check_ocaml = false) ?(variable_regex : string = "")  
+    ?(dash_to_underscore : bool = false)
+    (_ : unit) : options =
   {
     input_file;
     output_file;
@@ -83,6 +85,7 @@ let mkOptions ?(input_file = StdIn) ?(output_file = Silent) ?(verbosity = None)
     debug;
     check_ocaml;
     variable_regex;
+    dash_to_underscore;
   }
 
 let get_verbosity opts = opts.verbosity
@@ -113,7 +116,7 @@ let get_curry_expressions opts = opts.conversions.curry_expressions
 let get_curry_types opts = opts.conversions.curry_types
 let get_tuple_select opts = opts.conversions.tuple_select
 let get_toplevel_names opts = opts.conversions.toplevel_names
-
+let get_dash_to_underscore opts = opts.dash_to_underscore
 let engaged = function Enable | Warn -> true | _ -> false
 let noted = function Warn | Note -> true | _ -> false
 

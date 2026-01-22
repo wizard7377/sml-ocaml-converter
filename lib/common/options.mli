@@ -36,6 +36,7 @@ val mkOptions :
   ?debug:string list ->
   ?check_ocaml:bool ->
   ?variable_regex:string ->
+  ?dash_to_underscore:bool ->
   unit ->
   options
 
@@ -64,6 +65,7 @@ val get_curry_expressions : options -> convert_flag
 val get_curry_types : options -> convert_flag
 val get_tuple_select : options -> convert_flag
 val get_toplevel_names : options -> convert_flag
+val get_dash_to_underscore : options -> bool
 val engaged : convert_flag -> bool
 (** [engaged flag] returns true if the conversion flag is not Disable. *)
 

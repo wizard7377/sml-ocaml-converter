@@ -245,7 +245,7 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
       else
         (self#build_longident res, b)) 
       in 
-      if ((last name) != (Ppxlib.Longident.last_exn res0)) then Log.log_with ~cfg:!config ~level:Low ~kind:Neutral ~msg:(Printf.sprintf "From %s, Processed name: %s in context %s" (String.concat "." name) (Ppxlib.Longident.name res0) (show_context ctx)) ();
+      if ((last name) != (Ppxlib.Longident.last_exn res0)) then Log.log_with  ~cfg:!config ~level:Low ~kind:Neutral ~msg:(Printf.sprintf "From %s, Processed name: %s in context %s" (String.concat "." name) (Ppxlib.Longident.name res0) (show_context ctx)) ();
       (res0, res1)
     end
 

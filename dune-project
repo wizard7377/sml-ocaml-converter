@@ -1,6 +1,7 @@
 (lang dune 3.20)
 
 (name shibboleth)
+
 (version 0.0.4)
 
 (generate_opam_files true)
@@ -15,24 +16,31 @@
 (license BSD-2-Clause)
 
 (documentation https://url/to/documentation)
+
 (using menhir 3.0)
+
 (package
  (name shibboleth)
  (synopsis "A converter between SML and OCaml")
- (description "A tool that converts Standard ML code to OCaml code and vice versa, facilitating interoperability between the two languages.")
+ (description
+  "A tool that converts Standard ML code to OCaml code and vice versa, facilitating interoperability between the two languages.")
  (depends
+  (menhirLib
+   (>= 20250912))
+  (fpath
+   (>= 0.7.3))
+  (bos
+   (>= 0.2.1))
   ocaml
   (alcotest :with-test)
   ppxlib
   cmdliner
-  menhir 
-  ppx_import 
+  menhir
+  ppx_import
   ppx_deriving
-  ocamlformat 
-  re 
-  fmt
-  )
+  ocamlformat
+  re
+  ez_file
+  fmt)
  (tags
-  ("ocaml" "sml")))
-
-; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html
+  (ocaml sml)))

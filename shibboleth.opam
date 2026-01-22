@@ -13,6 +13,9 @@ doc: "https://url/to/documentation"
 bug-reports: "https://github.com/wizard7377/sml-ocaml-converter/issues"
 depends: [
   "dune" {>= "3.20"}
+  "menhirLib" {>= "20250912"}
+  "fpath" {>= "0.7.3"}
+  "bos" {>= "0.2.1"}
   "ocaml"
   "alcotest" {with-test}
   "ppxlib"
@@ -22,6 +25,7 @@ depends: [
   "ppx_deriving"
   "ocamlformat"
   "re"
+  "ez_file"
   "fmt"
   "odoc" {with-doc}
 ]

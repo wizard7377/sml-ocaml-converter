@@ -661,6 +661,39 @@ let test_process_pat_as () =
   check bool "as pattern (layered pattern)" true
     (String.contains result_str 'x')
 
+(** Test configuration with guess_var enabled *)
+module TestConfigWithGuessVar : Common.CONFIG = struct
+  let config = Common.mkOptions
+    ~input_file:Common.StdIn
+    ~output_file:Common.Silent
+    ~verbosity:(Some 3)
+    ~conversions:(Common.mkConversions ())
+    ~guess_var:(Some "[A-Z][a-zA-Z0-9_]*")
+    ()
+end
+
+module TestContextWithGuessVar = struct
+  let lexbuf = ""
+  let context = Context.basis_context
+end
+
+module TestBackendWithGuessVar = Backend.Make (TestContextWithGuessVar) (TestConfigWithGuessVar)
+
+let test_process_pat_as_with_guess_var () =
+  (* Test that an as pattern variable matching guess_var gets lowercased and has _ appended *)
+  let input =
+    PatAs
+      ( b (WithoutOp (b (IdxIdx (b "Result")))),
+        None,
+        b (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))) )
+  in
+  let result = TestBackendWithGuessVar.process_pat (b input) in
+  let result_str = pattern_to_string result in
+  (* "Result" should be converted to "result_" because it matches the guess_var pattern *)
+  check string "as pattern variable matching guess_var gets _ suffix"
+    "x as result_"
+    result_str
+
 let test_process_pat_ref () =
   let input =
     PatApp
@@ -1076,6 +1109,7 @@ let pattern_tests =
     ("list pattern", `Quick, test_process_pat_list);
     ("typed pattern", `Quick, test_process_pat_typed);
     ("as pattern (layered pattern)", `Quick, test_process_pat_as);
+    ("as pattern with guess_var", `Quick, test_process_pat_as_with_guess_var);
     ("ref pattern", `Quick, test_process_pat_ref);
     ("nested ref patterns", `Quick, test_process_pat_ref_nested);
   ]

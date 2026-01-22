@@ -73,7 +73,7 @@ let create_dir (path : path) : unit =
   | Error e -> raise (Dir_create_error path)
   | Ok _ -> ()
 
-let copy_file (src : path) (dst : path) : unit =
+let copy_file ?(force = false) (src : path) (dst : path) : unit =
   (* Check if it's a symlink and skip it *)
   let src_str = Fpath.to_string src in
   let lstat = Unix.lstat src_str in
@@ -82,13 +82,30 @@ let copy_file (src : path) (dst : path) : unit =
       (* Skip symlinks *)
       ()
   | _ -> (
-      match Bos.OS.File.read src with
-      | Ok contents ->
-          let _ = Bos.OS.File.write dst contents in
-          ()
-      | Error (`Msg msg) ->
-          Printf.eprintf "Error copying file %s: %s\n" (Fpath.to_string src) msg;
-          ())
+      (* Check if destination exists *)
+      let should_copy =
+        match Bos.OS.File.exists dst with
+        | Ok true ->
+            if force then
+              true
+            else begin
+              Printf.eprintf "Skipping %s (already exists, use --force to overwrite)\n"
+                (Fpath.to_string dst);
+              false
+            end
+        | Ok false -> true
+        | Error _ -> true (* If we can't check, proceed anyway *)
+      in
+      if should_copy then
+        match Bos.OS.File.read src with
+        | Ok contents ->
+            let _ = Bos.OS.File.write dst contents in
+            ()
+        | Error (`Msg msg) ->
+            Printf.eprintf "Error copying file %s: %s\n" (Fpath.to_string src) msg;
+            ()
+      else ()
+    )
 
 (* Directory, normal, source *)
 let partition_files (files : path list) : path list * path list * path list =
@@ -139,11 +156,38 @@ let process_sml_files (input_path : path) (output_path : path)
           let existing_files_abs =
             List.map (fun p -> Fpath.( // ) input_path p) existing_files
           in
-          let output_file = Fpath.add_ext ".ml" (Fpath.( // ) output_path f) in
-          let status =
-            convert_file ~input_files:existing_files_abs ~output_file ~options
+          (* Convert dashes to underscores in both directory and file paths *)
+          let output_path' = if Common.get_dash_to_underscore options then
+              Common.convert_path_dashes_to_underscores output_path
+            else output_path in
+          let f' = if Common.get_dash_to_underscore options then
+              Common.convert_path_dashes_to_underscores f
+            else f in
+          let output_file = Fpath.add_ext ".ml" (Fpath.( // ) output_path' f') in
+
+          (* Check if output file exists and respect --force flag *)
+          let should_convert =
+            match Bos.OS.File.exists output_file with
+            | Ok true ->
+                if Common.get_force options then
+                  true
+                else begin
+                  Printf.eprintf "Skipping %s (already exists, use --force to overwrite)\n"
+                    (Fpath.to_string output_file);
+                  false
+                end
+            | Ok false -> true
+            | Error _ -> true (* If we can't check, proceed anyway *)
           in
-          status)
+
+          if should_convert then
+            let status =
+              convert_file ~input_files:existing_files_abs ~output_file ~options
+            in
+            status
+          else
+            0 (* Skip this file, count as success *)
+        )
       groups
   in
   let failures =
@@ -154,25 +198,28 @@ let process_sml_files (input_path : path) (output_path : path)
 
 let convert_group ~(input_dir : path) ~(output_dir : path)
     ~(options : Common.options) : int =
-  let r = Result.value ~default:true @@ Bos.OS.Dir.exists output_dir in
-  (if r then
-     if Common.get_force options then
-       if input_dir == output_dir then
-         let () =
-           Printf.eprintf "Input and output directories cannot be the same.\n"
-         in
-         exit 1
-       else
-         let _ = Bos.OS.Dir.delete ~recurse:true output_dir in
-         ()
-     else
-       let () =
-         Printf.eprintf
-           "Output directory %s already exists. Use --force to overwrite.\n"
-           (Fpath.to_string output_dir)
-       in
-       exit 1);
-  let _ = Bos.OS.Dir.create output_dir in
+  (* Check if input and output are the same *)
+  if Fpath.equal input_dir output_dir then begin
+    Printf.eprintf "Input and output directories cannot be the same.\n";
+    exit 1
+  end;
+
+  (* Check if output directory exists *)
+  let dir_exists = Result.value ~default:false @@ Bos.OS.Dir.exists output_dir in
+  if dir_exists && not (Common.get_force options) then begin
+    Printf.eprintf
+      "Output directory %s already exists. Use --force to overwrite existing files.\n"
+      (Fpath.to_string output_dir);
+    exit 1
+  end;
+
+  (* Create output directory if it doesn't exist (or ensure it exists) *)
+  let _ =
+    if not dir_exists then
+      Bos.OS.Dir.create ~path:true output_dir
+    else
+      Ok true
+  in
   let all_files = list_contents_rec input_dir in
   (* Make paths absolute for partition_files by joining with input_dir *)
   let all_files_abs = List.map (fun f -> Fpath.( // ) input_dir f) all_files in
@@ -190,7 +237,8 @@ let convert_group ~(input_dir : path) ~(output_dir : path)
   let _ =
     List.iter
       (fun f ->
-        copy_file (Fpath.( // ) input_dir f) (Fpath.( // ) output_dir f))
+        copy_file ~force:(Common.get_force options)
+          (Fpath.( // ) input_dir f) (Fpath.( // ) output_dir f))
       normal_files_rel
   in
   let failures, total =

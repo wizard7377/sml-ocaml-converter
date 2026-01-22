@@ -23,6 +23,15 @@ let rec map_last (f : 'a -> 'a) (lst : 'a list) : 'a list =
   | [ x ] -> [ f x ]
   | first :: rest -> first :: map_last f rest
 
+(** Convert dashes to underscores in path components (filenames and directories)
+    without affecting path separators *)
+let convert_path_dashes_to_underscores (p : Fpath.t) : Fpath.t =
+  let segments = Fpath.segs p in
+  let converted_segments =
+    List.map (String.map (fun c -> if c = '-' then '_' else c)) segments
+  in
+  Fpath.v (String.concat Fpath.dir_sep converted_segments)
+
 include Options
 include Logger
 module Format = Format

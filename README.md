@@ -16,27 +16,6 @@ After that, the command `shibboleth` will run the tool!
 
 By default, this tool outputs to standard output. 
 To instead output to a file, use the `-o` or `--output` option 
-
-### Limatitations 
-
-Currently, this tool has a number of shortcomings:
-1. Name capitilzation (ie, `datatype Ctx`) is not fixed (`type Ctx`) in the output 
-2. Because of this, `ocamlformat` can't, by default format the output (unless your code is already correctly capitlized)
-
-## Requirements 
-
-The tools required to build this are as follows:
-- `dune`, `opam`, `ocaml`, for the OCaml side 
-- GNU `make`, for the scripts 
-
-The OCaml libraries required to build this are as follows:
-- `alcotest` (testing)
-- `ppxlib` (core OCaml AST)
-- `cmdliner` (command line args)
-- `menhir` (parsing)
-- `ppx_import` (utility) 
-- `ppx_deriving` (utility)
-- `ez_file` (utility)
-- `ocamlformat` (formatting)
-- `odoc` (documentation)
-- `re` (regex) 
+If you're project does not follow OCaml naming conventions for variables, `--guess-var=<REGEX>` is highly reccomended with `<REGEX>` being a regular expressions that match uppercase identifiers that are actually supposed to be variables.
+While being just barely better than using `sed` on the output, this dosen't convert modules.
+A good starting point is `--guess-var=[A-Z]s?[0-9]?'?` (a capitial letter follwed by optional `s`, optional numeral, and optional quote `'`)

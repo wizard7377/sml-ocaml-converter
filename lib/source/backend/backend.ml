@@ -749,7 +749,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       Parsetree.pattern =
     Log.log ~subgroup:"pattern" ~level:Debug ~kind:Neutral
       ~msg:(Printf.sprintf "Processing pattern: %s (is_head=%b, is_arg=%b)"
-        (match pat.value with
+        (let dbg = Ast.show_pat pat.value in (match pat.value with
          | PatCon _ -> "PatCon"
          | PatWildcard -> "PatWildcard"
          | PatIdx _ -> "PatIdx"
@@ -762,7 +762,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
          | PatList _ -> "PatList"
          | PatTyp _ -> "PatTyp"
          | PatAs _ -> "PatAs"
-         | PatOr _ -> "PatOr")
+         | PatOr _ -> "PatOr") ^ " " ^ dbg)
         is_head is_arg)
       ();
     (* Enter accumulation mode for comment hoisting *)

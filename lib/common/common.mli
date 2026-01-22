@@ -75,6 +75,17 @@ val last : 'a list -> 'a
 
 val map_last : ('a -> 'a) -> 'a list -> 'a list
 
+val convert_path_dashes_to_underscores : Fpath.t -> Fpath.t
+(** [convert_path_dashes_to_underscores path] converts dashes to underscores
+    in each path component (directory names and filenames) without affecting
+    path separators.
+
+    Example: [convert_path_dashes_to_underscores (Fpath.v "foo-bar/baz-qux.ml")]
+    returns a path equivalent to ["foo_bar/baz_qux.ml"]
+
+    @param path The input path
+    @return A new path with dashes replaced by underscores in each component *)
+
 include module type of Options
 include module type of Logger
 

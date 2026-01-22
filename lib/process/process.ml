@@ -29,7 +29,15 @@ class process ?(store = Context.create []) cfg_init =
     method private write_output (content : string) : bool =
       match get_output_file cfg with
       | FileOut path ->
-          let oc = open_out path in
+          let fpath = Fpath.v path in
+          let path' = if Common.get_dash_to_underscore cfg then
+              Common.convert_path_dashes_to_underscores fpath
+            else fpath in
+          (* Ensure parent directory exists *)
+          let parent_dir = Fpath.parent path' in
+          let _ = Bos.OS.Dir.create ~path:true parent_dir in
+          let _ = Bos.OS.File.delete path' in
+          let oc = open_out (Fpath.to_string path') in
           output_string oc content;
           close_out oc;
           true
@@ -80,14 +88,22 @@ class process ?(store = Context.create []) cfg_init =
 
               (match output_target with
               | FileOut path ->
-                  let contents = Bos.OS.File.read (Fpath.v path) in
+                  let fpath = Fpath.v path in
+                  let path' = if Common.get_dash_to_underscore cfg then
+                      Common.convert_path_dashes_to_underscores fpath
+                    else fpath in
+                  (* Ensure parent directory exists *)
+                  let parent_dir = Fpath.parent path' in
+                  let _ = Bos.OS.Dir.create ~path:true parent_dir in
+                  let _ = Bos.OS.File.delete path' in
+                  let contents = Bos.OS.File.read path' in
                   let new_contents =
                     match contents with
                     | Error _ -> ocaml_code
                     | Ok existing_content ->
                         existing_content ^ "\n\n" ^ ocaml_code
                   in
-                  Bos.OS.File.write (Fpath.v path) new_contents |> ignore
+                  Bos.OS.File.write path' new_contents |> ignore
               | StdOut -> print_string ocaml_code
               | Silent -> print_string ocaml_code);
               begin match checked with
@@ -106,10 +122,17 @@ class process ?(store = Context.create []) cfg_init =
               has_errors <- true;
               failures <- failures + 1;
               begin match get_output_file cfg with
-              | FileOut out_path -> begin 
+              | FileOut out_path -> begin
                 let content = Bos.OS.File.read (Fpath.v file) in
+                let error_fpath = Fpath.v (out_path ^ ".error") in
+                let error_path' = if Common.get_dash_to_underscore cfg then
+                    Common.convert_path_dashes_to_underscores error_fpath
+                  else error_fpath in
+                (* Ensure parent directory exists *)
+                let parent_dir = Fpath.parent error_path' in
+                let _ = Bos.OS.Dir.create ~path:true parent_dir in
                 match content with
-                | Ok existing_content -> Bos.OS.File.write (Fpath.v (out_path ^ ".error")) existing_content |> ignore
+                | Ok existing_content -> Bos.OS.File.write error_path' existing_content |> ignore
                 | Error _ -> ()
               end
               | _ -> () end ;
@@ -152,19 +175,19 @@ class process ?(store = Context.create []) cfg_init =
       close_in ic;
       let sml_ast = process#parse_sml content in
       if Common.get_verbosity_default cfg 0 > 2 then
-        Log.log_with ~cfg ~level:Low ~kind:Neutral
+        Log.log_with  ~cfg ~level:Low ~kind:Neutral
           ~msg:"Finished parsing SML AST." ();
       let ocaml_ast = process#convert_to_ocaml sml_ast in
       if Common.get_verbosity_default cfg 0 > 2 then
-        Log.log_with ~cfg ~level:Low ~kind:Neutral
+        Log.log_with  ~cfg ~level:Low ~kind:Neutral
           ~msg:"Finished converting to OCaml AST." ();
       let ocaml_code' = process#print_ocaml ocaml_ast in
       if Common.get_verbosity_default cfg 0 > 2 then
-        Log.log_with ~cfg ~level:Low ~kind:Neutral
+        Log.log_with  ~cfg ~level:Low ~kind:Neutral
           ~msg:"Finished printing OCaml code." ();
       let ocaml_code = Polish.polish ocaml_code' in
       if Common.get_verbosity_default cfg 0 > 2 then
-        Log.log_with ~cfg ~level:Low ~kind:Neutral
+        Log.log_with  ~cfg ~level:Low ~kind:Neutral
           ~msg:"Finished polishing OCaml code." ();
       let checked = if Common.get_check_ocaml cfg then Process_common.check_output ~config:cfg ocaml_code else Process_common.Good in
       let _ = checked in

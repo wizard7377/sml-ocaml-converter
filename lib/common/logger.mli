@@ -3,10 +3,12 @@ type kind = Positive | Negative | Neutral | Warning
 type group = string
 
 module type LOG = sig
-  val log : ?level:level -> ?kind:kind -> msg:string -> unit -> unit
+  val log : 
+    ?subgroup:string -> ?level:level -> ?kind:kind -> msg:string -> unit -> unit
 
   val log_with :
     cfg:Options.options ->
+    ?subgroup:string ->
     ?level:level ->
     ?kind:kind ->
     msg:string ->
