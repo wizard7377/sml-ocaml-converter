@@ -152,7 +152,7 @@ class process ?(store = Context.create []) cfg_init =
           0)
       in
       Log.log ~level:High
-        ~kind:(if failures == 0 then Positive else Negative)
+        ~kind:(if failures == 0 then if warnings == 0 then Positive else Warning else Negative)
         ~msg:
           (Printf.sprintf
              "Processing complete: %d successes, %d warnings, %d failures out of %d files."
@@ -162,7 +162,7 @@ class process ?(store = Context.create []) cfg_init =
         ~msg:
           (Printf.sprintf "Processed these files: %s" (String.concat ", " files))
         ();
-      if failures = 0 then 0 else 1
+      if failures = 0 then if warnings = 0 then 0 else 2 else 1
 
     method private run_single_file (file : string) : (string * Process_common.check_result) =
       Log.log ~level:Medium ~kind:Positive

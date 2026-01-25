@@ -7,7 +7,12 @@ let print_error ~(err : Syntaxerr.error) : string =
   Format.pp_print_flush fmt ();
   Buffer.contents buffer
 
-let check_output ~(config : Common.options) (input : string) : check_result =
+let get_output_file (config : Common.options) : string =
+  match Common.get_output_file config with
+  | Common.FileOut path -> path
+  | Common.StdOut -> "standard output"
+  | Common.Silent -> "silent output"
+let check_output ~(config : Common.options) ?(output_file= get_output_file config)  (input : string) : check_result =
   let module Log = Common.Make (struct
     let config = config
     let group = "process_common"
@@ -16,8 +21,10 @@ let check_output ~(config : Common.options) (input : string) : check_result =
     Log.log ~level:Low ~kind:Neutral ~msg:"Checking output syntax..." ();
     let () = Printexc.record_backtrace true in
     let lexbuf = Lexing.from_string ~with_positions:true input in
-    let p = Parse.use_file lexbuf in
+    Lexing.set_filename lexbuf output_file ;
+    
     let () = Printexc.record_backtrace false in
+    let p = Parse.use_file lexbuf in
     Log.log ~level:Medium ~kind:Positive ~msg:"Output syntax is valid OCaml." ();
     (* List.iter (Pprintast.toplevel_phrase Format.err_formatter) p; *)
     Good

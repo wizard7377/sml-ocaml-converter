@@ -131,7 +131,7 @@ let order_files (input_path0 : path) (input_path1 : path) : int =
   | n -> n
 
 let process_sml_files (input_path : path) (output_path : path)
-    (sml_files : path list) (options : Common.options) : int * int =
+    (sml_files : path list) (options : Common.options) : int * int * int =
   let files = List.map Fpath.rem_ext sml_files in
   let groups = List.sort_uniq Fpath.compare files in
   let res =
@@ -190,11 +190,11 @@ let process_sml_files (input_path : path) (output_path : path)
         )
       groups
   in
-  let failures =
-    List.fold_left (fun acc x -> if x <> 0 then acc + 1 else acc) 0 res
+  let warnings, failures =
+    List.fold_left (fun (acc_warn, acc_fail) x -> if x <> 0 then begin if x > 1 then (acc_warn + 1, acc_fail) else (acc_warn, acc_fail + 1) end else (acc_warn, acc_fail)) (0, 0) res
   in
 
-  (failures, List.length res)
+  (failures, warnings, List.length res)
 
 let convert_group ~(input_dir : path) ~(output_dir : path)
     ~(options : Common.options) : int =
@@ -241,11 +241,11 @@ let convert_group ~(input_dir : path) ~(output_dir : path)
           (Fpath.( // ) input_dir f) (Fpath.( // ) output_dir f))
       normal_files_rel
   in
-  let failures, total =
+  let failures, warnings, total =
     process_sml_files input_dir output_dir source_files_rel options
   in
   let () =
-    Printf.printf "Conversion complete: %d successes, %d failures %d total.\n"
-      (total - failures) failures total
+    Printf.printf "Conversion complete: %d successes, %d warnings, %d failures %d total.\n"
+      (total - failures - warnings) warnings failures total
   in
   if failures = 0 then 0 else 1

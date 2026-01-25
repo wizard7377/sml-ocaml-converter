@@ -120,8 +120,10 @@
 (* ========================================================================= *)
 
 %nonassoc EOF
+
 %left PROGRAM_SEP
 %left SEMICOLON
+%right CONS
 %right AND
 %nonassoc BIGARROW
 %left BAR
@@ -132,7 +134,7 @@
 %right ORELSE
 %right ANDALSO
 %right AS
-%right CONS
+
 %right ARROW
 %nonassoc EQUAL
 %right STAR
