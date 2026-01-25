@@ -3,8 +3,8 @@
 (** Module type for type processing dependencies *)
 module type TYPE_DEPS = sig
   val labeller : Process_label.process_label
-  val process_name_to_longident : ctx:Process_names.context -> string list -> Ppxlib.Longident.t
-  val process_name_to_string : ctx:Process_names.context -> string list -> string
+  val build_longident : string list -> Ppxlib.Longident.t
+  val name_to_string : string list -> string
   val ghost : 'a -> 'a Location.loc
   val config : Common.options
 end

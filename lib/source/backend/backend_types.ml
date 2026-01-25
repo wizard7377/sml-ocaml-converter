@@ -6,13 +6,12 @@
     - SML: [{x: int, y: int}] (records) vs OCaml: [< x: int; y: int >] (objects) *)
 
 include Helpers
-open Process_names
 
 (** Module type for type processing dependencies *)
 module type TYPE_DEPS = sig
   val labeller : Process_label.process_label
-  val process_name_to_longident : ctx:Process_names.context -> string list -> Ppxlib.Longident.t
-  val process_name_to_string : ctx:Process_names.context -> string list -> string
+  val build_longident : string list -> Ppxlib.Longident.t
+  val name_to_string : string list -> string
   val ghost : 'a -> 'a Location.loc
   val config : Common.options
 end
@@ -39,7 +38,7 @@ module Make (Deps : TYPE_DEPS) : TYPE_PROCESSOR = struct
           | _ -> failwith "Expected type variable")
       | TypCon (args, head) ->
           let head_longident =
-            process_name_to_longident ~ctx:Type (Idx_utils.idx_to_name head.value)
+            build_longident (Idx_utils.idx_to_name head.value)
           in
           let args' = List.map (fun arg -> process_type_value arg) args in
           Builder.ptyp_constr (ghost head_longident) args'
@@ -63,7 +62,7 @@ module Make (Deps : TYPE_DEPS) : TYPE_PROCESSOR = struct
     match field.value with
     | Ast.TypRow (name, ty, rest) -> (
         let label_name =
-          process_name_to_string ~ctx:Label (Idx_utils.idx_to_name name.value)
+          name_to_string (Idx_utils.idx_to_name name.value)
         in
         let here : Parsetree.object_field =
           Builder.otag (ghost label_name) (process_type_value ty)
