@@ -10,3 +10,4 @@ examples/**
 *~ 
 .temp/
 deps.svg
+.worktrees/
