@@ -179,6 +179,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       - SML character literals use [#"c"], OCaml uses ['c'] *)
 
   (** Convert an SML constant to an OCaml constant. Delegated to Backend_constants. *)
+  (* TODO Task 1.4: Wire Backend_const here *)
+  (* Original process_con function to be replaced *)
   let process_con = Backend_constants.process_con
 
   let rec is_operator (s : expression Ast.node) : bool =
@@ -709,7 +711,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
               let name_longident = build_longident op_name in
               Builder.ppat_construct (ghost name_longident) None
             else
-              let name_str = name_to_string op_name in
+              let name_str = process_lowercase (name_to_string op_name) in
               Builder.ppat_var (ghost name_str)
         | WithoutOp id ->
             let id_name = idx_to_name id.value in
@@ -718,7 +720,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
               let name_longident = build_longident id_name in
               Builder.ppat_construct (ghost name_longident) None
             else
-              let name_str = name_to_string id_name in
+              let name_str = process_lowercase (name_to_string id_name) in
               Builder.ppat_var (ghost name_str))
     | PatApp (node, p) when pat_head_eq_ref node -> let loc = Ppxlib.Location.none in ([%pat? { contents = [%p process_pat ~is_arg ~is_head p] }])
     | PatApp (wo, p) ->
@@ -771,7 +773,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
           | WithOp id -> idx_to_name id.value
           | WithoutOp id -> idx_to_name id.value
         in
-        let var_str = name_to_string var_name in
+        let var_str = process_lowercase (name_to_string var_name) in
         let inner_pat = process_pat ~is_arg ~is_head p in
         let final_pat =
           match t_opt with
@@ -829,7 +831,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
           | None -> pat_with_type
           | Some as_id ->
               let as_name =
-                name_to_string (idx_to_name as_id.value)
+                process_lowercase (name_to_string (idx_to_name as_id.value))
               in
               Builder.ppat_alias pat_with_type (ghost as_name)
         in
