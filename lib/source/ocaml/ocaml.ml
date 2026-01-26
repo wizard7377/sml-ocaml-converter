@@ -14,9 +14,10 @@ open Ppxlib
 open Common
 (** Helper functions for capitalization *)
 module Capital = struct
-  let process_lowercase (s : string) : string = String.uncapitalize_ascii s
-  let process_uppercase (s : string) : string = String.capitalize_ascii s
-  let process_caps (s : string) : string = String.uppercase_ascii s
+  let fin_process s0 s1 = if s0 <> s1 then s1 ^ "_" else s1
+  let process_lowercase (s : string) : string = fin_process s @@ String.uncapitalize_ascii s
+  let process_uppercase (s : string) : string = fin_process s @@ String.capitalize_ascii s
+  let process_caps (s : string) : string = fin_process s @@ String.uppercase_ascii s
 
   let is_variable_identifier (s : string) : bool =
     if String.length s = 0 then false
@@ -31,10 +32,14 @@ module Capital = struct
       not ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c = '_')
 end
 
+type pattern_type = 
+  | GlobalLet 
+  | LocalLet
+  | OtherPattern
 (** Context for name processing - tracks where we are in the tree *)
 type name_context =
   | EmptyContext    (** No specific context *)
-  | InPattern        (** Inside a pattern (may be constructor or variable) *)
+  | InPattern of pattern_type       (** Inside a pattern (may be constructor or variable) *)
   | InPatternHead    (** Head position of pattern application (always constructor) *)
   | InExpression     (** Inside an expression *)
   | InTypeDecl       (** Inside a type declaration name *)
@@ -44,11 +49,12 @@ type name_context =
   | InQualifiedName of name_context  (** Inside a qualified name *)
   | InLabel          (** Inside a record label *)
   | InValue          (** Inside a value identifier *)
+  | InVariableContext of name_context  (** Inside a variable context *)
 
 let context_to_string (ctx : name_context) : string =
   match ctx with
   | EmptyContext -> "EmptyContext"
-  | InPattern -> "InPattern"
+  | InPattern _ -> "InPattern"
   | InPatternHead -> "InPatternHead"
   | InExpression -> "InExpression"
   | InTypeDecl -> "InTypeDecl"
@@ -58,13 +64,15 @@ let context_to_string (ctx : name_context) : string =
   | InQualifiedName _ -> "InQualifiedName"
   | InLabel -> "InLabel"
   | InValue -> "InValue"
+  | InVariableContext _ -> "InVariableContext"
+  | _ -> raise (Failure "Unknown context")
 
 (** Overall context for processing, including configuration options *)
 type context = {
   name_ctx : name_context;
   config : Common.options;
 }
-
+let update context f = { context with name_ctx = f context.name_ctx }
 let default_context : context = {
   name_ctx = EmptyContext;
   config = Common.mkOptions ();
@@ -168,7 +176,7 @@ class process_ocaml ~(opts : Common.options) =
         processing_depth <- processing_depth - 1;
         let ctx_str = match ctx with
           | EmptyContext -> "EmptyContext"
-          | InPattern -> "InPattern"
+          | InPattern _ -> "InPattern"
           | InPatternHead -> "InPatternHead"
           | InExpression -> "InExpression"
           | InTypeDecl -> "InTypeDecl"
@@ -178,6 +186,8 @@ class process_ocaml ~(opts : Common.options) =
           | InQualifiedName _ -> "InQualifiedName"
           | InLabel -> "InLabel"
           | InValue -> "InValue"
+          | InVariableContext _ -> "InVariableContext"
+          | _ -> assert false
         in
         failwith (Printf.sprintf
           "Maximum recursion depth (%d) exceeded while processing identifier '%s' in context %s. \
@@ -187,15 +197,39 @@ class process_ocaml ~(opts : Common.options) =
       Log.log_with ~cfg:config ~level:Debug ~kind:Neutral
         ~msg:(Printf.sprintf "Processing identifier (depth=%d): %s in context %s" processing_depth name (context_to_string ctx)) ();
       let name_without_op = self#process_op name in
+      
       let result = begin
 
       match ctx with
-      | InTypeDecl when Common.is_flag_enabled (Common.get_rename_types config) ->
+      
+      | InPattern _ | InVariableContext (InPattern _) ->
+          (* In patterns, guess based on capitalization if --guess-var is set *)
+          (match Common.get_guess_var config with
+           | Some pattern ->
+               let regex = Re.Str.regexp ({|\b|} ^ pattern ^ {|\b|}) in
+               if Re.Str.string_match regex name_without_op 0 then
+                 (* Matches guess pattern - treat as variable *)
+                 if Common.is_flag_enabled (Common.get_convert_names config) then
+                   Capital.process_lowercase name_without_op
+                 else
+                   name_without_op
+               else
+                 (* Doesn't match - treat as constructor *)
+                 Capital.process_uppercase name_without_op
+           | None ->
+               (* No guess pattern - use SML capitalization as-is *)
+               name_without_op)
+
+      | InTypeDecl | InQualifiedName InTypeDecl | InVariableContext _ when Common.is_flag_enabled (Common.get_rename_types config) ->
           (* Type declarations must be lowercase *)
           let lowered = Capital.process_lowercase name_without_op in
           if Capital.is_variable_identifier lowered then lowered
           else lowered ^ "_"
-
+      
+      | InTypeName | InQualifiedName InTypeName when Common.is_flag_enabled (Common.get_rename_types config) ->
+          let lowered = Capital.process_lowercase name_without_op in
+          if Capital.is_variable_identifier lowered then lowered
+          else lowered ^ "_"
       | InConstructorDecl when Common.is_flag_enabled (Common.get_convert_names config) ->
           Log.log_with ~cfg:config ~level:Debug ~kind:Neutral
             ~msg:("Processing constructor declaration name: " ^ name_without_op) ();
@@ -219,24 +253,6 @@ class process_ocaml ~(opts : Common.options) =
       | InPatternHead when Common.is_flag_enabled (Common.get_guess_pattern config) ->
           (* Pattern heads are always constructors *)
           Capital.process_uppercase name_without_op
-
-      | InPattern ->
-          (* In patterns, guess based on capitalization if --guess-var is set *)
-          (match Common.get_guess_var config with
-           | Some pattern ->
-               let regex = Re.Str.regexp ({|\b|} ^ pattern ^ {|\b|}) in
-               if Re.Str.string_match regex name_without_op 0 then
-                 (* Matches guess pattern - treat as variable *)
-                 if Common.is_flag_enabled (Common.get_convert_names config) then
-                   Capital.process_lowercase name_without_op
-                 else
-                   name_without_op
-               else
-                 (* Doesn't match - treat as constructor *)
-                 Capital.process_uppercase name_without_op
-           | None ->
-               (* No guess pattern - use SML capitalization as-is *)
-               name_without_op)
 
       | InValue | InLabel when Common.is_flag_enabled (Common.get_convert_names config) ->
           (* Values and labels should be lowercase *)
@@ -312,9 +328,9 @@ class process_ocaml ~(opts : Common.options) =
 
       | Ppat_alias (inner, name) ->
           (* Alias pattern *)
-          let new_name = self#process_identifier InValue name.txt in
+          let new_name = self#process_identifier (InVariableContext ctx.name_ctx) name.txt in
           let escaped = self#escape_keyword new_name in
-          let new_inner = self#pattern ctx inner in
+          let new_inner = self#pattern (update ctx (fun _ -> InPattern OtherPattern)) inner in
           { pat with ppat_desc = Ppat_alias (new_inner, { name with txt = escaped }) }
 
       | Ppat_construct (lid, arg_opt) ->
@@ -482,7 +498,7 @@ class process_ocaml ~(opts : Common.options) =
       | Ptyp_constr (lid, args) ->
           (* Type constructor reference *)
           let new_lid = self#process_loc_longident InTypeName lid in
-          let new_args = List.map (self#core_type ctx) args in
+          let new_args = List.map (self#core_type {ctx with name_ctx = InTypeName}) args in
           { ct with ptyp_desc = Ptyp_constr (new_lid, new_args) }
 
       | _ ->

@@ -1546,7 +1546,7 @@ let count_sml_comments (source : string) : int =
   find_all_occurrences source "(*" 0 0
 
 (** Helper to recursively count comment attributes in Parsetree *)
-let rec count_parsetree_comments (structure : Parsetree.structure) : int =
+let count_parsetree_comments (structure : Parsetree.structure) : int =
   let rec count_structure_item item =
     match item.Parsetree.pstr_desc with
     | Pstr_attribute _ -> 1  (* Count all Pstr_attribute as comments *)
@@ -1661,6 +1661,124 @@ let comment_preservation_tests =
     ("multiple declarations with comments", `Quick, test_multiple_declarations_with_comments);
   ]
 
+(** {1 Twelf Integration Tests} *)
+
+(** Helper to find all SML files recursively in a directory *)
+let find_sml_files (dir : string) : string list =
+  let rec scan_directory acc path =
+    let entries = Sys.readdir path in
+    Array.fold_left (fun acc entry ->
+      let full_path = Filename.concat path entry in
+      if Sys.is_directory full_path then
+        scan_directory acc full_path
+      else if
+        Filename.check_suffix entry ".sml" ||
+        Filename.check_suffix entry ".fun" ||
+        Filename.check_suffix entry ".sig"
+      then
+        full_path :: acc
+      else
+        acc
+    ) acc entries
+  in
+  let files = scan_directory [] dir in
+  List.sort String.compare files
+
+(** Create a test for a single Twelf file *)
+let test_twelf_file (file_path : string) () : unit =
+  (* Read file content *)
+  let ic = open_in file_path in
+  let len = in_channel_length ic in
+  let content = really_input_string ic len in
+  close_in ic;
+
+  (* Configure the converter *)
+  let config = Common.mkOptions
+    ~input_file:(Common.File [file_path])
+    ~output_file:Common.Silent
+    ~verbosity:(Some 0)  (* Silent verbosity for tests *)
+    ~conversions:(Common.mkConversions ~convert_names:Enable ~convert_comments:Enable  ~convert_keywords:Enable ~rename_types:Enable ~rename_constructors:Enable ~deref_pattern:Enable ~guess_pattern:Enable ())
+    ~guess_var:(Some {|[A-Z]s?[0-9]?'?|})
+    ~variable_regex:( {|[A-Z]s?[0-9]?'?|})
+    ()
+  in
+
+  try
+    (* Parse SML using Frontend *)
+    let sml_ast = Frontend.parse content in
+
+    (* Create backend module for conversion *)
+    let module TestCtx = struct
+      let lexbuf = content
+      let context = Context.basis_context
+    end in
+    let module TestCfg : Common.CONFIG = struct
+      let config = config
+    end in
+    let module TestBackend = Backend.Make(TestCtx)(TestCfg) in
+
+    (* Convert to OCaml *)
+    let ocaml_ast = TestBackend.process_prog sml_ast in
+
+    (* Print OCaml code *)
+    let buf = Buffer.create 4096 in
+    let fmt = Format.formatter_of_buffer buf in
+    List.iter (fun item ->
+      Ppxlib.Pprintast.structure_item fmt item;
+      Format.pp_print_newline fmt ()
+    ) ocaml_ast;
+    Format.pp_print_flush fmt ();
+    let ocaml_code' = Buffer.contents buf in
+    let ocaml_code = Polish.polish ocaml_code' in
+
+    (* Check if the generated OCaml is valid by parsing it *)
+    begin
+      try
+        let lexbuf = Lexing.from_string ~with_positions:true ocaml_code in
+        Lexing.set_filename lexbuf file_path;
+        let _ = Parse.use_file lexbuf in
+        () (* Test passes - OCaml code is valid *)
+      with
+      | Syntaxerr.Error e ->
+          let buf = Buffer.create 256 in
+          let fmt = Format.formatter_of_buffer buf in
+          Location.report_exception fmt (Syntaxerr.Error e);
+          Format.pp_print_flush fmt ();
+          let error_msg = Buffer.contents buf in
+          fail (Printf.sprintf "Generated invalid OCaml code:\n%s" error_msg)
+      | e ->
+          fail (Printf.sprintf "Error validating OCaml syntax: %s" (Printexc.to_string e))
+    end
+  with
+  | Lexer.Error (_, _loc) ->
+      fail "Lexing error"
+  | Parser.Error ->
+      fail "Parsing error"
+  | e ->
+      fail (Printf.sprintf "Conversion failed: %s\n%s"
+        (Printexc.to_string e)
+        (Printexc.get_backtrace ()))
+
+(** Generate test cases for all Twelf files *)
+let twelf_tests =
+  let twelf_dir = "examples/input/twelf/src" in
+  if Sys.file_exists twelf_dir && Sys.is_directory twelf_dir then
+    let files = find_sml_files twelf_dir in
+    List.map (fun file_path ->
+      let rel_path =
+        if String.length file_path > String.length twelf_dir + 1 then
+          String.sub file_path (String.length twelf_dir + 1)
+            (String.length file_path - String.length twelf_dir - 1)
+        else
+          file_path
+      in
+      (rel_path, `Quick, test_twelf_file file_path)
+    ) files
+  else
+    (* If directory doesn't exist, create a single failing test *)
+    [("twelf directory not found", `Quick,
+      fun () -> fail (Printf.sprintf "Twelf directory not found: %s" twelf_dir))]
+
 (** Main test runner *)
 
 let run_unit_tests () : unit =
@@ -1676,6 +1794,7 @@ let run_unit_tests () : unit =
       ("Complex Type Processing", complex_type_tests);
       ("Pattern Matching (AST Structure)", pattern_matching_tests);
       ("Comment Preservation", comment_preservation_tests);
+      ("Twelf Integration", twelf_tests);
     ]
 
 let () = run_unit_tests ()

@@ -39,6 +39,7 @@
   ppx_import
   ppx_deriving
   ocamlformat
+  containers
   re
   ez_file
   fmt)

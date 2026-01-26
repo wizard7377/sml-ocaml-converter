@@ -30,7 +30,7 @@ val structure_item: Parsetree.structure_item t
 val signature_item: Parsetree.signature_item t
 val binding: Parsetree.value_binding t
 val payload: Parsetree.payload t
-
+val use : ('a -> unit t) -> 'a t
 val tyvar_of_name : string -> string
   (** Turn a type variable name into a valid identifier, taking care of the
       special treatment required for the single quote character in second

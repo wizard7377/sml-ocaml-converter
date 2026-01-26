@@ -46,7 +46,7 @@ type 'a node = {
 
           This is the actual AST constructor value. Pattern match on this
           field to examine the AST structure. *)
-  pos : (Lexing.position * Lexing.position) option; [@opaque]
+  pos : (Lexing.position * Lexing.position) option [@opaque]
       (** Optional source location (start position, end position).
 
           Set by the parser to track where this AST node originated

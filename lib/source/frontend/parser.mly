@@ -110,6 +110,7 @@
 
 (* Identifiers *)
 %token<Tokens.ident> SHORT_IDENT
+%token<Tokens.ident> SYMBOL_IDENT
 %token<Tokens.ident list> LONG_IDENT
 %token<string> TYVAR
 
@@ -123,6 +124,7 @@
 
 %left PROGRAM_SEP
 %left SEMICOLON
+
 %right CONS
 %right AND
 %nonassoc BIGARROW
@@ -134,11 +136,12 @@
 %right ORELSE
 %right ANDALSO
 %right AS
-
+%left INFIX_APP
 %right ARROW
 %nonassoc EQUAL
 %right STAR
 %left COLON COLON_GT
+%right PREFIX_APP
 %left PROGRAM_PREC 
 
 (* ========================================================================= *)
@@ -211,6 +214,10 @@
 %type <Ast.pat node option> as_pat_opt
 
 %start main
+%start<Ast.prog * string list> main_top
+%start<Ast.expression> expression_top 
+%start<Ast.pat> pat_top
+%start<Ast.typ> typ_top
 
 %%
 
@@ -218,12 +225,23 @@
 (* Identifiers                                                               *)
 (* ========================================================================= *)
 
-
+main_top : 
+  | main { $1 }
+expression_top:
+  | expression EOF { $1 }
+;
+pat_top:
+  | pat EOF { $1 }
+;
+typ_top:
+  | typ EOF { $1 }
+;
 let boxed(r) := 
   | v=r; { { value = v; pos=Some ($symbolstartpos , $endpos ) } } 
 
 %inline ident:
   | SHORT_IDENT { ident_to_idx $1 }
+  | lifted_symbol { ident_to_idx $1 }
   | boxed(STAR) { IdxIdx (b "*") }
 ;
 
@@ -249,8 +267,12 @@ let boxed(r) :=
   | TYVAR { IdxVar (b $1) }
 ;
 
+%inline lifted_symbol: 
+  | "op" SYMBOL_IDENT { $2 }
+  | "(" SYMBOL_IDENT ")" { $2 }
 %inline tycon:
   | SHORT_IDENT { ident_to_idx $1 }
+  | lifted_symbol { ident_to_idx $1 }
 ;
 
 %inline longid:
@@ -390,6 +412,7 @@ expression:
       | f :: args -> List.fold_left (fun acc arg -> ExpApp (b acc, arg)) f.value args
       | [] -> failwith "impossible: empty expression sequence"
     }
+  | expression SYMBOL_IDENT expression %prec INFIX_APP { InfixApp (bp $1 $startpos($1) $endpos($1), b (IdxIdx (b (match $2 with Symbol s -> s | Name s -> s))), bp $3 $startpos($3) $endpos($3)) }
   | expression COLON typ { TypedExp (bp $1 $startpos $endpos, bp $3 $startpos($3) $endpos($3)) }
   | expression "andalso" expression { AndExp (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3)) }
   | expression "orelse" expression { OrExp (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3)) }
@@ -400,7 +423,8 @@ expression:
   | "while" c=expression "do" bdy=expression { WhileExp (bp c $startpos(c) $endpos(c), bp bdy $startpos(bdy) $endpos(bdy)) }
   | "case" e=expression "of" m=match_clause { CaseExp (bp e $startpos(e) $endpos(e), bp m $startpos(m) $endpos(m)) }
   | "fn" m=match_clause { FnExp (bp m $startpos(m) $endpos(m)) }
-;
+  | head=SYMBOL_IDENT arg=expression %prec PREFIX_APP { ExpApp ((bp (ExpIdx (bp (ident_to_idx head) $startpos(head) $endpos(head))) $startpos(head) $endpos(head)), bp arg $startpos(arg) $endpos(arg)) }
+  ;
 
 atomic_exp_seq1:
   | atomic_exp atomic_exp_seq1 { bp $1 $startpos($1) $endpos($1) :: $2 }

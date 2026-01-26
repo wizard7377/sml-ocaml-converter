@@ -267,10 +267,29 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         Builder.pexp_apply
           (Builder.pexp_ident (ghost op_longident))
           [ (Nolabel, process_exp e1) ]
-    | ExpApp (e1, e2) ->
-        let e1' = process_exp e1 in
-        let e2' = process_exp e2 in
-        Builder.pexp_apply e1' [ (Nolabel, e2') ]
+    | ExpApp (e1, e2) -> (
+        (* Check if this is a constructor applied to a tuple *)
+        match (e1.value, e2.value) with
+        | (ExpIdx idx_node, TupleExp args) -> (
+            let idx_name = idx_to_name idx_node.value in
+            let idx_str = idx_to_string idx_node.value in
+            (* If it looks like a constructor (not lowercase variable), use pexp_construct *)
+            if not (is_variable_identifier idx_str) then
+              let name_longident = build_longident idx_name in
+              let arg_tuple = Builder.pexp_tuple (List.map process_exp args) in
+              Builder.pexp_construct (ghost name_longident) (Some arg_tuple)
+            else
+              (* Variable applied to tuple - use regular application *)
+              let e1' = process_exp e1 in
+              let e2' = Builder.pexp_tuple (List.map process_exp args) in
+              Builder.pexp_apply e1' [ (Nolabel, e2') ]
+          )
+        | _ ->
+            (* Regular application *)
+            let e1' = process_exp e1 in
+            let e2' = process_exp e2 in
+            Builder.pexp_apply e1' [ (Nolabel, e2') ]
+      )
     | ExpIdx idx ->
         let scoped_name = idx_to_name idx.value in
         let name_longident = build_longident scoped_name in
@@ -747,7 +766,12 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | PatTyp (p, t) -> Builder.ppat_constraint (process_pat ~is_arg ~is_head p) (process_type t)
     | PatAs (wo, t_opt, p) ->
         (* Layered pattern: x as SOME y *)
-        let var_str = process_with_op wo.value in
+        let var_name = 
+          match wo.value with
+          | WithOp id -> idx_to_name id.value
+          | WithoutOp id -> idx_to_name id.value
+        in
+        let var_str = name_to_string var_name in
         let inner_pat = process_pat ~is_arg ~is_head p in
         let final_pat =
           match t_opt with
