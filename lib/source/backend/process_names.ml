@@ -175,7 +175,19 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
       assert (List.length name > 0);
       assert (not @@ String.starts_with "(" @@ List.nth name 0);
       assert (not @@ String.ends_with ")" @@ List.nth name (List.length name - 1));
-      let without_op = map_last (fun s -> self#process_op s) name in 
+      let sanitize_part (s : string) : string =
+        let buf = Buffer.create (String.length s) in
+        String.iter
+          (fun c ->
+            match c with
+            | '`' -> Buffer.add_string buf "_bq"
+            | '\'' -> Buffer.add_string buf "_prime"
+            | _ -> Buffer.add_char buf c)
+          s;
+        Buffer.contents buf
+      in
+      let sanitized = List.map sanitize_part name in
+      let without_op = map_last (fun s -> self#process_op s) sanitized in 
       let name'' = map_last (fun s -> self#get_name s) without_op in
       let name' = match name'' with
         | [ name''' ] -> if StringMap.mem name''' global_map then [ StringMap.find name''' global_map ] else [ name''' ]

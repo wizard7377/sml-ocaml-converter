@@ -2,6 +2,8 @@ CLAUDE.md
 _build/
 ./.*/
 examples/**
+!examples/input/twelf/**
+!examples/input/twelf
 !examples/TestSetup.mk
 *.opam
 !shibboleth.opam
@@ -10,3 +12,4 @@ examples/**
 *~ 
 .temp/
 deps.svg
+.worktrees/

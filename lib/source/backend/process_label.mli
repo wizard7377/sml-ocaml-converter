@@ -21,8 +21,11 @@ class process_label : Common.options -> string -> object
   method mark_structure_boundary : int -> unit
   method emit_pending_as_structure_items : unit -> Parsetree.structure_item list
   method emit_pending_as_signature_items : unit -> Parsetree.signature_item list
-  
+
   (* Methods for leading comments at declaration boundaries *)
-  method leading_comments : Lexing.position option -> Parsetree.structure_item list
-  method leading_signature_comments : Lexing.position option -> Parsetree.signature_item list
+  method leading_comments :
+    Lexing.position option -> Parsetree.structure_item list
+
+  method leading_signature_comments :
+    Lexing.position option -> Parsetree.signature_item list
 end

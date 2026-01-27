@@ -3,6 +3,8 @@ type target = FileOut of string | StdOut | Silent
 type conversions
 type convert_flag = Enable | Warn | Note | Disable
 
+
+
 val is_flag_enabled : convert_flag -> bool
 (** Check if a conversion flag is active (not Disable). *)
 val mkConversions :
@@ -37,6 +39,7 @@ val mkOptions :
   ?check_ocaml:bool ->
   ?variable_regex:string ->
   ?dash_to_underscore:bool ->
+  ?basis_shim:string list ->
   unit ->
   options
 
@@ -71,6 +74,8 @@ val engaged : convert_flag -> bool
 
 val noted : convert_flag -> bool
 (** [noted flag] returns true if the conversion flag is Warn or Note. *)
+
+val get_basis_shim : options -> string list
 
 module type CONFIG = sig
   val config : options

@@ -1,0 +1,61 @@
+name: Twelf Wiki
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-wiki:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          mkdir mlton && cd mlton
+          curl -O -L https://github.com/MLton/mlton/releases/download/on-20210117-release/mlton-20210117-1.amd64-linux-glibc2.31.tgz
+          tar xzf mlton-20210117-1.amd64-linux-glibc2.31.tgz
+          cd mlton-20210117-1.amd64-linux-glibc2.31 && sudo make install
+          echo -e '#!/bin/bash\ngit rev-parse HEAD' > /tmp/svnversion
+          chmod +x /tmp/svnversion
+          sudo cp /tmp/svnversion /usr/local/bin
+
+      - name: Build Twelf
+        run: |
+          make mlton
+          make twelf-regression
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+
+      - name: Build wiki
+        run: cd wiki && npm i && npm run build
+
+      - name: Sanitize Artifact Name
+        run: |
+          name="${{ github.head_ref || github.ref_name }}"
+          name=$(echo -n "$name" | sed -e 's/[":<>\|*?\r\n\\\/]/-/g')
+          echo "ARTIFACT_NAME=$name" >> $GITHUB_ENV
+
+      - name: Upload wiki as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wiki-ssg-${{ env.ARTIFACT_NAME }}
+          path: wiki/dist/
+          compression-level: 9
+          retention-days: 1
+
+  trigger-deploy:
+    needs: build-wiki
+    runs-on: ubuntu-latest
+    if: ${{ github.ref_name == 'main' }}
+    steps:
+      - name: Call render.com deploy hook
+        run: curl ${{ secrets.RENDER_DEPLOY_URL }}

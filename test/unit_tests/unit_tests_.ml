@@ -6,12 +6,9 @@ let b = Ast.box_node
 
 (** Test configuration *)
 module TestConfig : Common.CONFIG = struct
-  let config = Common.mkOptions
-    ~input_file:Common.StdIn
-    ~output_file:Common.Silent
-    ~verbosity:(Some 3)
-    ~conversions:(Common.mkConversions ())
-    ()
+  let config =
+    Common.mkOptions ~input_file:Common.StdIn ~output_file:Common.Silent
+      ~verbosity:(Some 3) ~conversions:(Common.mkConversions ()) ()
 end
 
 module TestContext (* TODO *) = struct
@@ -326,7 +323,9 @@ let test_process_exp_infix () =
   let result_str = expression_to_string result in
   (* Verify the output contains the infix operator in the correct form *)
   check bool "infix application expression" true
-    (String.contains result_str '+' && String.contains result_str 'x' && String.contains result_str 'y')
+    (String.contains result_str '+'
+    && String.contains result_str 'x'
+    && String.contains result_str 'y')
 
 let test_process_exp_infix_multiply () =
   let input =
@@ -337,8 +336,7 @@ let test_process_exp_infix_multiply () =
   in
   let result = process_exp (b input) in
   let result_str = expression_to_string result in
-  check bool "infix multiply expression" true
-    (String.contains result_str '*')
+  check bool "infix multiply expression" true (String.contains result_str '*')
 
 let test_process_exp_infix_cons () =
   let input =
@@ -349,16 +347,16 @@ let test_process_exp_infix_cons () =
   in
   let result = process_exp (b input) in
   let result_str = expression_to_string result in
-  check bool "infix cons expression" true
-    (String.contains result_str ':')
+  check bool "infix cons expression" true (String.contains result_str ':')
 
 let test_process_exp_infix_nested () =
   let input =
     InfixApp
-      ( b (InfixApp
-          ( b (ExpCon (b (ConInt (b "1")))),
-            b (IdxIdx (b "+")),
-            b (ExpCon (b (ConInt (b "2")))) )),
+      ( b
+          (InfixApp
+             ( b (ExpCon (b (ConInt (b "1")))),
+               b (IdxIdx (b "+")),
+               b (ExpCon (b (ConInt (b "2")))) )),
         b (IdxIdx (b "*")),
         b (ExpCon (b (ConInt (b "3")))) )
   in
@@ -663,13 +661,10 @@ let test_process_pat_as () =
 
 (** Test configuration with guess_var enabled *)
 module TestConfigWithGuessVar : Common.CONFIG = struct
-  let config = Common.mkOptions
-    ~input_file:Common.StdIn
-    ~output_file:Common.Silent
-    ~verbosity:(Some 3)
-    ~conversions:(Common.mkConversions ())
-    ~guess_var:(Some "[A-Z][a-zA-Z0-9_]*")
-    ()
+  let config =
+    Common.mkOptions ~input_file:Common.StdIn ~output_file:Common.Silent
+      ~verbosity:(Some 3) ~conversions:(Common.mkConversions ())
+      ~guess_var:(Some "[A-Z][a-zA-Z0-9_]*") ()
 end
 
 module TestContextWithGuessVar = struct
@@ -677,7 +672,8 @@ module TestContextWithGuessVar = struct
   let context = Context.basis_context
 end
 
-module TestBackendWithGuessVar = Backend.Make (TestContextWithGuessVar) (TestConfigWithGuessVar)
+module TestBackendWithGuessVar =
+  Backend.Make (TestContextWithGuessVar) (TestConfigWithGuessVar)
 
 let test_process_pat_as_with_guess_var () =
   (* Test that an as pattern variable matching guess_var gets lowercased and has _ appended *)
@@ -691,8 +687,7 @@ let test_process_pat_as_with_guess_var () =
   let result_str = pattern_to_string result in
   (* "Result" should be converted to "result_" because it matches the guess_var pattern *)
   check string "as pattern variable matching guess_var gets _ suffix"
-    "x as result_"
-    result_str
+    "x as result_" result_str
 
 let test_process_pat_ref () =
   let input =
@@ -710,12 +705,14 @@ let test_process_pat_ref_nested () =
   let input =
     PatTuple
       [
-        b (PatApp
-          ( b (WithoutOp (b (IdxIdx (b "ref")))),
-            b (PatIdx (b (WithoutOp (b (IdxIdx (b "a")))))) ));
-        b (PatApp
-          ( b (WithoutOp (b (IdxIdx (b "ref")))),
-            b (PatIdx (b (WithoutOp (b (IdxIdx (b "b")))))) ))
+        b
+          (PatApp
+             ( b (WithoutOp (b (IdxIdx (b "ref")))),
+               b (PatIdx (b (WithoutOp (b (IdxIdx (b "a")))))) ));
+        b
+          (PatApp
+             ( b (WithoutOp (b (IdxIdx (b "ref")))),
+               b (PatIdx (b (WithoutOp (b (IdxIdx (b "b")))))) ));
       ]
   in
   let result = process_pat (b input) in
@@ -1539,19 +1536,18 @@ let count_sml_comments (source : string) : int =
       let idx = String.index_from str start '(' in
       if idx + 1 < String.length str && str.[idx + 1] = '*' then
         find_all_occurrences str pattern (idx + 2) (acc + 1)
-      else
-        find_all_occurrences str pattern (idx + 1) acc
+      else find_all_occurrences str pattern (idx + 1) acc
     with Not_found -> acc
   in
   find_all_occurrences source "(*" 0 0
 
 (** Helper to recursively count comment attributes in Parsetree *)
-let rec count_parsetree_comments (structure : Parsetree.structure) : int =
+let count_parsetree_comments (structure : Parsetree.structure) : int =
   let rec count_structure_item item =
     match item.Parsetree.pstr_desc with
-    | Pstr_attribute _ -> 1  (* Count all Pstr_attribute as comments *)
+    | Pstr_attribute _ -> 1 (* Count all Pstr_attribute as comments *)
     | Pstr_value (_, bindings) ->
-        List.fold_left (+) 0 (List.map count_value_binding bindings)
+        List.fold_left ( + ) 0 (List.map count_value_binding bindings)
     | Pstr_eval (expr, _) -> count_expression expr
     | Pstr_module _ -> 0
     | Pstr_type _ -> 0
@@ -1561,42 +1557,42 @@ let rec count_parsetree_comments (structure : Parsetree.structure) : int =
     count_expression vb.Parsetree.pvb_expr + count_pattern vb.Parsetree.pvb_pat
   and count_expression expr =
     match expr.Parsetree.pexp_desc with
-      | Pexp_let (_, bindings, body) ->
-          List.fold_left (+) (count_expression body)
-            (List.map count_value_binding bindings)
-      | Pexp_sequence (e1, e2) -> count_expression e1 + count_expression e2
-      | Pexp_apply (e, args) ->
-          count_expression e +
-          List.fold_left (+) 0 (List.map (fun (_, e) -> count_expression e) args)
-      | Pexp_tuple exprs ->
-          List.fold_left (+) 0 (List.map count_expression exprs)
-      | Pexp_match (e, cases) ->
-          count_expression e +
-          List.fold_left (+) 0 (List.map count_case cases)
-      | Pexp_ifthenelse (e1, e2, e3_opt) ->
-          count_expression e1 + count_expression e2 +
-          (match e3_opt with Some e3 -> count_expression e3 | None -> 0)
-      | Pexp_fun (_, _, pat, e) ->
-          count_pattern pat + count_expression e
-      | Pexp_constraint (e, _) -> count_expression e
-      | _ -> 0
-  and count_pattern _pat = 0  (* Patterns should not have comments after hoisting *)
+    | Pexp_let (_, bindings, body) ->
+        List.fold_left ( + ) (count_expression body)
+          (List.map count_value_binding bindings)
+    | Pexp_sequence (e1, e2) -> count_expression e1 + count_expression e2
+    | Pexp_apply (e, args) ->
+        count_expression e
+        + List.fold_left ( + ) 0
+            (List.map (fun (_, e) -> count_expression e) args)
+    | Pexp_tuple exprs ->
+        List.fold_left ( + ) 0 (List.map count_expression exprs)
+    | Pexp_match (e, cases) ->
+        count_expression e + List.fold_left ( + ) 0 (List.map count_case cases)
+    | Pexp_ifthenelse (e1, e2, e3_opt) -> (
+        count_expression e1 + count_expression e2
+        + match e3_opt with Some e3 -> count_expression e3 | None -> 0)
+    | Pexp_fun (_, _, pat, e) -> count_pattern pat + count_expression e
+    | Pexp_constraint (e, _) -> count_expression e
+    | _ -> 0
+  and count_pattern _pat =
+    0 (* Patterns should not have comments after hoisting *)
   and count_case case =
     count_pattern case.Parsetree.pc_lhs + count_expression case.Parsetree.pc_rhs
   in
-  List.fold_left (+) 0 (List.map count_structure_item structure)
+  List.fold_left ( + ) 0 (List.map count_structure_item structure)
 
 (** Test that all comments are preserved after conversion *)
 let test_all_comments_preserved () =
   let source = "(* A *)\nval x = 1 (* B *)\n(* C *)\nval y = 2\n(* D *)" in
-  let expected_count = 4 in  (* A, B, C, D *)
+  let expected_count = 4 in
+  (* A, B, C, D *)
 
   let module TestCtx = struct
     let lexbuf = source
     let context = Context.basis_context
   end in
-  let module TestBE = Backend.Make(TestCtx)(TestConfig) in
-
+  let module TestBE = Backend.Make (TestCtx) (TestConfig) in
   let ast = Frontend.parse source in
   let result = TestBE.process_prog ast in
   let actual_count = count_parsetree_comments result in
@@ -1611,8 +1607,7 @@ let test_comments_hoisted_to_structure () =
     let lexbuf = source
     let context = Context.basis_context
   end in
-  let module TestBE = Backend.Make(TestCtx)(TestConfig) in
-
+  let module TestBE = Backend.Make (TestCtx) (TestConfig) in
   let ast = Frontend.parse source in
   let result = TestBE.process_prog ast in
 
@@ -1627,17 +1622,14 @@ let test_comments_hoisted_to_structure () =
   in
 
   (* Should have at least one structure-level comment *)
-  check bool "comment hoisted to structure level"
-    true (structure_comment_count > 0)
+  check bool "comment hoisted to structure level" true
+    (structure_comment_count > 0)
 
 (** Test with multiple declarations and comments *)
 let test_multiple_declarations_with_comments () =
   let source =
-    "(* Header comment *)\n" ^
-    "val x = 1\n" ^
-    "(* Middle comment *)\n" ^
-    "val y = 2\n" ^
-    "(* Trailing comment *)"
+    "(* Header comment *)\n" ^ "val x = 1\n" ^ "(* Middle comment *)\n"
+    ^ "val y = 2\n" ^ "(* Trailing comment *)"
   in
   let expected_count = 3 in
 
@@ -1645,8 +1637,7 @@ let test_multiple_declarations_with_comments () =
     let lexbuf = source
     let context = Context.basis_context
   end in
-  let module TestBE = Backend.Make(TestCtx)(TestConfig) in
-
+  let module TestBE = Backend.Make (TestCtx) (TestConfig) in
   let ast = Frontend.parse source in
   let result = TestBE.process_prog ast in
   let actual_count = count_parsetree_comments result in
@@ -1657,9 +1648,136 @@ let test_multiple_declarations_with_comments () =
 let comment_preservation_tests =
   [
     ("all comments preserved", `Quick, test_all_comments_preserved);
-    ("comments hoisted to structure items", `Quick, test_comments_hoisted_to_structure);
-    ("multiple declarations with comments", `Quick, test_multiple_declarations_with_comments);
+    ( "comments hoisted to structure items",
+      `Quick,
+      test_comments_hoisted_to_structure );
+    ( "multiple declarations with comments",
+      `Quick,
+      test_multiple_declarations_with_comments );
   ]
+
+(** {1 Twelf Integration Tests} *)
+
+(** Helper to find all SML files recursively in a directory *)
+let find_sml_files (dir : string) : string list =
+  let rec scan_directory acc path =
+    let entries = Sys.readdir path in
+    Array.fold_left
+      (fun acc entry ->
+        let full_path = Filename.concat path entry in
+        if Sys.is_directory full_path then scan_directory acc full_path
+        else if
+          Filename.check_suffix entry ".sml"
+          || Filename.check_suffix entry ".fun"
+          || Filename.check_suffix entry ".sig"
+        then full_path :: acc
+        else acc)
+      acc entries
+  in
+  let files = scan_directory [] dir in
+  List.sort String.compare files
+
+(** Create a test for a single Twelf file *)
+let test_twelf_file (file_path : string) () : unit =
+  (* Read file content *)
+  let ic = open_in file_path in
+  let len = in_channel_length ic in
+  let content = really_input_string ic len in
+  close_in ic;
+
+  (* Configure the converter *)
+  let config =
+    Common.mkOptions ~input_file:(Common.File [ file_path ])
+      ~output_file:Common.Silent
+      ~verbosity:(Some 0) (* Silent verbosity for tests *)
+      ~conversions:
+        (Common.mkConversions ~convert_names:Enable ~convert_comments:Enable
+           ~convert_keywords:Enable ~rename_types:Enable
+           ~rename_constructors:Enable ~deref_pattern:Enable
+           ~guess_pattern:Enable ())
+      ~guess_var:(Some {|[A-Z]s?[0-9]?'?|}) ~variable_regex:{|[A-Z]s?[0-9]?'?|}
+      ()
+  in
+
+  try
+    (* Parse SML using Frontend *)
+    let sml_ast = Frontend.parse content in
+
+    (* Create backend module for conversion *)
+    let module TestCtx = struct
+      let lexbuf = content
+      let context = Context.basis_context
+    end in
+    let module TestCfg : Common.CONFIG = struct
+      let config = config
+    end in
+    let module TestBackend = Backend.Make (TestCtx) (TestCfg) in
+    (* Convert to OCaml *)
+    let ocaml_ast = TestBackend.process_prog sml_ast in
+
+    (* Print OCaml code *)
+    let buf = Buffer.create 4096 in
+    let fmt = Format.formatter_of_buffer buf in
+    List.iter
+      (fun item ->
+        Ppxlib.Pprintast.structure_item fmt item;
+        Format.pp_print_newline fmt ())
+      ocaml_ast;
+    Format.pp_print_flush fmt ();
+    let ocaml_code' = Buffer.contents buf in
+    let ocaml_code = Polish.polish ocaml_code' in
+
+    (* Check if the generated OCaml is valid by parsing it *)
+    begin try
+      let lexbuf = Lexing.from_string ~with_positions:true ocaml_code in
+      Lexing.set_filename lexbuf file_path;
+      let _ = Parse.use_file lexbuf in
+      () (* Test passes - OCaml code is valid *)
+    with
+    | Syntaxerr.Error e ->
+        let buf = Buffer.create 256 in
+        let fmt = Format.formatter_of_buffer buf in
+        Location.report_exception fmt (Syntaxerr.Error e);
+        Format.pp_print_flush fmt ();
+        let error_msg = Buffer.contents buf in
+        fail (Printf.sprintf "Generated invalid OCaml code:\n%s" error_msg)
+    | e ->
+        fail
+          (Printf.sprintf "Error validating OCaml syntax: %s"
+             (Printexc.to_string e))
+    end
+  with
+  | Lexer.Error (_, _loc) -> fail "Lexing error"
+  | Parser.Error -> fail "Parsing error"
+  | e ->
+      fail
+        (Printf.sprintf "Conversion failed: %s\n%s" (Printexc.to_string e)
+           (Printexc.get_backtrace ()))
+
+(** Generate test cases for all Twelf files *)
+let twelf_tests =
+  let twelf_dir = "examples/input/twelf/src" in
+  if Sys.file_exists twelf_dir && Sys.is_directory twelf_dir then
+    let files = find_sml_files twelf_dir in
+    List.map
+      (fun file_path ->
+        let rel_path =
+          if String.length file_path > String.length twelf_dir + 1 then
+            String.sub file_path
+              (String.length twelf_dir + 1)
+              (String.length file_path - String.length twelf_dir - 1)
+          else file_path
+        in
+        (rel_path, `Quick, test_twelf_file file_path))
+      files
+  else
+    (* If directory doesn't exist, create a single failing test *)
+    [
+      ( "twelf directory not found",
+        `Quick,
+        fun () ->
+          fail (Printf.sprintf "Twelf directory not found: %s" twelf_dir) );
+    ]
 
 (** Main test runner *)
 
@@ -1676,6 +1794,7 @@ let run_unit_tests () : unit =
       ("Complex Type Processing", complex_type_tests);
       ("Pattern Matching (AST Structure)", pattern_matching_tests);
       ("Comment Preservation", comment_preservation_tests);
+      ("Twelf Integration", twelf_tests);
     ]
 
 let () = run_unit_tests ()

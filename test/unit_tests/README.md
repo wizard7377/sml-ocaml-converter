@@ -4,7 +4,30 @@ This directory contains Alcotest-based unit tests for the SML to OCaml converter
 
 ## Overview
 
-The tests in `backend.ml` comprehensively test the backend functions that convert SML AST nodes to OCaml Parsetree representations.
+The tests comprehensively validate the SML to OCaml conversion pipeline, including both unit tests for individual backend functions and integration tests against real-world SML codebases.
+
+## Test Suites
+
+### 1. Backend Unit Tests
+Fine-grained tests for individual backend conversion functions.
+
+### 2. Twelf Integration Tests (NEW)
+End-to-end integration tests validating the converter against the Twelf project codebase.
+
+**Test Count:** 468 tests (one per source file: *.sml, *.fun, *.sig)
+**Location:** `examples/input/twelf/src/`
+
+Each test:
+1. Parses the SML source file
+2. Converts to OCaml AST
+3. Pretty-prints the OCaml code
+4. Validates the generated OCaml is syntactically valid
+
+**Current Status:**
+- ✅ **177 tests passing** (37.8%) - Files that convert to valid OCaml
+- ❌ **291 tests failing** (62.2%) - Files exposing converter limitations
+
+Failing tests help identify missing features and bugs in the converter.
 
 ## Test Coverage
 
@@ -32,28 +55,46 @@ The tests in `backend.ml` comprehensively test the backend functions that conver
 
 ## Running the Tests
 
-### Run all backend unit tests:
+### Run all tests (recommended):
 ```bash
-dune exec test/unit/backend.exe
+make test
 ```
 
-### Run with verbose output:
+### Run only Twelf integration tests:
 ```bash
-dune exec test/unit/backend.exe -- -v
+make test_twelf
+```
+
+### Run all unit tests (including Twelf):
+```bash
+dune exec test/unit_tests/unit_tests.exe
 ```
 
 ### Run specific test suites:
 ```bash
 # Run only type processing tests
-dune exec test/unit/backend.exe -- test "Type Processing"
+dune exec test/unit_tests/unit_tests.exe -- test "Type Processing"
 
 # Run only expression tests
-dune exec test/unit/backend.exe -- test "Expression Processing"
+dune exec test/unit_tests/unit_tests.exe -- test "Expression Processing"
+
+# Run only Twelf integration tests
+dune exec test/unit_tests/unit_tests.exe -- test "Twelf Integration"
+```
+
+### Run with verbose output:
+```bash
+dune exec test/unit_tests/unit_tests.exe -- test "Twelf Integration" --verbose
+```
+
+### Run specific file from Twelf tests:
+```bash
+dune exec test/unit_tests/unit_tests.exe -- test "Twelf Integration" --match "modes/modetable.fun"
 ```
 
 ### Build the tests without running:
 ```bash
-dune build test/unit/backend.exe
+dune build test/unit_tests/unit_tests.exe
 ```
 
 ## Test Structure
@@ -71,9 +112,16 @@ Each test follows this pattern:
 - **ast**: SML AST definitions
 - **helpers**: Helper utilities for AST construction
 
-## Adding New Tests
+## Adding New Twelf Integration Tests
 
-To add new tests:
+The Twelf integration tests are **automatically discovered** at runtime! Simply:
+1. Place your `.sml`, `.fun`, or `.sig` file in `examples/input/twelf/src/` (or any subdirectory)
+2. Run the tests - the new file will be automatically tested
+3. No code changes needed!
+
+## Adding New Unit Tests
+
+To add new backend unit tests:
 
 1. Create a test function:
 ```ocaml

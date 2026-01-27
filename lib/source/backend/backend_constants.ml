@@ -1,5 +1,5 @@
 (** Backend constant processing - converts SML constants to OCaml constants.
-    
+
     SML and OCaml have different constant syntaxes:
     - SML uses [~] for negation, OCaml uses [-]
     - SML has word literals ([0w42]), OCaml doesn't (need conversion)

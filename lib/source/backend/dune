@@ -2,5 +2,20 @@
  (public_name shibboleth.backend)
  (name backend)
  (libraries re ast common context helpers ppxlib)
+ (modules
+  backend
+  backend_sig
+  backend_common
+  backend_const
+  backend_constants
+  backend_context
+  backend_types
+  capital_utils
+  create_ocaml
+  idx_utils
+  name_processor
+  process_label
+  process_names
+  type_var_utils)
  (preprocess
   (pps ppxlib.metaquot)))

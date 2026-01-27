@@ -60,14 +60,14 @@ class process_label opts lexbuf =
 
     (* NEW FIELDS for comment hoisting *)
     val mutable pending_comments : (string * int) list = []
-      (* Comments accumulated during expression/pattern processing *)
-      (* Tuple: (comment_text, original_char_position) *)
+    (* Comments accumulated during expression/pattern processing *)
+    (* Tuple: (comment_text, original_char_position) *)
 
     val mutable last_structure_pos : int = 0
-      (* Position of last structure boundary, for flushing *)
+    (* Position of last structure boundary, for flushing *)
 
-    val mutable emission_mode : [`Immediate | `Accumulate] = `Immediate
-      (* Controls whether comments are attached or accumulated *)
+    val mutable emission_mode : [ `Immediate | `Accumulate ] = `Immediate
+    (* Controls whether comments are attached or accumulated *)
 
     method private take_within (pos : int * int) : string list =
       let start_range, end_range = pos in
@@ -80,8 +80,8 @@ class process_label opts lexbuf =
       in
       comments <- outside;
       (* Sort by start position to maintain source order *)
-      let sorted_inside = 
-        List.sort (fun (_, s1, _) (_, s2, _) -> compare s1 s2) inside 
+      let sorted_inside =
+        List.sort (fun (_, s1, _) (_, s2, _) -> compare s1 s2) inside
       in
       List.map (fun (s, _, _) -> s) sorted_inside
 
@@ -150,27 +150,28 @@ class process_label opts lexbuf =
       fun tag pos x ->
         match pos with
         | None -> x
-        | Some (start_pos, end_pos) ->
+        | Some (start_pos, end_pos) -> (
             let comments = self#retrieve_comments start_pos end_pos in
-            (match emission_mode with
-             | `Immediate ->
-                 (* Old behavior: attach as attributes *)
-                 let comments' = List.map self#comment_attr comments in
-                 List.fold_left tag x comments'
-             | `Accumulate ->
-                 (* New behavior: accumulate for later emission *)
-                 let with_positions =
-                   List.map (fun c -> (c, start_pos.pos_cnum)) comments
-                 in
-                 pending_comments <- pending_comments @ with_positions;
-                 x (* Return unchanged *)
-            )
+            match emission_mode with
+            | `Immediate ->
+                (* Old behavior: attach as attributes *)
+                let comments' = List.map self#comment_attr comments in
+                List.fold_left tag x comments'
+            | `Accumulate ->
+                (* New behavior: accumulate for later emission *)
+                let with_positions =
+                  List.map (fun c -> (c, start_pos.pos_cnum)) comments
+                in
+                pending_comments <- pending_comments @ with_positions;
+                x (* Return unchanged *))
+
     method until : Lexing.position -> Attr.attr list =
       fun end_pos ->
         (* Get comments from position 0 up to end_pos *)
         let start_pos = { Lexing.dummy_pos with pos_cnum = 0 } in
         let comments = self#retrieve_comments start_pos end_pos in
         List.map self#comment_attr comments
+
     method cite_exact : 'a. 'a citer -> string -> string list -> 'a -> 'a =
       fun tag name payload x ->
         let payload_str = payload in
@@ -179,29 +180,52 @@ class process_label opts lexbuf =
 
     (* NEW METHODS for comment hoisting *)
 
+    method enter_accumulate_context : unit = emission_mode <- `Accumulate
     (** Enter accumulation mode for expression/pattern context *)
-    method enter_accumulate_context : unit =
-      emission_mode <- `Accumulate
 
+    method exit_accumulate_context : unit = emission_mode <- `Immediate
     (** Exit accumulation mode, return to immediate *)
-    method exit_accumulate_context : unit =
-      emission_mode <- `Immediate
 
-    (** Get pending comments after last structure position, sorted by position *)
     method flush_pending : (string * int) list =
-      let (matching, remaining) =
-        List.partition (fun (_, pos) -> pos > last_structure_pos) pending_comments
+      let matching, remaining =
+        List.partition
+          (fun (_, pos) -> pos > last_structure_pos)
+          pending_comments
       in
       pending_comments <- remaining;
       List.sort (fun (_, p1) (_, p2) -> compare p1 p2) matching
+    (** Get pending comments after last structure position, sorted by position
+    *)
 
-    (** Update structure boundary marker *)
     method mark_structure_boundary (pos : int) : unit =
       last_structure_pos <- pos
+    (** Update structure boundary marker *)
 
-    (** Get leading comments before a position (from last_structure_pos to pos) 
+    method leading_comments (pos : Lexing.position option) :
+        Parsetree.structure_item list =
+      match pos with
+      | None -> []
+      | Some start_pos ->
+          let start_range = last_structure_pos in
+          let end_range = start_pos.Lexing.pos_cnum in
+          if end_range <= start_range then []
+          else begin
+            let leading = self#take_within (start_range, end_range) in
+            last_structure_pos <- end_range;
+            List.map
+              (fun comment_text ->
+                let attr = self#comment_attr comment_text in
+                {
+                  Parsetree.pstr_desc = Parsetree.Pstr_attribute attr;
+                  Parsetree.pstr_loc = Location.none;
+                })
+              leading
+          end
+    (** Get leading comments before a position (from last_structure_pos to pos)
         and update last_structure_pos to the end of this range *)
-    method leading_comments (pos : Lexing.position option) : Parsetree.structure_item list =
+
+    method leading_signature_comments (pos : Lexing.position option) :
+        Parsetree.signature_item list =
       match pos with
       | None -> []
       | Some start_pos ->
@@ -211,48 +235,43 @@ class process_label opts lexbuf =
           else begin
             let leading = self#take_within (start_range, end_range) in
             last_structure_pos <- end_range;
-            List.map (fun comment_text ->
-              let attr = self#comment_attr comment_text in
-              { Parsetree.pstr_desc = Parsetree.Pstr_attribute attr;
-                Parsetree.pstr_loc = Location.none }
-            ) leading
+            List.map
+              (fun comment_text ->
+                let attr = self#comment_attr comment_text in
+                {
+                  Parsetree.psig_desc = Parsetree.Psig_attribute attr;
+                  Parsetree.psig_loc = Location.none;
+                })
+              leading
           end
-
     (** Get leading comments for signatures *)
-    method leading_signature_comments (pos : Lexing.position option) : Parsetree.signature_item list =
-      match pos with
-      | None -> []
-      | Some start_pos ->
-          let start_range = last_structure_pos in
-          let end_range = start_pos.Lexing.pos_cnum in
-          if end_range <= start_range then []
-          else begin
-            let leading = self#take_within (start_range, end_range) in
-            last_structure_pos <- end_range;
-            List.map (fun comment_text ->
-              let attr = self#comment_attr comment_text in
-              { Parsetree.psig_desc = Parsetree.Psig_attribute attr;
-                Parsetree.psig_loc = Location.none }
-            ) leading
-          end
 
+    method emit_pending_as_structure_items :
+        unit -> Parsetree.structure_item list =
+      fun () ->
+        let pending = self#flush_pending in
+        List.map
+          (fun (comment_text, _) ->
+            let attr = self#comment_attr comment_text in
+            {
+              Parsetree.pstr_desc = Parsetree.Pstr_attribute attr;
+              Parsetree.pstr_loc = Location.none;
+            })
+          pending
     (** Create Pstr_attribute items from pending comments *)
-    method emit_pending_as_structure_items : unit -> Parsetree.structure_item list =
+
+    method emit_pending_as_signature_items :
+        unit -> Parsetree.signature_item list =
       fun () ->
         let pending = self#flush_pending in
-        List.map (fun (comment_text, _) ->
-          let attr = self#comment_attr comment_text in
-          { Parsetree.pstr_desc = Parsetree.Pstr_attribute attr;
-            Parsetree.pstr_loc = Location.none }
-        ) pending
-    method emit_pending_as_signature_items : unit -> Parsetree.signature_item list =
-      fun () ->
-        let pending = self#flush_pending in
-        List.map (fun (comment_text, _) ->
-          let attr = self#comment_attr comment_text in
-          { Parsetree.psig_desc = Parsetree.Psig_attribute attr;
-            Parsetree.psig_loc = Location.none }
-        ) pending
+        List.map
+          (fun (comment_text, _) ->
+            let attr = self#comment_attr comment_text in
+            {
+              Parsetree.psig_desc = Parsetree.Psig_attribute attr;
+              Parsetree.psig_loc = Location.none;
+            })
+          pending
 
     method destruct : unit -> bool =
       fun () ->

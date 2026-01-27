@@ -8,12 +8,15 @@ DUNE_OPTS += $(if $(DEV), --profile dev, --profile release)
 TEST_OPTS+=
 DUNE_ROOT:=.
 
-.PHONY: test build install clean docs test_files format
+.PHONY: test build install clean docs test_files test_twelf format
 
 
-test: build 
+test: build
 	@$(DUNE) exec $(DUNE_OPTS) $(FILE_TEST_EXE) -- $(TEST_OPTS)
 	@$(DUNE) exec $(DUNE_OPTS) $(UNIT_TEST_EXE) -- $(TEST_OPTS)
+
+test_twelf: build
+	@$(DUNE) exec $(DUNE_OPTS) $(UNIT_TEST_EXE) -- test "Twelf Integration" $(TEST_OPTS)
 
 test_files: 
 	DUNE_ROOT=1 dune runtest tests.t

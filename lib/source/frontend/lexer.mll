@@ -169,7 +169,7 @@ rule token = parse
   | '*'         { STAR }
 
   (* Symbolic identifiers - these can never be keywords *)
-  | symbolic_id as s { SHORT_IDENT (Symbol s) }
+  | symbolic_id as s { SYMBOL_IDENT (Symbol s) }
   | (alphanum_id '.')+ symbolic_id {
       (* Parse the full long identifier *)
       let full = Lexing.lexeme lexbuf in
@@ -177,7 +177,7 @@ rule token = parse
       LONG_IDENT (List.map (fun s -> Name s) parts)
     }
     
-  | "op" symbolic_id as s { SHORT_IDENT (Symbol s) }
+  | "op" symbolic_id as s { SYMBOL_IDENT (Symbol s) }
 
   (* End of file *)
   | eof           { file_comments := [] ; EOF !file_comments }

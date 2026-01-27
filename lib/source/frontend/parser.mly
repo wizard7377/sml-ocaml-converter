@@ -110,6 +110,7 @@
 
 (* Identifiers *)
 %token<Tokens.ident> SHORT_IDENT
+%token<Tokens.ident> SYMBOL_IDENT
 %token<Tokens.ident list> LONG_IDENT
 %token<string> TYVAR
 
@@ -120,8 +121,11 @@
 (* ========================================================================= *)
 
 %nonassoc EOF
+
 %left PROGRAM_SEP
 %left SEMICOLON
+%left JUXTAPOSE
+%right CONS
 %right AND
 %nonassoc BIGARROW
 %left BAR
@@ -132,11 +136,13 @@
 %right ORELSE
 %right ANDALSO
 %right AS
-%right CONS
+%right PREFIX_APP
+%left INFIX_APP
 %right ARROW
 %nonassoc EQUAL
 %right STAR
 %left COLON COLON_GT
+
 %left PROGRAM_PREC 
 
 (* ========================================================================= *)
@@ -199,7 +205,7 @@
 %type <Ast.typ_refine> typrefin
 %type <Ast.typ_refine node option> and_typrefin_opt
 %type <Ast.idx> ident longid tyvar tycon lab modid sigid
-%type <Ast.idx node list> tyvarseq tyvarseq1 tyvar_comma_seq1 longid_seq1 eq_ident_seq1 sigid_seq2
+%type <Ast.idx node list> tyvarseq tyvarseq1 tyvar_comma_seq1 longid_seq1 eq_ident_seq1 any_ident_seq1 sigid_seq2
 %type <Ast.constant> scon
 %type <Ast.with_op> op_ident op_longid op_eq_ident
 %type <Ast.anotate> anotate
@@ -209,6 +215,10 @@
 %type <Ast.pat node option> as_pat_opt
 
 %start main
+%start<Ast.prog * string list> main_top
+%start<Ast.expression> expression_top 
+%start<Ast.pat> pat_top
+%start<Ast.typ> typ_top
 
 %%
 
@@ -216,12 +226,23 @@
 (* Identifiers                                                               *)
 (* ========================================================================= *)
 
-
+main_top : 
+  | main { $1 }
+expression_top:
+  | expression EOF { $1 }
+;
+pat_top:
+  | pat EOF { $1 }
+;
+typ_top:
+  | typ EOF { $1 }
+;
 let boxed(r) := 
   | v=r; { { value = v; pos=Some ($symbolstartpos , $endpos ) } } 
 
 %inline ident:
   | SHORT_IDENT { ident_to_idx $1 }
+  | lifted_symbol { ident_to_idx $1 }
   | boxed(STAR) { IdxIdx (b "*") }
 ;
 
@@ -233,6 +254,8 @@ let boxed(r) :=
 %inline op_ident:
   | ident { WithoutOp (b $1) }
   | "op" ident { WithOp (b $2) }
+  | CONS { WithoutOp (b (IdxIdx (b "::"))) }
+  | SYMBOL_IDENT { WithoutOp (b (ident_to_idx $1)) }
 ;
 
 %inline modid:
@@ -247,8 +270,12 @@ let boxed(r) :=
   | TYVAR { IdxVar (b $1) }
 ;
 
+%inline lifted_symbol: 
+  | "op" SYMBOL_IDENT { $2 }
+  | "(" SYMBOL_IDENT ")" { $2 }
 %inline tycon:
   | SHORT_IDENT { ident_to_idx $1 }
+  | lifted_symbol { ident_to_idx $1 }
 ;
 
 %inline longid:
@@ -265,6 +292,7 @@ op_longid:
   | longid { WithoutOp (b $1) }
   | "op" ident { WithOp (b $2) }
   | "op" LONG_IDENT { WithOp (b (idents_to_long_idx $2)) }
+  | SYMBOL_IDENT { WithoutOp (b (ident_to_idx $1)) }
 ;
 
 op_eq_ident:
@@ -273,13 +301,21 @@ op_eq_ident:
   | "op" EQUAL { WithOp (b (IdxIdx (b "="))) }
   | CONS { WithoutOp (b (IdxIdx (b "::"))) }
   | "op" CONS { WithOp (b (IdxIdx (b "::"))) }
+  | SYMBOL_IDENT { WithoutOp (b (ident_to_idx $1)) }
 ;
 
 eq_ident_seq1:
   | eq_ident eq_ident_seq1 { b $1 :: $2 }
   | eq_ident { [b $1] }
 ;
-
+%inline 
+any_ident:
+  | eq_ident { b($1) }
+  | SYMBOL_IDENT { b (ident_to_idx $1) }
+  ;
+any_ident_seq1:
+  | any_ident any_ident_seq1 { $1 :: $2 }
+  | any_ident { [$1] } ;
 longid_seq1:
   | longid longid_seq1 { b $1 :: $2 }
   | longid { [b $1] }
@@ -388,6 +424,7 @@ expression:
       | f :: args -> List.fold_left (fun acc arg -> ExpApp (b acc, arg)) f.value args
       | [] -> failwith "impossible: empty expression sequence"
     }
+  | expression SYMBOL_IDENT expression %prec INFIX_APP { InfixApp (bp $1 $startpos($1) $endpos($1), b (IdxIdx (b (match $2 with Symbol s -> s | Name s -> s))), bp $3 $startpos($3) $endpos($3)) }
   | expression COLON typ { TypedExp (bp $1 $startpos $endpos, bp $3 $startpos($3) $endpos($3)) }
   | expression "andalso" expression { AndExp (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3)) }
   | expression "orelse" expression { OrExp (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3)) }
@@ -398,10 +435,11 @@ expression:
   | "while" c=expression "do" bdy=expression { WhileExp (bp c $startpos(c) $endpos(c), bp bdy $startpos(bdy) $endpos(bdy)) }
   | "case" e=expression "of" m=match_clause { CaseExp (bp e $startpos(e) $endpos(e), bp m $startpos(m) $endpos(m)) }
   | "fn" m=match_clause { FnExp (bp m $startpos(m) $endpos(m)) }
-;
+  | head=SYMBOL_IDENT arg=expression %prec PREFIX_APP { ExpApp ((bp (ExpIdx (bp (ident_to_idx head) $startpos(head) $endpos(head))) $startpos(head) $endpos(head)), bp arg $startpos(arg) $endpos(arg)) }
+  ;
 
 atomic_exp_seq1:
-  | atomic_exp atomic_exp_seq1 { bp $1 $startpos($1) $endpos($1) :: $2 }
+  | atomic_exp atomic_exp_seq1 %prec JUXTAPOSE { bp $1 $startpos($1) $endpos($1) :: $2 }
   | atomic_exp { [bp $1 $startpos($1) $endpos($1)] }
 ;
 
@@ -487,14 +525,18 @@ pat:
   | p0=pat BAR p1=pat {
       PatOr (bp p0 $startpos(p0) $endpos(p0), bp p1 $startpos(p1) $endpos(p1))
     }
+  | pat SYMBOL_IDENT pat %prec INFIX_APP { PatInfix (bp $1 $startpos($1) $endpos($1), b (IdxIdx (b (match $2 with Symbol s -> s | Name s -> s))), bp $3 $startpos($3) $endpos($3)) }
+  
   | pat COLON typ { PatTyp (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3)) }
   | pat CONS pat { PatInfix (bp $1 $startpos($1) $endpos($1), b (IdxIdx (b "::")), bp $3 $startpos($3) $endpos($3)) }
+  
   | pat "as" pat {
       match $1 with
       | PatIdx op -> PatAs (op, None, bp $3 $startpos($3) $endpos($3))
       | PatTyp (p, ty) -> (match p.value with PatIdx op -> PatAs (op, Some ty, bp $3 $startpos($3) $endpos($3)) | _ -> failwith "invalid layered pattern")
       | _ -> failwith "invalid layered pattern"
     }
+    | SYMBOL_IDENT pat %prec PREFIX_APP { PatApp (b (WithoutOp (b (IdxIdx (b (match $1 with Symbol s -> s | Name s -> s))))), bp $2 $startpos($2) $endpos($2)) }
 ;
 
 atomic_pat_seq1:
@@ -601,9 +643,9 @@ kwcoredec:
   | "exception" exnbind { ExnDec (bp $2 $startpos($2) $endpos($2)) }
   | "local" dec_seq "in" dec_seq "end" { LocalDec (bp $2 $startpos($2) $endpos($2), bp $4 $startpos($4) $endpos($4)) }
   | "open" longid_seq1 { OpenDec $2 }
-  | "infix" digit_opt eq_ident_seq1 { FixityDec (bp (Infix (b $2)) $startpos $endpos, $3) }
-  | "infixr" digit_opt eq_ident_seq1 { FixityDec (bp (Infixr (b $2)) $startpos $endpos, $3) }
-  | "nonfix" eq_ident_seq1 { FixityDec (bp Nonfix $startpos $endpos, $2) }
+  | "infix" digit_opt any_ident_seq1 { FixityDec (bp (Infix (b $2)) $startpos $endpos, $3) }
+  | "infixr" digit_opt any_ident_seq1 { FixityDec (bp (Infixr (b $2)) $startpos $endpos, $3) }
+  | "nonfix" any_ident_seq1 { FixityDec (bp Nonfix $startpos $endpos, $2) }
 ;
 
 typbind_opt:
@@ -849,11 +891,11 @@ kwcorespec:
   | "exception" exndesc { SpecExn (bp $2 $startpos($2) $endpos($2)) }
   | "local" specification "in" specification "end" { SpecSeq (bp $2 $startpos($2) $endpos($2), bp $4 $startpos($4) $endpos($4)) }
   | "open" longid_seq1 { SpecIncludeIdx $2 }
-  | "infix" digit_opt eq_ident_seq1 { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
+  | "infix" digit_opt any_ident_seq1 { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
                                              b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None))))) }
-  | "infixr" digit_opt eq_ident_seq1 { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
+  | "infixr" digit_opt any_ident_seq1 { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
                                               b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None))))) }
-  | "nonfix" eq_ident_seq1 { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
+  | "nonfix" any_ident_seq1 { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
                                     b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None))))) }
 ;
 
@@ -872,8 +914,8 @@ sigid_seq2:
 ;
 
 valdesc:
-  | op_ident COLON typ and_valdesc_opt {
-      ValDesc ((match $1 with WithOp i -> i | WithoutOp i -> i), bp $3 $startpos($3) $endpos($3), $4)
+  | any_ident COLON typ and_valdesc_opt {
+      ValDesc ($1, bp $3 $startpos($3) $endpos($3), $4)
     }
 ;
 

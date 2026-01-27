@@ -8,7 +8,17 @@
   process_dir
   process_group
   process_cm)
- (libraries ppx_deriving fpath bos polish common backend context frontend helpers)
- (preprocess (pps ppx_deriving.show)
- )
-)
+ (libraries
+  ppx_deriving
+  containers
+  fpath
+  bos
+  polish
+  common
+  backend
+  context
+  frontend
+  helpers
+  ocaml)
+ (preprocess
+  (pps ppx_deriving.show)))

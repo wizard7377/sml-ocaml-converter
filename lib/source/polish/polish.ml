@@ -17,8 +17,12 @@ let comment_re =
          Re.str "]";
        ])
 
-let clean_comment (input:string) : string =
-  let res0 = Re.replace_string (Re.compile @@ Re.alt [ Re.str "(*"; Re.str "*)" ]) ~by:"" input in 
+let clean_comment (input : string) : string =
+  let res0 =
+    Re.replace_string
+      (Re.compile @@ Re.alt [ Re.str "(*"; Re.str "*)" ])
+      ~by:"" input
+  in
   Scanf.unescaped res0
 
 let comment_replace : Re.Group.t -> string =

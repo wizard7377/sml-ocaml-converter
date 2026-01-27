@@ -1,0 +1,6 @@
+(library
+ (public_name shibboleth.ocaml)
+ (name ocaml)
+ (libraries re ast common context helpers ppxlib)
+ (preprocess
+  (pps ppxlib.metaquot)))
