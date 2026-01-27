@@ -30,9 +30,11 @@ class process ?(store = Context.create []) cfg_init =
       match get_output_file cfg with
       | FileOut path ->
           let fpath = Fpath.v path in
-          let path' = if Common.get_dash_to_underscore cfg then
+          let path' =
+            if Common.get_dash_to_underscore cfg then
               Common.convert_path_dashes_to_underscores fpath
-            else fpath in
+            else fpath
+          in
           (* Ensure parent directory exists *)
           let parent_dir = Fpath.parent path' in
           let _ = Bos.OS.Dir.create ~path:true parent_dir in
@@ -44,7 +46,9 @@ class process ?(store = Context.create []) cfg_init =
       | StdOut ->
           print_string content;
           true
-      | Silent -> print_string content ; true
+      | Silent ->
+          print_string content;
+          true
 
     method run (input : input) : int =
       try
@@ -83,15 +87,17 @@ class process ?(store = Context.create []) cfg_init =
                    (List.length files) file)
               ();
             try
-              let (ocaml_code, checked) = self#run_single_file file in
+              let ocaml_code, checked = self#run_single_file file in
               let output_target = get_output_file cfg in
 
               (match output_target with
               | FileOut path ->
                   let fpath = Fpath.v path in
-                  let path' = if Common.get_dash_to_underscore cfg then
+                  let path' =
+                    if Common.get_dash_to_underscore cfg then
                       Common.convert_path_dashes_to_underscores fpath
-                    else fpath in
+                    else fpath
+                  in
                   (* Ensure parent directory exists *)
                   let parent_dir = Fpath.parent path' in
                   let _ = Bos.OS.Dir.create ~path:true parent_dir in
@@ -108,14 +114,16 @@ class process ?(store = Context.create []) cfg_init =
               | Silent -> print_string ocaml_code);
               begin match checked with
               | Process_common.Good -> successes <- successes + 1
-              | Process_common.Bad err -> 
-                  warning_store <- (file, Printexc.to_string (Syntaxerr.Error err)) :: warning_store;
+              | Process_common.Bad err ->
+                  warning_store <-
+                    (file, Printexc.to_string (Syntaxerr.Error err))
+                    :: warning_store;
                   warnings <- warnings + 1
               | Process_common.Err e ->
-                errors_store <- (file, Printexc.to_string e) :: errors_store;
-                has_errors <- true;
-                failures <- failures + 1 ;
-              end ;
+                  errors_store <- (file, Printexc.to_string e) :: errors_store;
+                  has_errors <- true;
+                  failures <- failures + 1
+              end;
               ocaml_code
             with e ->
               errors_store <- (file, Printexc.to_string e) :: errors_store;
@@ -123,19 +131,23 @@ class process ?(store = Context.create []) cfg_init =
               failures <- failures + 1;
               begin match get_output_file cfg with
               | FileOut out_path -> begin
-                let content = Bos.OS.File.read (Fpath.v file) in
-                let error_fpath = Fpath.v (out_path ^ ".error") in
-                let error_path' = if Common.get_dash_to_underscore cfg then
-                    Common.convert_path_dashes_to_underscores error_fpath
-                  else error_fpath in
-                (* Ensure parent directory exists *)
-                let parent_dir = Fpath.parent error_path' in
-                let _ = Bos.OS.Dir.create ~path:true parent_dir in
-                match content with
-                | Ok existing_content -> Bos.OS.File.write error_path' existing_content |> ignore
-                | Error _ -> ()
-              end
-              | _ -> () end ;
+                  let content = Bos.OS.File.read (Fpath.v file) in
+                  let error_fpath = Fpath.v (out_path ^ ".error") in
+                  let error_path' =
+                    if Common.get_dash_to_underscore cfg then
+                      Common.convert_path_dashes_to_underscores error_fpath
+                    else error_fpath
+                  in
+                  (* Ensure parent directory exists *)
+                  let parent_dir = Fpath.parent error_path' in
+                  let _ = Bos.OS.Dir.create ~path:true parent_dir in
+                  match content with
+                  | Ok existing_content ->
+                      Bos.OS.File.write error_path' existing_content |> ignore
+                  | Error _ -> ()
+                end
+              | _ -> ()
+              end;
               raise e)
           files
       in
@@ -152,10 +164,13 @@ class process ?(store = Context.create []) cfg_init =
           0)
       in
       Log.log ~level:High
-        ~kind:(if failures == 0 then if warnings == 0 then Positive else Warning else Negative)
+        ~kind:
+          (if failures == 0 then if warnings == 0 then Positive else Warning
+           else Negative)
         ~msg:
           (Printf.sprintf
-             "Processing complete: %d successes, %d warnings, %d failures out of %d files."
+             "Processing complete: %d successes, %d warnings, %d failures out \
+              of %d files."
              successes warnings failures total)
         ();
       Log.log ~level:Medium ~kind:Neutral
@@ -164,7 +179,8 @@ class process ?(store = Context.create []) cfg_init =
         ();
       if failures = 0 then if warnings = 0 then 0 else 2 else 1
 
-    method private run_single_file (file : string) : (string * Process_common.check_result) =
+    method private run_single_file (file : string) :
+        string * Process_common.check_result =
       Log.log ~level:Medium ~kind:Positive
         ~msg:(Printf.sprintf "Processing file: %s" file)
         ();
@@ -175,21 +191,25 @@ class process ?(store = Context.create []) cfg_init =
       close_in ic;
       let sml_ast = process#parse_sml content in
       if Common.get_verbosity_default cfg 0 > 2 then
-        Log.log_with  ~cfg ~level:Low ~kind:Neutral
+        Log.log_with ~cfg ~level:Low ~kind:Neutral
           ~msg:"Finished parsing SML AST." ();
       let ocaml_ast = process#convert_to_ocaml sml_ast in
       if Common.get_verbosity_default cfg 0 > 2 then
-        Log.log_with  ~cfg ~level:Low ~kind:Neutral
+        Log.log_with ~cfg ~level:Low ~kind:Neutral
           ~msg:"Finished converting to OCaml AST." ();
       let ocaml_code' = process#print_ocaml ocaml_ast in
       if Common.get_verbosity_default cfg 0 > 2 then
-        Log.log_with  ~cfg ~level:Low ~kind:Neutral
+        Log.log_with ~cfg ~level:Low ~kind:Neutral
           ~msg:"Finished printing OCaml code." ();
       let ocaml_code = Polish.polish ocaml_code' in
       if Common.get_verbosity_default cfg 0 > 2 then
-        Log.log_with  ~cfg ~level:Low ~kind:Neutral
+        Log.log_with ~cfg ~level:Low ~kind:Neutral
           ~msg:"Finished polishing OCaml code." ();
-      let checked = if Common.get_check_ocaml cfg then Process_common.check_output ~config:cfg ocaml_code else Process_common.Good in
+      let checked =
+        if Common.get_check_ocaml cfg then
+          Process_common.check_output ~config:cfg ocaml_code
+        else Process_common.Good
+      in
       let _ = checked in
       (ocaml_code, checked)
   end

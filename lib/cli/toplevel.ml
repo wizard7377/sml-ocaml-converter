@@ -29,8 +29,7 @@ let convert_file ~(input_files : path list) ?(output_file : path option)
       ~verbosity:(Common.get_verbosity options)
       ~conversions:(Common.get_conversions options)
       ~concat_output:(Common.get_concat_output options)
-      ~force:(Common.get_force options)
-      ~quiet:(Common.get_quiet options)
+      ~force:(Common.get_force options) ~quiet:(Common.get_quiet options)
       ~guess_var:(Common.get_guess_var options)
       ~debug:(Common.get_debug options)
       ~check_ocaml:(Common.get_check_ocaml options)
@@ -81,31 +80,31 @@ let copy_file ?(force = false) (src : path) (dst : path) : unit =
   | Unix.S_LNK ->
       (* Skip symlinks *)
       ()
-  | _ -> (
+  | _ ->
       (* Check if destination exists *)
       let should_copy =
         match Bos.OS.File.exists dst with
         | Ok true ->
-            if force then
-              true
+            if force then true
             else begin
-              Printf.eprintf "Skipping %s (already exists, use --force to overwrite)\n"
+              Printf.eprintf
+                "Skipping %s (already exists, use --force to overwrite)\n"
                 (Fpath.to_string dst);
               false
             end
         | Ok false -> true
         | Error _ -> true (* If we can't check, proceed anyway *)
       in
-      if should_copy then
+      if should_copy then (
         match Bos.OS.File.read src with
         | Ok contents ->
             let _ = Bos.OS.File.write dst contents in
             ()
         | Error (`Msg msg) ->
-            Printf.eprintf "Error copying file %s: %s\n" (Fpath.to_string src) msg;
-            ()
+            Printf.eprintf "Error copying file %s: %s\n" (Fpath.to_string src)
+              msg;
+            ())
       else ()
-    )
 
 (* Directory, normal, source *)
 let partition_files (files : path list) : path list * path list * path list =
@@ -157,22 +156,28 @@ let process_sml_files (input_path : path) (output_path : path)
             List.map (fun p -> Fpath.( // ) input_path p) existing_files
           in
           (* Convert dashes to underscores in both directory and file paths *)
-          let output_path' = if Common.get_dash_to_underscore options then
+          let output_path' =
+            if Common.get_dash_to_underscore options then
               Common.convert_path_dashes_to_underscores output_path
-            else output_path in
-          let f' = if Common.get_dash_to_underscore options then
+            else output_path
+          in
+          let f' =
+            if Common.get_dash_to_underscore options then
               Common.convert_path_dashes_to_underscores f
-            else f in
-          let output_file = Fpath.add_ext ".ml" (Fpath.( // ) output_path' f') in
+            else f
+          in
+          let output_file =
+            Fpath.add_ext ".ml" (Fpath.( // ) output_path' f')
+          in
 
           (* Check if output file exists and respect --force flag *)
           let should_convert =
             match Bos.OS.File.exists output_file with
             | Ok true ->
-                if Common.get_force options then
-                  true
+                if Common.get_force options then true
                 else begin
-                  Printf.eprintf "Skipping %s (already exists, use --force to overwrite)\n"
+                  Printf.eprintf
+                    "Skipping %s (already exists, use --force to overwrite)\n"
                     (Fpath.to_string output_file);
                   false
                 end
@@ -185,13 +190,17 @@ let process_sml_files (input_path : path) (output_path : path)
               convert_file ~input_files:existing_files_abs ~output_file ~options
             in
             status
-          else
-            0 (* Skip this file, count as success *)
-        )
+          else 0 (* Skip this file, count as success *))
       groups
   in
   let warnings, failures =
-    List.fold_left (fun (acc_warn, acc_fail) x -> if x <> 0 then begin if x > 1 then (acc_warn + 1, acc_fail) else (acc_warn, acc_fail + 1) end else (acc_warn, acc_fail)) (0, 0) res
+    List.fold_left
+      (fun (acc_warn, acc_fail) x ->
+        if x <> 0 then begin
+          if x > 1 then (acc_warn + 1, acc_fail) else (acc_warn, acc_fail + 1)
+        end
+        else (acc_warn, acc_fail))
+      (0, 0) res
   in
 
   (failures, warnings, List.length res)
@@ -205,20 +214,20 @@ let convert_group ~(input_dir : path) ~(output_dir : path)
   end;
 
   (* Check if output directory exists *)
-  let dir_exists = Result.value ~default:false @@ Bos.OS.Dir.exists output_dir in
+  let dir_exists =
+    Result.value ~default:false @@ Bos.OS.Dir.exists output_dir
+  in
   if dir_exists && not (Common.get_force options) then begin
     Printf.eprintf
-      "Output directory %s already exists. Use --force to overwrite existing files.\n"
+      "Output directory %s already exists. Use --force to overwrite existing \
+       files.\n"
       (Fpath.to_string output_dir);
     exit 1
   end;
 
   (* Create output directory if it doesn't exist (or ensure it exists) *)
   let _ =
-    if not dir_exists then
-      Bos.OS.Dir.create ~path:true output_dir
-    else
-      Ok true
+    if not dir_exists then Bos.OS.Dir.create ~path:true output_dir else Ok true
   in
   let all_files = list_contents_rec input_dir in
   (* Make paths absolute for partition_files by joining with input_dir *)
@@ -237,15 +246,17 @@ let convert_group ~(input_dir : path) ~(output_dir : path)
   let _ =
     List.iter
       (fun f ->
-        copy_file ~force:(Common.get_force options)
-          (Fpath.( // ) input_dir f) (Fpath.( // ) output_dir f))
+        copy_file ~force:(Common.get_force options) (Fpath.( // ) input_dir f)
+          (Fpath.( // ) output_dir f))
       normal_files_rel
   in
   let failures, warnings, total =
     process_sml_files input_dir output_dir source_files_rel options
   in
   let () =
-    Printf.printf "Conversion complete: %d successes, %d warnings, %d failures %d total.\n"
-      (total - failures - warnings) warnings failures total
+    Printf.printf
+      "Conversion complete: %d successes, %d warnings, %d failures %d total.\n"
+      (total - failures - warnings)
+      warnings failures total
   in
   if failures = 0 then 0 else 1

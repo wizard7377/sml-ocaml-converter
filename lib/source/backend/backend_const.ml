@@ -39,8 +39,6 @@ end) : CONVERTER_SIG = struct
     | ConFloat r ->
         let r' = String.map (function '~' -> '-' | c -> c) r.value in
         Parsetree.Pconst_float (r', None)
-    | ConChar c ->
-        Parsetree.Pconst_char (String.get c.value 0)
-    | ConString s ->
-        Parsetree.Pconst_string (s.value, Location.none, None)
+    | ConChar c -> Parsetree.Pconst_char (String.get c.value 0)
+    | ConString s -> Parsetree.Pconst_string (s.value, Location.none, None)
 end

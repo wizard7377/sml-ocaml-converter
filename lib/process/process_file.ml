@@ -31,15 +31,15 @@ class process_file ?(store = Context.create []) cfg_init =
       Frontend.parse s
 
     method convert_to_ocaml (sml : sml_code) : ocaml_code =
-      Log.log_with  ~cfg ~level:Low ~kind:Neutral
-        ~msg:( "Starting conversion from SML to OCaml..." ) ();
+      Log.log_with ~cfg ~level:Low ~kind:Neutral
+        ~msg:"Starting conversion from SML to OCaml..." ();
       let ctx = Context.create [] in
-      Log.log_with  ~cfg ~level:Debug ~kind:Neutral
+      Log.log_with ~cfg ~level:Debug ~kind:Neutral
         ~msg:"Building initial context..." ();
       let ctx0 = Context.merge ctx (self#get_store ()) in
       let ctx1 = Context.merge ctx0 Context.basis_context in
       (* TODO Make this a flag *)
-      Log.log_with  ~cfg ~level:Low ~kind:Neutral
+      Log.log_with ~cfg ~level:Low ~kind:Neutral
         ~msg:"Converting SML to OCaml (backend phase)..." ();
       let module BackendContext = struct
         let lexbuf = lexbuf
@@ -50,7 +50,7 @@ class process_file ?(store = Context.create []) cfg_init =
       end in
       let module Backend = Backend.Make (BackendContext) (BackendConfig) in
       let raw_ocaml = Backend.process_sml ~prog:sml in
-      Log.log_with  ~cfg ~level:Low ~kind:Neutral
+      Log.log_with ~cfg ~level:Low ~kind:Neutral
         ~msg:"Post-processing names (ocaml phase)..." ();
       let post_processor = new Ocaml.process_ocaml ~opts:(self#get_config ()) in
       post_processor#run_process raw_ocaml

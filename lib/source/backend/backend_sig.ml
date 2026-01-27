@@ -25,7 +25,9 @@ module type BACKEND = sig
   val process_type : Ast.typ Ast.node -> Parsetree.core_type
   val process_con : Ast.constant Ast.node -> Parsetree.constant
   val process_exp : Ast.expression Ast.node -> Parsetree.expression
-  val process_pat : ?is_arg:bool -> ?is_head:bool -> Ast.pat Ast.node -> Parsetree.pattern
+
+  val process_pat :
+    ?is_arg:bool -> ?is_head:bool -> Ast.pat Ast.node -> Parsetree.pattern
 
   val process_value_dec : Ast.declaration -> Parsetree.value_binding list
   val process_val_bind : Ast.value_binding -> Parsetree.value_binding list

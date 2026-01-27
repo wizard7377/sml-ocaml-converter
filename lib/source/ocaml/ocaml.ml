@@ -198,6 +198,9 @@ class process_ocaml ~(opts : Common.options) =
         ~msg:(Printf.sprintf "Processing identifier (depth=%d): %s in context %s" processing_depth name (context_to_string ctx)) ();
       let name_without_op = self#process_op name in
       
+      (* Escape OCaml keywords FIRST, before other transformations *)
+      let name_after_escape = self#escape_keyword name_without_op in
+      
       let result = begin
 
       match ctx with
@@ -207,34 +210,34 @@ class process_ocaml ~(opts : Common.options) =
           (match Common.get_guess_var config with
            | Some pattern ->
                let regex = Re.Str.regexp ({|\b|} ^ pattern ^ {|\b|}) in
-               if Re.Str.string_match regex name_without_op 0 then
+               if Re.Str.string_match regex name_after_escape 0 then
                  (* Matches guess pattern - treat as variable *)
                  if Common.is_flag_enabled (Common.get_convert_names config) then
-                   Capital.process_lowercase name_without_op
+                   Capital.process_lowercase name_after_escape
                  else
-                   name_without_op
+                   name_after_escape
                else
                  (* Doesn't match - treat as constructor *)
-                 Capital.process_uppercase name_without_op
+                 Capital.process_uppercase name_after_escape
            | None ->
                (* No guess pattern - use SML capitalization as-is *)
-               name_without_op)
+               name_after_escape)
 
       | InTypeDecl | InQualifiedName InTypeDecl | InVariableContext _ when Common.is_flag_enabled (Common.get_rename_types config) ->
           (* Type declarations must be lowercase *)
-          let lowered = Capital.process_lowercase name_without_op in
+          let lowered = Capital.process_lowercase name_after_escape in
           if Capital.is_variable_identifier lowered then lowered
           else lowered ^ "_"
       
       | InTypeName | InQualifiedName InTypeName when Common.is_flag_enabled (Common.get_rename_types config) ->
-          let lowered = Capital.process_lowercase name_without_op in
+          let lowered = Capital.process_lowercase name_after_escape in
           if Capital.is_variable_identifier lowered then lowered
           else lowered ^ "_"
       | InConstructorDecl when Common.is_flag_enabled (Common.get_convert_names config) ->
           Log.log_with ~cfg:config ~level:Debug ~kind:Neutral
-            ~msg:("Processing constructor declaration name: " ^ name_without_op) ();
+            ~msg:("Processing constructor declaration name: " ^ name_after_escape) ();
           (* Map SML basis constructors to OCaml equivalents *)
-          let mapped = match name_without_op with
+          let mapped = match name_after_escape with
             | "SOME" -> "Some"
             | "NONE" -> "None"
             | "true" -> "true"
@@ -243,31 +246,31 @@ class process_ocaml ~(opts : Common.options) =
             | "LESS" -> "Less"
             | "EQUAL" -> "Equal"
             | "GREATER" -> "Greater"
-            | _ -> name_without_op
+            | _ -> name_after_escape
           in
           Log.log_with ~cfg:config ~level:Debug ~kind:Neutral
-            ~msg:(Printf.sprintf "Mapped constructor name: %s -> %s" name_without_op mapped) ();
+            ~msg:(Printf.sprintf "Mapped constructor name: %s -> %s" name_after_escape mapped) ();
           (* Constructors must be uppercase *)
           Capital.process_uppercase mapped
 
       | InPatternHead when Common.is_flag_enabled (Common.get_guess_pattern config) ->
           (* Pattern heads are always constructors *)
-          Capital.process_uppercase name_without_op
+          Capital.process_uppercase name_after_escape
 
       | InValue | InLabel when Common.is_flag_enabled (Common.get_convert_names config) ->
           (* Values and labels should be lowercase *)
-          Capital.process_lowercase name_without_op
+          Capital.process_lowercase name_after_escape
 
       | InModuleName inner_ctx ->
           (* Modules should be uppercase *)
-          Capital.process_uppercase name_without_op
+          Capital.process_uppercase name_after_escape
       | InQualifiedName inner_ctx ->
-          name_without_op
+          name_after_escape
 
       | _ ->
           Log.log_with ~cfg:config ~level:Debug ~kind:Neutral
-            ~msg:("No specific processing for identifier: " ^ name_without_op) ();
-          name_without_op
+            ~msg:("No specific processing for identifier: " ^ name_after_escape) ();
+          name_after_escape
       end in
       
       Log.log_with ~cfg:config ~level:Debug ~kind:Neutral
@@ -284,12 +287,10 @@ class process_ocaml ~(opts : Common.options) =
           Log.log_with ~cfg:config ~level:Debug ~kind:Neutral
             ~msg:("Processing simple identifier: " ^ name) ();
           let processed = self#process_identifier ctx name in
-          let escaped = self#escape_keyword processed in
-          Lident escaped
+          Lident processed
 
       | Ldot (prefix, name) ->
           let processed_name = self#process_identifier (InQualifiedName ctx) name in
-          let escaped_name = self#escape_keyword processed_name in
           (* Module prefixes stay uppercase - avoid infinite nesting of InModuleName *)
           let module_ctx = match ctx with
             | InModuleName inner -> inner
@@ -297,7 +298,7 @@ class process_ocaml ~(opts : Common.options) =
             | _ -> ctx
           in
           let processed_prefix = self#process_longident (InModuleName ctx) prefix in
-          Ldot (processed_prefix, escaped_name)
+          Ldot (processed_prefix, processed_name)
 
       | Lapply (f, arg) ->
           (* Avoid infinite nesting of InModuleName *)
@@ -323,15 +324,13 @@ class process_ocaml ~(opts : Common.options) =
       | Ppat_var name ->
           (* Variable pattern - process as value *)
           let new_name = self#process_identifier InValue name.txt in
-          let escaped = self#escape_keyword new_name in
-          { pat with ppat_desc = Ppat_var { name with txt = escaped } }
+          { pat with ppat_desc = Ppat_var { name with txt = new_name } }
 
       | Ppat_alias (inner, name) ->
           (* Alias pattern *)
           let new_name = self#process_identifier (InVariableContext ctx.name_ctx) name.txt in
-          let escaped = self#escape_keyword new_name in
           let new_inner = self#pattern (update ctx (fun _ -> InPattern OtherPattern)) inner in
-          { pat with ppat_desc = Ppat_alias (new_inner, { name with txt = escaped }) }
+          { pat with ppat_desc = Ppat_alias (new_inner, { name with txt = new_name }) }
 
       | Ppat_construct (lid, arg_opt) ->
           (* Constructor pattern - head is always constructor *)
@@ -442,25 +441,28 @@ class process_ocaml ~(opts : Common.options) =
     (** Override type declaration *)
     method! type_declaration ctx td =
       let new_name = self#process_identifier InTypeDecl td.ptype_name.txt in
-      let escaped = self#escape_keyword new_name in
       let new_td = super#type_declaration ctx td in
-      { new_td with ptype_name = { td.ptype_name with txt = escaped } }
+      { new_td with ptype_name = { td.ptype_name with txt = new_name } }
 
     (** Override constructor declaration *)
     method! constructor_declaration ctx cd =
       Log.log_with ~cfg:config ~level:Debug ~kind:Neutral
         ~msg:("Processing constructor declaration: " ^ cd.pcd_name.txt) ();
       let new_name = self#process_identifier InConstructorDecl cd.pcd_name.txt in
-      let escaped = self#escape_keyword new_name in
       let new_cd = super#constructor_declaration ctx cd in
-      { new_cd with pcd_name = { cd.pcd_name with txt = escaped } }
+      { new_cd with pcd_name = { cd.pcd_name with txt = new_name } }
 
     (** Override label declaration (record fields) *)
     method! label_declaration ctx ld =
       let new_name = self#process_identifier InLabel ld.pld_name.txt in
-      let escaped = self#escape_keyword new_name in
       let new_ld = super#label_declaration ctx ld in
-      { new_ld with pld_name = { ld.pld_name with txt = escaped } }
+      { new_ld with pld_name = { ld.pld_name with txt = new_name } }
+
+      (** Override value description (in signatures) *)
+      method! value_description ctx vd =
+        let new_name = self#process_identifier InValue vd.pval_name.txt in
+        let new_vd = super#value_description ctx vd in
+        { new_vd with pval_name = { vd.pval_name with txt = new_name } }
 
     (** Override value binding *)
     method! value_binding ctx vb =
@@ -473,8 +475,7 @@ class process_ocaml ~(opts : Common.options) =
       let new_name = match mb.pmb_name.txt with
         | Some name ->
             let processed = self#process_identifier (InModuleName ctx.name_ctx) name in
-            let escaped = self#escape_keyword processed in
-            Some escaped
+            Some processed
         | None -> None
       in
       let new_mb = super#module_binding ctx mb in
@@ -485,8 +486,7 @@ class process_ocaml ~(opts : Common.options) =
       let new_name = match md.pmd_name.txt with
         | Some name ->
             let processed = self#process_identifier (InModuleName ctx.name_ctx) name in
-            let escaped = self#escape_keyword processed in
-            Some escaped
+            Some processed
         | None -> None
       in
       let new_md = super#module_declaration ctx md in

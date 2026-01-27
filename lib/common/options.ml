@@ -26,8 +26,8 @@ let mkConversions ?(convert_names = Disable) ?(convert_comments = Warn)
     ?(rename_types = Warn) ?(make_make_functor = Disable)
     ?(rename_constructors = Disable) ?(guess_pattern = Disable)
     ?(deref_pattern = Disable) ?(curry_expressions = Disable)
-    ?(curry_types = Disable) ?(tuple_select = Disable) ?(toplevel_names = Enable) () :
-    conversions =
+    ?(curry_types = Disable) ?(tuple_select = Disable)
+    ?(toplevel_names = Enable) () : conversions =
   {
     convert_names;
     convert_comments;
@@ -63,16 +63,18 @@ type options = {
   guess_var : string option;
   debug : string list;
   check_ocaml : bool;
-  variable_regex : string; 
+  variable_regex : string;
   dash_to_underscore : bool;
+  basis_shim : string list;
+      (** List of basis libraries to include during conversion. *)
 }
 
 let mkOptions ?(input_file = StdIn) ?(output_file = Silent) ?(verbosity = None)
     ?(conversions = mkConversions ()) ?(concat_output = true) ?(force = false)
-    ?(quiet = false) ?(guess_var : string option = None) 
-    ?(debug : string list = []) ?(check_ocaml = false) ?(variable_regex : string = "")  
-    ?(dash_to_underscore : bool = false)
-    (_ : unit) : options =
+    ?(quiet = false) ?(guess_var : string option = None)
+    ?(debug : string list = []) ?(check_ocaml = false)
+    ?(variable_regex : string = "") ?(dash_to_underscore : bool = false)
+    ?(basis_shim : string list = []) (_ : unit) : options =
   {
     input_file;
     output_file;
@@ -86,6 +88,7 @@ let mkOptions ?(input_file = StdIn) ?(output_file = Silent) ?(verbosity = None)
     check_ocaml;
     variable_regex;
     dash_to_underscore;
+    basis_shim;
   }
 
 let get_verbosity opts = opts.verbosity
@@ -119,6 +122,7 @@ let get_toplevel_names opts = opts.conversions.toplevel_names
 let get_dash_to_underscore opts = opts.dash_to_underscore
 let engaged = function Enable | Warn -> true | _ -> false
 let noted = function Warn | Note -> true | _ -> false
+let get_basis_shim opts = opts.basis_shim
 
 module type CONFIG = sig
   val config : options

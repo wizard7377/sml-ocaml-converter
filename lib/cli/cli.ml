@@ -38,37 +38,49 @@ let cmd_convert : int Cmd.t =
     - Cross-language learning and comparison
     - Automated initial conversion followed by manual refinement
     |}
-      ~man:[
-        `S "EXAMPLES";
-        `P "Convert a single SML file to OCaml:";
-        `Pre "  shibboleth file input.sml -o output.ml";
-        `P "Convert multiple related SML files (signature, functor, structure) in recommended order:";
-        `Pre "  shibboleth file module.sig module.fun module.sml -o module.ml";
-        `P "Convert an entire directory of SML files:";
-        `Pre "  shibboleth group --input ./sml_src --output ./ocaml_src";
-        `P "Enable name conflict detection with attributes:";
-        `Pre "  shibboleth file input.sml --convert-names=enable -o output.ml";
-        `P "Disable comment conversion and use quiet mode:";
-        `Pre "  shibboleth file input.sml --convert-comments=disable --quiet -o output.ml";
-        `P "Convert with variable pattern guessing for uppercase variables:";
-        `Pre "  shibboleth file input.sml --guess-var=\"[A-Z]'?\" -o output.ml";
-        `S "CONVERSION FLAGS";
-        `P "Most conversion features use a four-level flag system:";
-        `I ("$(b,enable)", "Apply the conversion and proceed without warnings");
-        `I ("$(b,warn)", "Apply the conversion and emit warnings to stderr");
-        `I ("$(b,note)", "Apply the conversion and emit informational notes");
-        `I ("$(b,disable)", "Skip the conversion entirely");
-        `P "Different flags have different defaults based on their reliability and impact.";
-        `S "FILE ORDERING";
-        `P "When converting multiple related SML files, provide them in dependency order:";
-        `Pre "  %.sig %.fun %.sml";
-        `P "This ensures that signature definitions are processed before functor applications \
-            and structure implementations, which helps the converter properly resolve names \
-            and maintain correct scoping.";
-        `S "SEE ALSO";
-        `P "For detailed options for each subcommand:";
-        `Pre "  shibboleth file --help\n  shibboleth group --help";
-      ]
+      ~man:
+        [
+          `S "EXAMPLES";
+          `P "Convert a single SML file to OCaml:";
+          `Pre "  shibboleth file input.sml -o output.ml";
+          `P
+            "Convert multiple related SML files (signature, functor, \
+             structure) in recommended order:";
+          `Pre "  shibboleth file module.sig module.fun module.sml -o module.ml";
+          `P "Convert an entire directory of SML files:";
+          `Pre "  shibboleth group --input ./sml_src --output ./ocaml_src";
+          `P "Enable name conflict detection with attributes:";
+          `Pre "  shibboleth file input.sml --convert-names=enable -o output.ml";
+          `P "Disable comment conversion and use quiet mode:";
+          `Pre
+            "  shibboleth file input.sml --convert-comments=disable --quiet -o \
+             output.ml";
+          `P "Convert with variable pattern guessing for uppercase variables:";
+          `Pre
+            "  shibboleth file input.sml --guess-var=\"[A-Z]'?\" -o output.ml";
+          `S "CONVERSION FLAGS";
+          `P "Most conversion features use a four-level flag system:";
+          `I ("$(b,enable)", "Apply the conversion and proceed without warnings");
+          `I ("$(b,warn)", "Apply the conversion and emit warnings to stderr");
+          `I ("$(b,note)", "Apply the conversion and emit informational notes");
+          `I ("$(b,disable)", "Skip the conversion entirely");
+          `P
+            "Different flags have different defaults based on their \
+             reliability and impact.";
+          `S "FILE ORDERING";
+          `P
+            "When converting multiple related SML files, provide them in \
+             dependency order:";
+          `Pre "  %.sig %.fun %.sml";
+          `P
+            "This ensures that signature definitions are processed before \
+             functor applications and structure implementations, which helps \
+             the converter properly resolve names and maintain correct \
+             scoping.";
+          `S "SEE ALSO";
+          `P "For detailed options for each subcommand:";
+          `Pre "  shibboleth file --help\n  shibboleth group --help";
+        ]
   in
   Cmd.group doc [ cmd_convert_file; cmd_convert_group ]
 

@@ -9,7 +9,4 @@
   helpers
   compiler-libs.common
   ppxlib)
- (modules
-  comment_tests
-  common_tests
-  comment_test_1))
+ (modules comment_tests common_tests comment_test_1))

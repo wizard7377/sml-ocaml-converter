@@ -60,9 +60,20 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (* Name processing removed - using literal translation only *)
 
-  (** Build a Longident from name parts (literal translation - no processing) *)
+  let sanitize_ident (s : string) : string =
+    let buf = Buffer.create (String.length s) in
+    String.iter
+      (fun c ->
+        match c with
+        | '\'' -> Buffer.add_string buf "_prime"
+        | '`' -> Buffer.add_string buf "_bq"
+        | _ -> Buffer.add_char buf c)
+      s;
+    Buffer.contents buf
+
+  (** Build a Longident from name parts (sanitized to valid OCaml identifiers) *)
   let build_longident (parts : string list) : Ppxlib.Longident.t =
-    match parts with
+    match parts |> List.map sanitize_ident with
     | [] -> failwith "empty name"
     | [ x ] -> Longident.Lident x
     | first :: rest ->
@@ -70,9 +81,9 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
           (fun acc part -> Longident.Ldot (acc, part))
           (Longident.Lident first) rest
 
-  (** Get string from name parts (literal translation - just the last part) *)
+  (** Get string from name parts (sanitize to valid OCaml identifier) *)
   let name_to_string (parts : string list) : string =
-    match parts with
+    match parts |> List.map sanitize_ident with
     | [] -> failwith "empty name"
     | parts -> List.nth parts (List.length parts - 1)
 

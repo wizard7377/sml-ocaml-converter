@@ -237,7 +237,8 @@ let conversion_flags : (bool * Common.conversions) Term.t =
     Arg.value
     @@ convert_flag_arg Common.Note
          (Cmdliner.Arg.info [ "rename-constructors" ]
-            ~doc:rename_constructors_doc) in
+            ~doc:rename_constructors_doc)
+  in
   let deref_pattern_doc =
     {|
   Transform reference patterns to match OCaml's reference handling.
@@ -258,13 +259,14 @@ let conversion_flags : (bool * Common.conversions) Term.t =
   Keep enabled unless you're manually handling reference semantics.
 
   Default: enable (apply transformation silently)
-  |}  
+  |}
   in
   let deref_pattern_flag : Common.convert_flag Term.t =
     Arg.value
     @@ convert_flag_arg Common.Enable
          (Cmdliner.Arg.info [ "deref-pattern" ] ~doc:deref_pattern_doc)
-  in let curry_expressions_doc =
+  in
+  let curry_expressions_doc =
     {|
   Convert tuple-argument functions to curried form.
 
@@ -292,8 +294,9 @@ let conversion_flags : (bool * Common.conversions) Term.t =
   let curry_expressions_flag : Common.convert_flag Term.t =
     Arg.value
     @@ convert_flag_arg Common.Enable
-          (Cmdliner.Arg.info [ "curry-expressions" ] ~doc:curry_expressions_doc)
-  in let curry_types_doc =
+         (Cmdliner.Arg.info [ "curry-expressions" ] ~doc:curry_expressions_doc)
+  in
+  let curry_types_doc =
     {|
   Convert tuple-argument type constructors to curried form.
 
@@ -317,8 +320,9 @@ let conversion_flags : (bool * Common.conversions) Term.t =
   let curry_types_flag : Common.convert_flag Term.t =
     Arg.value
     @@ convert_flag_arg Common.Enable
-          (Cmdliner.Arg.info [ "curry-types" ] ~doc:curry_types_doc)
-  in let tuple_select_doc =
+         (Cmdliner.Arg.info [ "curry-types" ] ~doc:curry_types_doc)
+  in
+  let tuple_select_doc =
     {|
   Transform SML tuple selector syntax to OCaml pattern matching.
 
@@ -342,7 +346,7 @@ let conversion_flags : (bool * Common.conversions) Term.t =
   let tuple_select_flag : Common.convert_flag Term.t =
     Arg.value
     @@ convert_flag_arg Common.Enable
-          (Cmdliner.Arg.info [ "tuple-select" ] ~doc:tuple_select_doc)
+         (Cmdliner.Arg.info [ "tuple-select" ] ~doc:tuple_select_doc)
   in
   let guess_pattern_doc =
     {|
@@ -397,7 +401,7 @@ let conversion_flags : (bool * Common.conversions) Term.t =
     in
     Arg.(value & flag & info [ "force" ] ~doc)
   in
-  
+
   let+ convert_names = convert_names_flag
   and+ convert_comments = convert_comments_flag
   and+ add_line_numbers = add_line_numbers_flag
@@ -406,7 +410,7 @@ let conversion_flags : (bool * Common.conversions) Term.t =
   and+ make_make_functor = make_make_functor_flag
   and+ rename_constructors = rename_constructors_flag
   and+ guess_pattern = guess_pattern_flag
-  and+ force = convert_force_flag 
+  and+ force = convert_force_flag
   and+ deref_pattern = deref_pattern_flag
   and+ curry_expressions = curry_expressions_flag
   and+ curry_types = curry_types_flag
@@ -416,7 +420,9 @@ let conversion_flags : (bool * Common.conversions) Term.t =
       ~convert_keywords ~rename_types ~make_make_functor ~rename_constructors
       ~guess_pattern ~deref_pattern ~curry_expressions ~curry_types
       ~tuple_select () )
-let dash_to_underscore_doc = {|
+
+let dash_to_underscore_doc =
+  {|
   Replace dashes with underscores in generated OCaml filenames.
 
   BEHAVIOR:
@@ -434,9 +440,11 @@ let dash_to_underscore_doc = {|
   SML files already follow underscore conventions.
 
   Default: disabled (preserve original filename patterns)
-  |}  
+  |}
+
 let dash_to_underscore_flag : bool Term.t =
   Arg.(value & flag & info [ "dash-to-underscore" ] ~doc:dash_to_underscore_doc)
+
 let concat_output : bool Term.t =
   let doc =
     {|
@@ -466,7 +474,8 @@ let concat_output : bool Term.t =
   Arg.(value & opt bool true & info [ "concat-output" ] ~doc)
 
 let quiet : bool Term.t =
-  let doc = {|
+  let doc =
+    {|
   Suppress all output except for errors.
 
   BEHAVIOR:
@@ -483,7 +492,8 @@ let quiet : bool Term.t =
   To reduce those messages, adjust individual flag levels to 'enable' or 'disable'.
 
   Default: disabled (show normal output)
-  |} in
+  |}
+  in
   Arg.(value & flag & info [ "q"; "quiet" ] ~doc)
 
 let guess_var : string option Term.t =
@@ -552,8 +562,9 @@ let debug : string list Term.t =
   |}
   in
   Arg.(value & opt (list string) [] & info [ "debug" ] ~docv:"CATEGORY" ~doc)
+
 let variable_regex_doc =
-    {|
+  {|
   Regular expression pattern for forcing variable names to lowercase in patterns.
 
   PURPOSE:
@@ -581,9 +592,11 @@ let variable_regex_doc =
     match x with x -> ...
 
   Default: empty (no regex-based variable forcing)
-  |} 
+  |}
+
 let variable_regex_flag : string Term.t =
-    Arg.(value & opt string "" & info [ "variable-regex" ] ~doc:variable_regex_doc)
+  Arg.(
+    value & opt string "" & info [ "variable-regex" ] ~doc:variable_regex_doc)
 
 let check_ocaml_doc =
   {|
@@ -615,8 +628,10 @@ let check_ocaml_doc =
 
   Default: disabled (no automatic validation)
   |}
+
 let check_ocaml_flag : bool Term.t =
-  Arg.(value & flag & info [ "check-ocaml" ] ~doc:check_ocaml_doc)  
+  Arg.(value & flag & info [ "check-ocaml" ] ~doc:check_ocaml_doc)
+
 let common_options : Common.options Cmdliner.Term.t =
   let+ v = verb
   and+ force, c = conversion_flags
@@ -628,5 +643,5 @@ let common_options : Common.options Cmdliner.Term.t =
   and+ check_ocaml = check_ocaml_flag
   and+ dash_to_underscore = dash_to_underscore_flag in
   Common.mkOptions ~verbosity:(Some v) ~conversions:c ~concat_output:co ~force
-    ~quiet:q ~guess_var:gv ~debug:dbg ~variable_regex:var_reg ~check_ocaml:check_ocaml
-    ~dash_to_underscore:dash_to_underscore () 
+    ~quiet:q ~guess_var:gv ~debug:dbg ~variable_regex:var_reg ~check_ocaml
+    ~dash_to_underscore ()

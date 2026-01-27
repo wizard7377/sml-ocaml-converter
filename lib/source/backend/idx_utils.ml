@@ -1,7 +1,7 @@
 (** Utilities for working with SML identifiers (idx type).
-    
-    This module provides conversion functions for the Ast.idx type,
-    which represents various forms of SML identifiers. *)
+
+    This module provides conversion functions for the Ast.idx type, which
+    represents various forms of SML identifiers. *)
 
 (** Extract a string from an idx value *)
 let rec idx_to_string (idx : Ast.idx) : string =

@@ -1,5 +1,5 @@
 (** Utilities for handling capitalization in SML to OCaml conversion.
-    
+
     SML and OCaml have different conventions for capitalization:
     - SML constructors can be any case (SOME, Some, some)
     - OCaml constructors must start with uppercase
@@ -32,8 +32,8 @@ let is_variable_identifier (s : string) : bool =
     let first_char = String.get s 0 in
     (first_char >= 'a' && first_char <= 'z') || first_char = '_'
 
-(** Check if a string is an operator (non-alphanumeric identifier).
-    Returns true if the first character is not a letter or underscore. *)
+(** Check if a string is an operator (non-alphanumeric identifier). Returns true
+    if the first character is not a letter or underscore. *)
 let is_operator_name (s : string) : bool =
   if String.length s = 0 then false
   else

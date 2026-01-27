@@ -1,7 +1,7 @@
 (** {1 SML Abstract Syntax Tree - Core Language}
 
-    Complete AST for Standard ML ('97 revision), representing all core
-    language constructs and the module system (structures, signatures, functors).
+    Complete AST for Standard ML ('97 revision), representing all core language
+    constructs and the module system (structures, signatures, functors).
 
     This module contains 34 mutually recursive types forming a single
     strongly-connected component. The mutual recursion is fundamental to SML's
@@ -9,8 +9,8 @@
 
     {2 Type Organization}
 
-    The AST types are organized into logical groups that mirror the structure
-    of the SML Definition:
+    The AST types are organized into logical groups that mirror the structure of
+    the SML Definition:
 
     {3 Top-Level Program Structure}
     - {!prog} - Top-level programs (sequences of declarations)
@@ -61,8 +61,9 @@
     The 34 types in this module form an unavoidable dependency cycle:
 
     {3 Core Circular Dependencies}
-    - [expression ↔ matching ↔ pat]: Expressions contain patterns (case/fn/handle),
-      patterns contain expressions (as-patterns), and match clauses connect both
+    - [expression ↔ matching ↔ pat]: Expressions contain patterns
+      (case/fn/handle), patterns contain expressions (as-patterns), and match
+      clauses connect both
     - [declaration → all binding types]: Declarations reference value_binding,
       function_binding, type_binding, etc.
     - [pat ↔ pat_row], [typ ↔ typ_row]: Records require their row types
@@ -74,12 +75,11 @@
 
     {2 Grammar Source}
 
-    This AST follows the grammar from the Definition of Standard ML (Revised 1997),
-    including derived forms from Appendix A.
+    This AST follows the grammar from the Definition of Standard ML (Revised
+    1997), including derived forms from Appendix A.
 
     @see <https://smlfamily.github.io/sml97-defn.pdf> SML '97 Definition (PDF)
-    @see <http://sml-family.org/> Standard ML Family
-*)
+    @see <http://sml-family.org/> Standard ML Family *)
 
 open Ast_node
 
@@ -1065,7 +1065,6 @@ and expression =
           @see PatRecord Record pattern matching
           @see TupleExp Tuple expressions
           @see ExpApp Function application *)
-
   | ArrayExp of expression node list
   | ListExp of expression node list
       (** List expression - homogeneous sequential collection.
@@ -3788,15 +3787,16 @@ and pat =
             )
           ]} *)
   | PatOr of pat node * pat node
-(** Pattern rows in record patterns.
+      (** Pattern rows in record patterns.
 
-    {[
-      patrow ::= ...                                    (* wildcard *)
-               | lab = pat [, patrow]                   (* pattern *)
-               | id [: typ] [as pat] [, patrow]         (* variable *)
-    ]}
+          {[
+            patrow ::= ...                                    (* wildcard *)
+                     | lab = pat [, patrow]                   (* pattern *)
+                     | id [: typ] [as pat] [, patrow]         (* variable *)
+          ]}
 
-    @see 'PatRecord' Record patterns using rows *)
+          @see 'PatRecord' Record patterns using rows *)
+
 and pat_row =
   | PatRowPoly
       (** Wildcard row: [...]. Matches remaining record fields.
@@ -3832,4 +3832,3 @@ and pat_row =
             (* SML: x : int *)
             PatRowVar (x_id, Some int_typ, None, None)
           ]} *)
-
