@@ -14,8 +14,18 @@
  (checkparser
   (menhir
    (flags
-    (--table --explain --comment -la 2 --trace -lc 2 --dump --dump-resolved))))
+    (--table
+     --no-dollars
+     --explain
+     --comment
+     -la
+     2
+     --trace
+     -lc
+     2
+     --dump
+     --dump-resolved))))
  (_
   (menhir
    (flags
-    (--table --dump)))))
+    (--table --no-dollars --dump)))))

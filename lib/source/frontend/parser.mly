@@ -19,6 +19,11 @@
       | [id] -> ident_to_idx id
       | ids -> IdxLong (List.map (fun x -> b (ident_to_idx x)) ids)
 
+    (* Helper to unwrap with_op to get the inner idx node *)
+    let unwrap_op = function
+      | WithOp idx -> idx
+      | WithoutOp idx -> idx
+
     (* Helper for optional values with continuations *)
     let opt_chain opt cont =
       match opt with
@@ -121,10 +126,10 @@
 (* ========================================================================= *)
 
 %nonassoc EOF
-
+%nonassoc USE_OP 
 %left PROGRAM_SEP
 %left SEMICOLON
-%left JUXTAPOSE
+%right JUXTAPOSE
 %right CONS
 %right AND
 %nonassoc BIGARROW
@@ -153,66 +158,46 @@
 %type <Ast.prog> program nonempty_program
 %type <Ast.declaration> dec_seq nonempty_dec_seq kwdec kwcoredec kwmoduledec
 %type <Ast.declaration node list> kwdec_seq kwcoredec_seq
-%type <Ast.expression> expression atomic_exp
-%type <Ast.expression node list> exp_comma_seq0 exp_comma_seq1 exp_comma_seq2 exp_semicolon_seq2 atomic_exp_seq1
+%type <Ast.expression> expression 
+%type <Ast.expression> at_exp appexp infexp
 %type <Ast.pat> pat atomic_pat
-%type <Ast.pat node list> pat_comma_seq0 pat_comma_seq1 pat_comma_seq2 atomic_pat_seq1
+%type <Ast.pat node list> pat_comma_seq2
 %type <Ast.typ> typ typ_sans_star atomic_typ
-%type <Ast.typ node list> tuple_typ
-%type <Ast.typ node list> typ_comma_seq2
+%type <Ast.typ node list> tuple_typ typ_comma_seq2
 %type <Ast.matching> match_clause
-%type <Ast.row> exprow
-%type <Ast.row node list> exprow_opt
+%type <Ast.expression node list> exp_seq_list
+
 %type <Ast.pat_row node list> patrow patrow_opt
+%type <Ast.row node list> exp_row exp_row_opt
 %type <Ast.typ_row node list> typrow typrow_opt
 %type <Ast.value_binding> valbind
-%type <Ast.value_binding node option> and_valbind_opt
 %type <Ast.function_binding> funbind
-%type <Ast.function_binding node option> and_funbind_opt
 %type <Ast.fun_match> funmatch
-%type <Ast.fun_match node option> bar_funmatch_opt
 %type <Ast.type_binding> typbind
-%type <Ast.type_binding node option> typbind_opt and_typbind_opt
+%type <Ast.type_binding node option> typbind_opt
 %type <Ast.data_binding> datbind datbind_0 datbind_n
-%type <Ast.data_binding node option> and_datbind_opt
 %type <Ast.constructor_binding> conbind
-%type <Ast.constructor_binding node option> bar_conbind_opt
 %type <Ast.exn_bind> exnbind
-%type <Ast.exn_bind node option> and_exnbind_opt
 %type <Ast.structure_binding> strbind
-%type <Ast.structure_binding node option> and_strbind_opt
 %type <Ast.structure> structure atomic_str
-%type <Ast.structure node list> atomic_str_seq1
 %type <Ast.signature> sig_expr
 %type <Ast.signature_binding> sigbind
-%type <Ast.signature_binding node option> and_sigbind_opt
 %type <Ast.functor_binding> fctbind
-%type <Ast.functor_binding node option> and_fctbind_opt
 %type <Ast.specification> specification kwspec kwcorespec kwmodulespec
 %type <Ast.specification node list> spec_seq corespec_seq
 %type <Ast.val_specification> valdesc
-%type <Ast.val_specification node option> and_valdesc_opt
 %type <Ast.typ_specification> typdesc
-%type <Ast.typ_specification node option> and_typdesc_opt
 %type <Ast.dat_specification> datdesc datdesc_0 datdesc_n
-%type <Ast.dat_specification node option> and_datdesc_opt
 %type <Ast.con_specification> condesc
-%type <Ast.con_specification node option> bar_condesc_opt
 %type <Ast.exn_specification> exndesc
-%type <Ast.exn_specification node option> and_exndesc_opt
-%type <Ast.str_specification> strdesc
-%type <Ast.str_specification node option> and_strdesc_opt
+%type <Ast.str_specification> strdesc fundesc
 %type <Ast.typ_refine> typrefin
-%type <Ast.typ_refine node option> and_typrefin_opt
 %type <Ast.idx> ident longid tyvar tycon lab modid sigid
-%type <Ast.idx node list> tyvarseq tyvarseq1 tyvar_comma_seq1 longid_seq1 eq_ident_seq1 any_ident_seq1 sigid_seq2
+%type <Ast.idx node list> tyvarseq tyvarseq1 sigid_seq2
 %type <Ast.constant> scon
 %type <Ast.with_op> op_ident op_longid op_eq_ident
 %type <Ast.anotate> anotate
-%type <(Ast.anotate node * Ast.signature node) option> sigconstraint_opt
-%type <Ast.typ node option> of_typ_opt colon_typ_opt
-%type <int> digit_opt
-%type <Ast.pat node option> as_pat_opt
+%type <Ast.signature> fundesctail
 
 %start main
 %start<Ast.prog * string list> main_top
@@ -226,109 +211,190 @@
 (* Identifiers                                                               *)
 (* ========================================================================= *)
 
-main_top : 
-  | main { $1 }
+main_top :
+  | m=main { m }
 expression_top:
-  | expression EOF { $1 }
+  | e=expression eof=EOF { e }
 ;
 pat_top:
-  | pat EOF { $1 }
+  | p=pat eof=EOF { p }
 ;
 typ_top:
-  | typ EOF { $1 }
+  | t=typ eof=EOF { t }
 ;
-let boxed(r) := 
-  | v=r; { { value = v; pos=Some ($symbolstartpos , $endpos ) } } 
+let boxed(r) :=
+  | v=r; { { value = v; pos=Some ($symbolstartpos , $endpos ) } }
 
-%inline ident:
-  | SHORT_IDENT { ident_to_idx $1 }
-  | lifted_symbol { ident_to_idx $1 }
-  | boxed(STAR) { IdxIdx (b "*") }
-;
+(* Helper for creating nodes with position info using bp *)
+let located(X) :=
+  | x=X; { bp x $startpos(x) $endpos(x) }
 
-%inline eq_ident:
-  | ident { $1 }
-  | boxed(EQUAL) { IdxIdx (b "=") }
-;
+(* Helper for at-least-2 element lists *)
+let list2(X) :=
+  | x1=X; x2=X; { [x1; x2] }
+  | x=X; rest=nonempty_list(X); { x :: rest }
 
-%inline op_ident:
-  | ident { WithoutOp (b $1) }
-  | "op" ident { WithOp (b $2) }
-  | CONS { WithoutOp (b (IdxIdx (b "::"))) }
-  | SYMBOL_IDENT { WithoutOp (b (ident_to_idx $1)) }
-;
+(* ========================================================================= *)
+(* Identifier Rules                                                          *)
+(* ========================================================================= *)
+(*
+   SML identifiers are organized in layers, from most basic to most permissive:
 
-%inline modid:
-  | ident { $1 }
-;
+   LAYER 0: Atomic tokens
+   ├─ tyvar              Type variables: 'a, 'b, ''a
+   └─ lifted_symbol      Symbols used as regular identifiers: "op +" or "(+)"
 
-%inline sigid:
-  | ident { $1 }
-;
+   LAYER 1: Base identifiers (produce idx)
+   ├─ ident              Standard identifier: foo, +, *
+   │                     Used for: value names, function names, most contexts
+   └─ tycon              Type constructor: int, list (no * since it means tuple)
+                         Used for: type definitions, type applications
 
+   LAYER 2: Extended base identifiers (produce idx)
+   ├─ eq_ident           ident + "=" symbol
+   │                     Used for: contexts where = is a valid identifier
+   └─ any_ident          eq_ident + bare SYMBOL_IDENT (boxed)
+                         Used for: fixity declarations (infix, infixr, nonfix)
+
+   LAYER 3: Qualified identifiers (produce idx)
+   ├─ longid             Qualified paths: A.B.c, foo
+   │                     Used for: expressions, structures
+   └─ long_tycon         Qualified type constructors: A.B.t, int
+                         Used for: type expressions
+
+   LAYER 4: "op"-wrapped identifiers (produce with_op)
+   ├─ op_ident           Short ident with optional "op": foo, op +, ::
+   │                     Used for: function bindings, constructor bindings
+   ├─ op_longid          Long ident with optional "op" + bare symbols
+   │                     Used for: patterns, expressions with operator context
+   └─ op_eq_ident        op_longid + "=" and "::" (most permissive)
+                         Used for: exception aliases, pattern matching
+
+   LAYER 5: Context-specific aliases
+   ├─ modid              Module identifier (= ident)
+   ├─ sigid              Signature identifier (= ident)
+   └─ lab                Record label: field names or numeric (#1, #2)
+*)
+
+(* ------------------------------------------------------------------------- *)
+(* Layer 0: Atomic token conversions                                         *)
+(* ------------------------------------------------------------------------- *)
+
+(* Type variables: 'a, 'b, ''a (equality type variables) *)
 %inline tyvar:
-  | TYVAR { IdxVar (b $1) }
+  | tv=TYVAR { IdxVar (b tv) }
 ;
 
-%inline lifted_symbol: 
-  | "op" SYMBOL_IDENT { $2 }
-  | "(" SYMBOL_IDENT ")" { $2 }
+(* Lift symbolic identifiers to be usable in regular identifier positions.
+   SML allows this via "op" prefix or parenthesization: "op +" or "(+)" *)
+%inline lifted_symbol:
+  | "op" sym=SYMBOL_IDENT { sym }
+  | "(" sym=SYMBOL_IDENT ")" { sym }
+;
+
+(* ------------------------------------------------------------------------- *)
+(* Layer 1: Base identifiers                                                 *)
+(* ------------------------------------------------------------------------- *)
+
+(* Standard identifier - the most common form.
+   Includes: alphanumeric (foo), lifted symbols (op +), and * (for signatures) *)
+%inline ident:
+  | id=SHORT_IDENT { ident_to_idx id }
+  | sym=lifted_symbol { ident_to_idx sym }
+  | STAR { IdxIdx (b "*") }
+;
+
+(* Type constructor - like ident but WITHOUT * (since * means tuple type).
+   Examples: int, list, option *)
 %inline tycon:
-  | SHORT_IDENT { ident_to_idx $1 }
-  | lifted_symbol { ident_to_idx $1 }
+  | id=SHORT_IDENT { ident_to_idx id }
+  | sym=lifted_symbol { ident_to_idx sym }
 ;
 
+(* ------------------------------------------------------------------------- *)
+(* Layer 2: Extended base identifiers                                        *)
+(* ------------------------------------------------------------------------- *)
+
+(* ident extended with "=" as a valid identifier.
+   Needed for contexts where = can be used as a value name *)
+%inline eq_ident:
+  | id=ident { id }
+  | EQUAL { IdxIdx (b "=") }
+;
+
+(* Most permissive base identifier - includes bare symbolic identifiers.
+   Used for fixity declarations: infix 5 ++, infixr 3 @@ *)
+any_ident:
+  | id=eq_ident { b id }
+  | sym=SYMBOL_IDENT %prec USE_OP { b (ident_to_idx sym) }
+;
+
+(* ------------------------------------------------------------------------- *)
+(* Layer 3: Qualified (long) identifiers                                     *)
+(* ------------------------------------------------------------------------- *)
+
+(* Qualified identifier path: A.B.c or simple foo *)
 %inline longid:
-  | ident { $1 }
-  | LONG_IDENT { idents_to_long_idx $1 }
+  | id=ident { id }
+  | ids=LONG_IDENT { idents_to_long_idx ids }
 ;
 
+(* Qualified type constructor path: A.B.t or simple int *)
 %inline long_tycon:
-  | tycon { $1 }
-  | LONG_IDENT { idents_to_long_idx $1 }
+  | tc=tycon { tc }
+  | ids=LONG_IDENT { idents_to_long_idx ids }
 ;
 
+(* ------------------------------------------------------------------------- *)
+(* Layer 4: "op"-wrapped identifiers (produce with_op)                       *)
+(* ------------------------------------------------------------------------- *)
+
+(* Short identifier with optional "op" prefix.
+   Used for: function names in fun bindings, constructor names.
+   Also accepts :: since it's a built-in constructor. *)
+op_ident:
+  | id=ident { WithoutOp (b id) }
+  | "op" id=ident { WithOp (b id) }
+  | CONS { WithoutOp (b (IdxIdx (b "::"))) }
+;
+
+(* Long identifier with optional "op" prefix.
+   Also accepts bare SYMBOL_IDENT (used as infix operator in pattern context) *)
 op_longid:
-  | longid { WithoutOp (b $1) }
-  | "op" ident { WithOp (b $2) }
-  | "op" LONG_IDENT { WithOp (b (idents_to_long_idx $2)) }
-  | SYMBOL_IDENT { WithoutOp (b (ident_to_idx $1)) }
+  | lid=longid { WithoutOp (b lid) }
+  | "op" lid=longid { WithOp (b lid) }
+  | sym=SYMBOL_IDENT %prec USE_OP { WithoutOp (b (ident_to_idx sym)) }
 ;
 
+(* Most permissive "op"-wrapped identifier.
+   Extends op_longid with "=" and "::" (with optional "op").
+   Used for: exception rebindings, pattern matching contexts *)
 op_eq_ident:
-  | op_longid { $1 }
+  | olid=op_longid { olid }
   | EQUAL { WithoutOp (b (IdxIdx (b "="))) }
   | "op" EQUAL { WithOp (b (IdxIdx (b "="))) }
   | CONS { WithoutOp (b (IdxIdx (b "::"))) }
   | "op" CONS { WithOp (b (IdxIdx (b "::"))) }
-  | SYMBOL_IDENT { WithoutOp (b (ident_to_idx $1)) }
 ;
 
-eq_ident_seq1:
-  | eq_ident eq_ident_seq1 { b $1 :: $2 }
-  | eq_ident { [b $1] }
-;
-%inline 
-any_ident:
-  | eq_ident { b($1) }
-  | SYMBOL_IDENT { b (ident_to_idx $1) }
-  ;
-any_ident_seq1:
-  | any_ident any_ident_seq1 { $1 :: $2 }
-  | any_ident { [$1] } ;
-longid_seq1:
-  | longid longid_seq1 { b $1 :: $2 }
-  | longid { [b $1] }
+(* ------------------------------------------------------------------------- *)
+(* Layer 5: Context-specific aliases                                         *)
+(* ------------------------------------------------------------------------- *)
+
+(* Module identifier - semantic alias for documentation *)
+%inline modid:
+  | id=ident { id }
 ;
 
-digit_opt:
-  | INT_LIT { int_of_string $1 }
-  | { 0 }
+(* Signature identifier - semantic alias for documentation *)
+%inline sigid:
+  | id=ident { id }
 ;
 
+(* Record label - can be alphanumeric (name) or numeric (#1, #2 for tuples) *)
 lab:
-  | ident { $1 }
-  | INT_LIT { IdxNum (b $1) }
+  | id=ident { id }
+  | lit=INT_LIT { IdxNum (b lit) }
 ;
 
 (* ========================================================================= *)
@@ -336,11 +402,11 @@ lab:
 (* ========================================================================= *)
 
 scon:
-  | INT_LIT { ConInt (b $1) }
-  | HEX_LIT { ConWord (b $1) }
-  | FLOAT_LIT { ConFloat (b $1) }
-  | CHAR_LIT { ConChar (b $1) }
-  | STRING_LIT { ConString (b $1) }
+  | lit=INT_LIT { ConInt (b lit) }
+  | lit=HEX_LIT { ConWord (b lit) }
+  | lit=FLOAT_LIT { ConFloat (b lit) }
+  | lit=CHAR_LIT { ConChar (b lit) }
+  | lit=STRING_LIT { ConString (b lit) }
 ;
 
 (* ========================================================================= *)
@@ -348,18 +414,13 @@ scon:
 (* ========================================================================= *)
 
 tyvarseq:
-  | tyvarseq1 { $1 }
+  | seq=tyvarseq1 { seq }
   | { [] }
 ;
 
 tyvarseq1:
-  | tyvar { [b $1] }
-  | "(" tyvar_comma_seq1 ")" { $2 }
-;
-
-tyvar_comma_seq1:
-  | tyvar "," tyvar_comma_seq1 { b $1 :: $3 }
-  | tyvar { [b $1] }
+  | tv=tyvar { [b tv] }
+  | "(" seq=separated_nonempty_list(",", boxed(tyvar)) ")" { seq }
 ;
 
 (* ========================================================================= *)
@@ -367,137 +428,145 @@ tyvar_comma_seq1:
 (* ========================================================================= *)
 
 typ:
-  | tuple_typ "->" typ {
-      let src = if List.length $1 = 1 then List.hd $1 else bp (TypTuple $1) $startpos($1) $endpos($1) in
-      TypFun (src, bp $3 $startpos($3) $endpos($3))
+  | tuple=tuple_typ "->" result=typ {
+      let src = if List.length tuple = 1 then List.hd tuple else bp (TypTuple tuple) $startpos(tuple) $endpos(tuple) in
+      TypFun (src, bp result $startpos(result) $endpos(result))
     }
-  | tuple_typ {
-      if List.length $1 = 1 then (List.hd $1).value else TypTuple $1
+  | tuple=tuple_typ {
+      if List.length tuple = 1 then (List.hd tuple).value else TypTuple tuple
     }
 ;
 
 tuple_typ:
-  | typ_sans_star { [bp $1 $startpos($1) $endpos($1)] }
-  | typ_sans_star STAR tuple_typ { bp $1 $startpos($1) $endpos($1) :: $3 }
+  | t=typ_sans_star { [bp t $startpos(t) $endpos(t)] }
+  | t=typ_sans_star STAR rest=tuple_typ { bp t $startpos(t) $endpos(t) :: rest }
 ;
 
 typ_sans_star:
-  | "(" typ_comma_seq2 ")" long_tycon { TypCon ($2, bp $4 $startpos($4) $endpos($4)) }
-  | typ_sans_star long_tycon { TypCon ([bp $1 $startpos($1) $endpos($1)], bp $2 $startpos($2) $endpos($2)) }
-  | atomic_typ { $1 }
+  | "(" args=typ_comma_seq2 ")" tc=long_tycon { TypCon (args, bp tc $startpos(tc) $endpos(tc)) }
+  | arg=typ_sans_star tc=long_tycon { TypCon ([bp arg $startpos(arg) $endpos(arg)], bp tc $startpos(tc) $endpos(tc)) }
+  | t=atomic_typ { t }
 ;
 
 atomic_typ:
-  | long_tycon { TypCon ([], bp $1 $startpos($1) $endpos($1)) }
-  | tyvar { TypVar (bp $1 $startpos($1) $endpos($1)) }
-  | LBRACE typrow_opt RBRACE { TypRecord $2 }
-  | "(" typ ")" { TypPar (bp $2 $startpos($2) $endpos($2)) }
+  | tc=long_tycon { TypCon ([], bp tc $startpos(tc) $endpos(tc)) }
+  | tv=tyvar { TypVar (bp tv $startpos(tv) $endpos(tv)) }
+  | LBRACE rows=typrow_opt RBRACE { TypRecord rows }
+  | "(" t=typ ")" { TypPar (bp t $startpos(t) $endpos(t)) }
 ;
 
 typ_comma_seq2:
-  | typ "," typ_comma_seq2 { bp $1 $startpos($1) $endpos($1) :: $3 }
-  | typ "," typ { [bp $1 $startpos($1) $endpos($1); bp $3 $startpos($3) $endpos($3)] }
+  | t=typ "," rest=separated_nonempty_list(",", located(typ)) { bp t $startpos(t) $endpos(t) :: rest }
 ;
 
 typrow_opt:
-  | typrow { $1 }
+  | rows=typrow { rows }
   | { [] }
 ;
 
 typrow:
-  | lab COLON typ comma_typrow_opt { bp (TypRow (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3), None)) $startpos $endpos :: $4 }
-;
-
-comma_typrow_opt:
-  | "," typrow { $2 }
-  | { [] }
+  | l=lab COLON t=typ rest=option(preceded(",", typrow)) { 
+      bp (TypRow (bp l $startpos(l) $endpos(l), bp t $startpos(t) $endpos(t), None)) $startpos $endpos 
+      :: (match rest with Some r -> r | None -> []) 
+    }
 ;
 
 (* ========================================================================= *)
 (* Expressions                                                               *)
 (* ========================================================================= *)
+/*
 
-expression:
-  | atomic_exp_seq1 {
-      match $1 with
-      | [e] -> e.value
-      | f :: args -> List.fold_left (fun acc arg -> ExpApp (b acc, arg)) f.value args
-      | [] -> failwith "impossible: empty expression sequence"
-    }
-  | expression SYMBOL_IDENT expression %prec INFIX_APP { InfixApp (bp $1 $startpos($1) $endpos($1), b (IdxIdx (b (match $2 with Symbol s -> s | Name s -> s))), bp $3 $startpos($3) $endpos($3)) }
-  | expression COLON typ { TypedExp (bp $1 $startpos $endpos, bp $3 $startpos($3) $endpos($3)) }
-  | expression "andalso" expression { AndExp (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3)) }
-  | expression "orelse" expression { OrExp (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3)) }
-  | expression CONS expression { InfixApp (bp $1 $startpos($1) $endpos($1), b (IdxIdx (b "::")), bp $3 $startpos($3) $endpos($3)) }
-  | e=expression "handle" m=match_clause { HandleExp (bp e $startpos(e) $endpos(e), bp m $startpos(m) $endpos(m)) }
-  | "raise" e=expression { RaiseExp (bp e $startpos(e) $endpos(e)) }
-  | "if" c=expression "then" t=expression "else" f=expression { IfExp (bp c $startpos(c) $endpos(c), bp t $startpos(t) $endpos(t), bp f $startpos(f) $endpos(f)) }
-  | "while" c=expression "do" bdy=expression { WhileExp (bp c $startpos(c) $endpos(c), bp bdy $startpos(bdy) $endpos(bdy)) }
-  | "case" e=expression "of" m=match_clause { CaseExp (bp e $startpos(e) $endpos(e), bp m $startpos(m) $endpos(m)) }
-  | "fn" m=match_clause { FnExp (bp m $startpos(m) $endpos(m)) }
-  | head=SYMBOL_IDENT arg=expression %prec PREFIX_APP { ExpApp ((bp (ExpIdx (bp (ident_to_idx head) $startpos(head) $endpos(head))) $startpos(head) $endpos(head)), bp arg $startpos(arg) $endpos(arg)) }
+atexp ::= scon special constant
+  〈op〉longvid value identifier
+  { 〈exprow 〉 } record
+  # lab record selector
+  () 0-tuple
+  (exp1 , ··· , expn) n-tuple, n ≥ 2
+  [exp1 , ··· , expn] list, n ≥ 0
+  (exp1 ; ··· ; expn) sequence, n ≥ 2
+  let dec in exp1 ; ··· ; expn end local declaration, n ≥ 1
+  ( exp )
+exprow ::= lab = exp 〈 , exprow〉 expression row
+appexp ::= atexp
+  appexp atexp application expression
+infexp ::= appexp
+  infexp1 vid infexp2 infix expression
+exp ::= infexp
+  exp : ty typed (L)
+  exp1 andalso exp2 conjunction
+  exp1 orelse exp2 disjunction
+  exp handle match handle exception
+  raise exp raise exception
+  if exp1 then exp2 else exp3 conditional
+  while exp1 do exp2 iteration
+  case exp of match case analysis
+  fn match function
+*/
+at_exp:
+  | c=boxed(scon) { ExpCon c }
+  | id=op_longid { ExpIdx (unwrap_op id) }
+  | "{" rows=exp_row_opt "}" { RecordExp rows }
+  | "#" lab=boxed(lab) { RecordSelector lab }
+  | "(" ")" { TupleExp [] }
+  | "(" seq_start=boxed(expression) "," seq=separated_nonempty_list(",", boxed(expression)) ")" { TupleExp (seq_start :: seq) }
+  | "[" seq=separated_list(",", boxed(expression)) "]" { ListExp seq }
+  | "(" e=exp_seq_list ")" { SeqExp e }
+  | "let" dec=boxed(dec_seq) "in" exp=exp_seq_list "end" { LetExp ([dec], exp) }
+  | "(" e=boxed(expression) ")" { ParenExp e }
+ ;
+
+
+exp_seq_list: 
+  | e=boxed(expression) { [e] }
+  | e=boxed(expression) ";" rest=exp_seq_list { e :: rest }
   ;
 
-atomic_exp_seq1:
-  | atomic_exp atomic_exp_seq1 %prec JUXTAPOSE { bp $1 $startpos($1) $endpos($1) :: $2 }
-  | atomic_exp { [bp $1 $startpos($1) $endpos($1)] }
-;
+%inline
+exp_seq: 
+  | e=expression { e }
+  | e=boxed(expression) ";" rest=boxed(exp_seq) { SeqExp [e; rest] }
+  ;
 
-atomic_exp:
-  | scon { ExpCon (bp $1 $startpos($1) $endpos($1)) }
-  | op_eq_ident { ExpIdx (match $1 with WithOp i | WithoutOp i -> i) }
-  | "let" dec_seq "in" exp_semicolon_exp "end" { LetExp ([bp $2 $startpos($2) $endpos($2)], $4) }
-  | HASH lab { RecordSelector (bp $2 $startpos($2) $endpos($2)) }
-  | "(" expression ")" { ParenExp (bp $2 $startpos($2) $endpos($2)) }
-  | "(" ")" { TupleExp [] }
-  | "(" exp_comma_seq2 ")" { TupleExp $2 }
-  | "(" exp_semicolon_seq2 ")" { SeqExp $2 }
-  | LBRACE exprow_opt RBRACE { RecordExp $2 }
-  | HASH_OPEN exp_comma_seq0 RBRACKET { ArrayExp $2 }
-  | LBRACKET exp_comma_seq0 RBRACKET { ListExp $2 }
-  
-;
-
-exp_semicolon_exp:
-  | expression { [bp $1 $startpos($1) $endpos($1)] }
-  | expression SEMICOLON exp_semicolon_exp { bp $1 $startpos($1) $endpos($1) :: $3 }
-;
-
-exp_comma_seq0:
-  | exp_comma_seq1 { $1 }
+exp_row_opt:
+  | rows=exp_row { rows }
   | { [] }
-;
+  ;
 
-exp_comma_seq1:
-  | expression "," exp_comma_seq1 { bp $1 $startpos($1) $endpos($1) :: $3 }
-  | expression { [bp $1 $startpos($1) $endpos($1)] }
-;
+exp_row: 
+  | l=boxed(lab) "=" e=boxed(expression) rest=option(preceded(",", exp_row)) {
+      bp (Row (l, e, None)) $startpos $endpos :: (match rest with Some r -> r | None -> [])
+    }
+  ;
 
-exp_comma_seq2:
-  | expression "," exp_comma_seq1 { bp $1 $startpos($1) $endpos($1) :: $3 }
-;
+appexp:
+  | a=at_exp { a }
+  | f=appexp a=at_exp { ExpApp (bp f $startpos(f) $endpos(f), bp a $startpos(a) $endpos(a)) }
+  ;
 
-exp_semicolon_seq2:
-  | expression SEMICOLON exp_semicolon_seq2 { bp $1 $startpos($1) $endpos($1) :: $3 }
-  | expression SEMICOLON expression { [bp $1 $startpos($1) $endpos($1); bp $3 $startpos($3) $endpos($3)] }
-;
+infexp: 
+  | a=appexp { a }
+  | a1=infexp op=SYMBOL_IDENT a2=appexp %prec INFIX_APP {
+      InfixApp (bp a1 $startpos(a1) $endpos(a1), b (ident_to_idx op), bp a2 $startpos(a2) $endpos(a2))
+    }
+  | a1=infexp CONS a2=appexp %prec INFIX_APP {
+      InfixApp (bp a1 $startpos(a1) $endpos(a1), b (IdxIdx (b "::")), bp a2 $startpos(a2) $endpos(a2))
+    }
+  | a1=infexp EQUAL a2=appexp %prec INFIX_APP {
+      InfixApp (bp a1 $startpos(a1) $endpos(a1), b (IdxIdx (b "=")), bp a2 $startpos(a2) $endpos(a2))
+    }
+  ;
 
-exprow_opt:
-  | exprow_list { $1 }
-  | { [] }
-;
-
-exprow_list:
-  | exprow comma_exprow_opt { bp $1 $startpos($1) $endpos($1) :: $2 }
-;
-
-exprow:
-  | lab EQUAL expression { Row (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3), None) }
-;
-
-comma_exprow_opt:
-  | "," exprow_list { $2 }
-  | { [] }
+expression:
+  | e=infexp { e }
+  | e=expression ":" ty=typ { TypedExp (bp e $startpos(e) $endpos(e), bp ty $startpos(ty) $endpos(ty)) }
+  | e1=boxed(expression) ANDALSO e2=boxed(expression) %prec ANDALSO { AndExp (e1, e2) }
+  | e1=boxed(expression) ORELSE e2=boxed(expression) %prec ORELSE { OrExp (e1, e2) }
+  | e=boxed(expression) HANDLE m=match_clause %prec HANDLE { HandleExp (e, bp m $startpos(m) $endpos(m)) }
+  | RAISE e=boxed(expression) %prec RAISE { RaiseExp e }
+  | IF e1=boxed(expression) THEN e2=boxed(expression) ELSE e3=boxed(expression) { IfExp (e1, e2, e3) }
+  | WHILE e1=boxed(expression) DO e2=boxed(expression) { WhileExp (e1, e2) }
+  | CASE e=boxed(expression) OF m=match_clause { CaseExp (e, bp m $startpos(m) $endpos(m)) }
+  | FN m=match_clause { FnExp (bp m $startpos(m) $endpos(m)) }
 ;
 
 match_clause:
@@ -510,8 +579,8 @@ match_clause:
 (* ========================================================================= *)
 
 pat:
-  | atomic_pat_seq1 {
-      match $1 with
+  | seq=nonempty_list(located(atomic_pat)) {
+      match seq with
       | [p] -> p.value
       | op :: args ->
           List.fold_left (fun acc arg -> PatApp (
@@ -525,72 +594,48 @@ pat:
   | p0=pat BAR p1=pat {
       PatOr (bp p0 $startpos(p0) $endpos(p0), bp p1 $startpos(p1) $endpos(p1))
     }
-  | pat SYMBOL_IDENT pat %prec INFIX_APP { PatInfix (bp $1 $startpos($1) $endpos($1), b (IdxIdx (b (match $2 with Symbol s -> s | Name s -> s))), bp $3 $startpos($3) $endpos($3)) }
-  
-  | pat COLON typ { PatTyp (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3)) }
-  | pat CONS pat { PatInfix (bp $1 $startpos($1) $endpos($1), b (IdxIdx (b "::")), bp $3 $startpos($3) $endpos($3)) }
-  
-  | pat "as" pat {
-      match $1 with
-      | PatIdx op -> PatAs (op, None, bp $3 $startpos($3) $endpos($3))
-      | PatTyp (p, ty) -> (match p.value with PatIdx op -> PatAs (op, Some ty, bp $3 $startpos($3) $endpos($3)) | _ -> failwith "invalid layered pattern")
+  | p=pat COLON t=typ { PatTyp (bp p $startpos(p) $endpos(p), bp t $startpos(t) $endpos(t)) }
+
+  | p1=pat "as" p2=pat {
+      match p1 with
+      | PatIdx op -> PatAs (op, None, bp p2 $startpos(p2) $endpos(p2))
+      | PatTyp (p, ty) -> (match p.value with PatIdx op -> PatAs (op, Some ty, bp p2 $startpos(p2) $endpos(p2)) | _ -> failwith "invalid layered pattern")
       | _ -> failwith "invalid layered pattern"
     }
-    | SYMBOL_IDENT pat %prec PREFIX_APP { PatApp (b (WithoutOp (b (IdxIdx (b (match $1 with Symbol s -> s | Name s -> s))))), bp $2 $startpos($2) $endpos($2)) }
-;
-
-atomic_pat_seq1:
-  | atomic_pat atomic_pat_seq1 { bp $1 $startpos($1) $endpos($1) :: $2 }
-  | atomic_pat { [bp $1 $startpos($1) $endpos($1)] }
+   //  | sym=SYMBOL_IDENT p=pat %prec PREFIX_APP { PatApp (b (WithoutOp (b (IdxIdx (b (match sym with Symbol s -> s | Name s -> s))))), bp p $startpos(p) $endpos(p)) }
 ;
 
 atomic_pat:
   | UNDERSCORE { PatWildcard }
-  | scon { PatCon (bp $1 $startpos($1) $endpos($1)) }
-  | op_longid { PatIdx (bp $1 $startpos($1) $endpos($1)) }
-  | LBRACE patrow_opt RBRACE { PatRecord $2 }
-  | "(" pat ")" { PatParen (bp $2 $startpos($2) $endpos($2)) }
+  | c=scon { PatCon (bp c $startpos(c) $endpos(c)) }
+  | id=op_longid { PatIdx (bp id $startpos(id) $endpos(id)) }
+  | LBRACE rows=patrow_opt RBRACE { PatRecord rows }
+  | "(" p=pat ")" { PatParen (bp p $startpos(p) $endpos(p)) }
   | "(" ")" { PatTuple [] }
-  | "(" pat_comma_seq2 ")" { PatTuple $2 }
-  | HASH_OPEN pat_comma_seq0 RBRACKET { PatArray $2 }
-  | LBRACKET pat_comma_seq0 RBRACKET { PatList $2 }
+  | "(" seq=pat_comma_seq2 ")" { PatTuple seq }
+  | HASH_OPEN pats=separated_list(",", located(pat)) RBRACKET { PatArray pats }
+  | LBRACKET pats=separated_list(",", located(pat)) RBRACKET { PatList pats }
 ;
 
 patrow_opt:
-  | patrow { $1 }
+  | rows=patrow { rows }
   | { [] }
 ;
 
 patrow:
   | ELLIPSIS { [bp PatRowPoly $startpos $endpos] }
-  | lab EQUAL pat comma_patrow_opt { bp (PatRowSimple (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3), match $4 with [] -> b PatRowPoly | h :: _ -> h)) $startpos $endpos :: $4 }
-  | ident colon_typ_opt as_pat_opt comma_patrow_opt {
-      bp (PatRowVar (bp $1 $startpos($1) $endpos($1), $2, None, match $4 with [] -> None | _ -> Some (List.hd $4))) $startpos $endpos :: $4
+  | l=lab EQUAL p=pat rest=option(preceded(",", patrow)) { 
+      let rest_list = match rest with Some r -> r | None -> [] in
+      bp (PatRowSimple (bp l $startpos(l) $endpos(l), bp p $startpos(p) $endpos(p), match rest_list with [] -> b PatRowPoly | h :: _ -> h)) $startpos $endpos :: rest_list 
+    }
+  | id=ident ty=option(preceded(COLON, located(typ))) aspat=option(preceded("as", located(pat))) rest=option(preceded(",", patrow)) {
+      let rest_list = match rest with Some r -> r | None -> [] in
+      bp (PatRowVar (bp id $startpos(id) $endpos(id), ty, None, match rest_list with [] -> None | _ -> Some (List.hd rest_list))) $startpos $endpos :: rest_list
     }
 ;
 
-as_pat_opt:
-  | "as" pat { Some (bp $2 $startpos($2) $endpos($2)) }
-  | { None }
-;
-
-comma_patrow_opt:
-  | "," patrow { $2 }
-  | { [] }
-;
-
-pat_comma_seq0:
-  | pat_comma_seq1 { $1 }
-  | { [] }
-;
-
-pat_comma_seq1:
-  | pat "," pat_comma_seq1 { bp $1 $startpos($1) $endpos($1) :: $3 }
-  | pat { [bp $1 $startpos($1) $endpos($1)] }
-;
-
 pat_comma_seq2:
-  | pat "," pat_comma_seq1 { bp $1 $startpos($1) $endpos($1) :: $3 }
+  | p=pat "," rest=separated_nonempty_list(",", located(pat)) { bp p $startpos(p) $endpos(p) :: rest }
 ;
 
 (* ========================================================================= *)
@@ -598,160 +643,115 @@ pat_comma_seq2:
 (* ========================================================================= *)
 
 dec_seq:
-  | kwdec SEMICOLON* dec_seq { SeqDec [bp $1 $startpos($1) $endpos($1); bp $3 $startpos($3) $endpos($3)] }
-  | expression SEMICOLON+ dec_seq { SeqDec [bp (ExpDec (bp $1 $startpos($1) $endpos($1))) $startpos($1) $endpos($1); bp $3 $startpos($3) $endpos($3)] }
-  | expression { SeqDec [bp (ExpDec (bp $1 $startpos($1) $endpos($1))) $startpos($1) $endpos($1)] }
+  | d=kwdec SEMICOLON* rest=dec_seq { SeqDec [bp d $startpos(d) $endpos(d); bp rest $startpos(rest) $endpos(rest)] }
+  | e=expression SEMICOLON+ rest=dec_seq { SeqDec [bp (ExpDec (bp e $startpos(e) $endpos(e))) $startpos(e) $endpos(e); bp rest $startpos(rest) $endpos(rest)] }
+  | e=expression %prec PROGRAM_SEP { SeqDec [bp (ExpDec (bp e $startpos(e) $endpos(e))) $startpos(e) $endpos(e)] }
   | { SeqDec [] }
 ;
 
 (* Non-empty declaration sequence - requires at least one declaration *)
 nonempty_dec_seq:
-  | kwdec SEMICOLON* dec_seq { SeqDec [bp $1 $startpos($1) $endpos($1); bp $3 $startpos($3) $endpos($3)] }
-  | expression SEMICOLON+ dec_seq { SeqDec [bp (ExpDec (bp $1 $startpos($1) $endpos($1))) $startpos($1) $endpos($1); bp $3 $startpos($3) $endpos($3)] }
-  | expression { SeqDec [bp (ExpDec (bp $1 $startpos($1) $endpos($1))) $startpos($1) $endpos($1)] }
+  | d=kwdec SEMICOLON* rest=dec_seq { SeqDec [bp d $startpos(d) $endpos(d); bp rest $startpos(rest) $endpos(rest)] }
+  | e=expression SEMICOLON+ rest=dec_seq { SeqDec [bp (ExpDec (bp e $startpos(e) $endpos(e))) $startpos(e) $endpos(e); bp rest $startpos(rest) $endpos(rest)] }
+  | e=expression { SeqDec [bp (ExpDec (bp e $startpos(e) $endpos(e))) $startpos(e) $endpos(e)] }
 ;
 
 kwdec_seq:
-  | kwdec SEMICOLON* kwdec_seq { bp $1 $startpos($1) $endpos($1) :: $3 }
+  | d=kwdec SEMICOLON* rest=kwdec_seq { bp d $startpos(d) $endpos(d) :: rest }
   | { [] }
 ;
 
 kwcoredec_seq:
-  | kwcoredec SEMICOLON* kwcoredec_seq { bp $1 $startpos($1) $endpos($1) :: $3 }
+  | d=kwcoredec SEMICOLON* rest=kwcoredec_seq { bp d $startpos(d) $endpos(d) :: rest }
   | { [] }
 ;
 
 kwdec:
-  | kwcoredec { $1 }
-  | kwmoduledec { $1 }
+  | d=kwcoredec { d }
+  | d=kwmoduledec { d }
 ;
 
 kwmoduledec:
-  | "structure" strbind { StrDec (bp $2 $startpos($2) $endpos($2)) }
+  | "structure" bind=strbind { StrDec (bp bind $startpos(bind) $endpos(bind)) }
 ;
 
 kwcoredec:
-  | "val" valbind { ValDec ([], bp $2 $startpos($2) $endpos($2)) }
-  | "val" tyvarseq1 valbind { ValDec ($2, bp $3 $startpos($3) $endpos($3)) }
-  | "fun" funbind { FunDec (bp $2 $startpos($2) $endpos($2)) }
-  | "fun" tyvarseq1 funbind { FunDec (bp $3 $startpos($3) $endpos($3)) }
-  | "type" typbind { TypDec (bp $2 $startpos($2) $endpos($2)) }
-  | "datatype" datbind_0 typbind_opt { DatDec (bp $2 $startpos($2) $endpos($2), $3) }
-  | "datatype" datbind_n typbind_opt { DatDec (bp $2 $startpos($2) $endpos($2), $3) }
-  | "datatype" tycon EQUAL "datatype" long_tycon { DataDecAlias (bp $2 $startpos($2) $endpos($2), bp $5 $startpos($5) $endpos($5)) }
-  | "abstype" datbind typbind_opt "with" dec_seq "end" { AbstractDec (bp $2 $startpos($2) $endpos($2), $3, [bp $5 $startpos($5) $endpos($5)]) }
-  | "exception" exnbind { ExnDec (bp $2 $startpos($2) $endpos($2)) }
-  | "local" dec_seq "in" dec_seq "end" { LocalDec (bp $2 $startpos($2) $endpos($2), bp $4 $startpos($4) $endpos($4)) }
-  | "open" longid_seq1 { OpenDec $2 }
-  | "infix" digit_opt any_ident_seq1 { FixityDec (bp (Infix (b $2)) $startpos $endpos, $3) }
-  | "infixr" digit_opt any_ident_seq1 { FixityDec (bp (Infixr (b $2)) $startpos $endpos, $3) }
-  | "nonfix" any_ident_seq1 { FixityDec (bp Nonfix $startpos $endpos, $2) }
+  | "val" bind=valbind { ValDec ([], bp bind $startpos(bind) $endpos(bind)) }
+  | "val" tvs=tyvarseq1 bind=valbind { ValDec (tvs, bp bind $startpos(bind) $endpos(bind)) }
+  | "fun" bind=funbind { FunDec (bp bind $startpos(bind) $endpos(bind)) }
+  | "fun" tvs=tyvarseq1 bind=funbind { FunDec (bp bind $startpos(bind) $endpos(bind)) }
+  | "type" bind=typbind { TypDec (bp bind $startpos(bind) $endpos(bind)) }
+  | "datatype" bind=datbind_0 wt=typbind_opt { DatDec (bp bind $startpos(bind) $endpos(bind), wt) }
+  | "datatype" bind=datbind_n wt=typbind_opt { DatDec (bp bind $startpos(bind) $endpos(bind), wt) }
+  | "datatype" tc=tycon EQUAL "datatype" ltc=long_tycon { DataDecAlias (bp tc $startpos(tc) $endpos(tc), bp ltc $startpos(ltc) $endpos(ltc)) }
+  | "abstype" bind=datbind wt=typbind_opt "with" decs=dec_seq "end" { AbstractDec (bp bind $startpos(bind) $endpos(bind), wt, [bp decs $startpos(decs) $endpos(decs)]) }
+  | "exception" bind=exnbind { ExnDec (bp bind $startpos(bind) $endpos(bind)) }
+  | "local" d1=dec_seq "in" d2=dec_seq "end" { LocalDec (bp d1 $startpos(d1) $endpos(d1), bp d2 $startpos(d2) $endpos(d2)) }
+  | "open" ids=nonempty_list(boxed(longid)) { OpenDec ids }
+  | "infix" n=option(INT_LIT) ids=nonempty_list(any_ident) { FixityDec (bp (Infix (b (match n with Some lit -> int_of_string lit | None -> 0))) $startpos $endpos, ids) }
+  | "infixr" n=option(INT_LIT) ids=nonempty_list(any_ident) { FixityDec (bp (Infixr (b (match n with Some lit -> int_of_string lit | None -> 0))) $startpos $endpos, ids) }
+  | "nonfix" ids=nonempty_list(any_ident) { FixityDec (bp Nonfix $startpos $endpos, ids) }
 ;
 
 typbind_opt:
-  | "withtype" typbind { Some (bp $2 $startpos($2) $endpos($2)) }
+  | "withtype" bind=typbind { Some (bp bind $startpos(bind) $endpos(bind)) }
   | { None }
 ;
 
 valbind:
-  | pat EQUAL expression and_valbind_opt { ValBind (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3), $4) }
-  | "rec" valbind { ValBindRec (bp $2 $startpos($2) $endpos($2)) }
-;
-
-and_valbind_opt:
-  | "and" valbind { Some (bp $2 $startpos($2) $endpos($2)) }
-  | { None }
+  | p=pat EQUAL e=expression rest=option(preceded("and", located(valbind))) { ValBind (bp p $startpos(p) $endpos(p), bp e $startpos(e) $endpos(e), rest) }
+  | "rec" bind=valbind { ValBindRec (bp bind $startpos(bind) $endpos(bind)) }
 ;
 
 funbind:
-  | funmatch and_funbind_opt { FunBind (bp $1 $startpos($1) $endpos($1), $2) }
-;
-
-and_funbind_opt:
-  | "and" funbind { Some (bp $2 $startpos($2) $endpos($2)) }
-  | { None }
+  | m=funmatch rest=option(preceded("and", located(funbind))) { FunBind (bp m $startpos(m) $endpos(m), rest) }
 ;
 
 funmatch:
-  | op_ident atomic_pat_seq1 colon_typ_opt EQUAL expression bar_funmatch_opt {
-      FunMatchPrefix (bp $1 $startpos($1) $endpos($1), $2, $3, bp $5 $startpos($5) $endpos($5), $6)
+  | id=op_ident pats=nonempty_list(located(atomic_pat)) ty=option(preceded(COLON, located(typ))) EQUAL e=expression rest=option(preceded(BAR, located(funmatch))) {
+      FunMatchPrefix (bp id $startpos(id) $endpos(id), pats, ty, bp e $startpos(e) $endpos(e), rest)
     }
-  | atomic_pat ident atomic_pat colon_typ_opt EQUAL expression bar_funmatch_opt {
-      FunMatchInfix (bp $1 $startpos($1) $endpos($1), bp $2 $startpos($2) $endpos($2), bp $3 $startpos($3) $endpos($3), $4, bp $6 $startpos($6) $endpos($6), $7)
+  | p1=atomic_pat id=ident p2=atomic_pat ty=option(preceded(COLON, located(typ))) EQUAL e=expression rest=option(preceded(BAR, located(funmatch))) {
+      FunMatchInfix (bp p1 $startpos(p1) $endpos(p1), bp id $startpos(id) $endpos(id), bp p2 $startpos(p2) $endpos(p2), ty, bp e $startpos(e) $endpos(e), rest)
     }
-  | "(" atomic_pat ident atomic_pat ")" atomic_pat_seq1 colon_typ_opt EQUAL expression bar_funmatch_opt {
-      FunMatchLow (bp $2 $startpos($2) $endpos($2), bp $3 $startpos($3) $endpos($3), bp $4 $startpos($4) $endpos($4), $6, $7, bp $9 $startpos($9) $endpos($9), $10)
+  | "(" p1=atomic_pat id=ident p2=atomic_pat ")" pats=nonempty_list(located(atomic_pat)) ty=option(preceded(COLON, located(typ))) EQUAL e=expression rest=option(preceded(BAR, located(funmatch))) {
+      FunMatchLow (bp p1 $startpos(p1) $endpos(p1), bp id $startpos(id) $endpos(id), bp p2 $startpos(p2) $endpos(p2), pats, ty, bp e $startpos(e) $endpos(e), rest)
     }
-;
-
-bar_funmatch_opt:
-  | BAR funmatch { Some (bp $2 $startpos($2) $endpos($2)) }
-  | { None }
-;
-
-colon_typ_opt:
-  | COLON typ { Some (bp $2 $startpos($2) $endpos($2)) }
-  | { None }
-;
-
-of_typ_opt:
-  | "of" typ { Some (bp $2 $startpos($2) $endpos($2)) }
-  | { None }
 ;
 
 typbind:
-  | tyvarseq tycon EQUAL typ and_typbind_opt { TypBind ($1, bp $2 $startpos($2) $endpos($2), bp $4 $startpos($4) $endpos($4), $5) }
-;
-
-and_typbind_opt:
-  | "and" typbind { Some (bp $2 $startpos($2) $endpos($2)) }
-  | { None }
+  | tvs=tyvarseq tc=tycon EQUAL t=typ rest=option(preceded("and", located(typbind))) { TypBind (tvs, bp tc $startpos(tc) $endpos(tc), bp t $startpos(t) $endpos(t), rest) }
 ;
 
 datbind:
-  | tyvarseq tycon EQUAL conbind and_datbind_opt { DatBind ($1, bp $2 $startpos($2) $endpos($2), bp $4 $startpos($4) $endpos($4), $5) }
+  | tvs=tyvarseq tc=tycon EQUAL cons=conbind rest=option(preceded("and", located(datbind))) { DatBind (tvs, bp tc $startpos(tc) $endpos(tc), bp cons $startpos(cons) $endpos(cons), rest) }
 ;
 
 datbind_0:
-  | tycon EQUAL conbind and_datbind_opt { DatBind ([], bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3), $4) }
+  | tc=tycon EQUAL cons=conbind rest=option(preceded("and", located(datbind))) { DatBind ([], bp tc $startpos(tc) $endpos(tc), bp cons $startpos(cons) $endpos(cons), rest) }
 ;
 
 datbind_n:
-  | tyvarseq1 tycon EQUAL conbind and_datbind_opt { DatBind ($1, bp $2 $startpos($2) $endpos($2), bp $4 $startpos($4) $endpos($4), $5) }
-;
-
-and_datbind_opt:
-  | "and" datbind { Some (bp $2 $startpos($2) $endpos($2)) }
-  | { None }
+  | tvs=tyvarseq1 tc=tycon EQUAL cons=conbind rest=option(preceded("and", located(datbind))) { DatBind (tvs, bp tc $startpos(tc) $endpos(tc), bp cons $startpos(cons) $endpos(cons), rest) }
 ;
 
 conbind:
-  | op_ident of_typ_opt bar_conbind_opt {
-      let id = match $1 with WithOp i -> i | WithoutOp i -> i in
-      ConBind (id, $2, $3)
+  | id=op_ident ty=option(preceded("of", located(typ))) rest=option(preceded(BAR, located(conbind))) {
+      let id = match id with WithOp i -> i | WithoutOp i -> i in
+      ConBind (id, ty, rest)
     }
-;
-
-bar_conbind_opt:
-  | BAR conbind { Some (bp $2 $startpos($2) $endpos($2)) }
-  | { None }
 ;
 
 exnbind:
-  | op_ident of_typ_opt and_exnbind_opt {
-      let id = match $1 with WithOp i -> i | WithoutOp i -> i in
-      ExnBind (id, $2, $3)
+  | id=op_ident ty=option(preceded("of", located(typ))) rest=option(preceded("and", located(exnbind))) {
+      let id = match id with WithOp i -> i | WithoutOp i -> i in
+      ExnBind (id, ty, rest)
     }
-  | op_ident EQUAL op_eq_ident and_exnbind_opt {
-      let id1 = match $1 with WithOp i -> i | WithoutOp i -> i in
-      let id2 = match $3 with WithOp i -> i | WithoutOp i -> i in
-      ExnBindAlias (id1, id2, $4)
+  | id1=op_ident EQUAL id2=op_eq_ident rest=option(preceded("and", located(exnbind))) {
+      let id1 = match id1 with WithOp i -> i | WithoutOp i -> i in
+      let id2 = match id2 with WithOp i -> i | WithoutOp i -> i in
+      ExnBindAlias (id1, id2, rest)
     }
-;
-
-and_exnbind_opt:
-  | "and" exnbind { Some (bp $2 $startpos($2) $endpos($2)) }
-  | { None }
 ;
 
 (* ========================================================================= *)
@@ -759,19 +759,9 @@ and_exnbind_opt:
 (* ========================================================================= *)
 
 strbind:
-  | modid sigconstraint_opt EQUAL structure and_strbind_opt {
-      StrBind (bp $1 $startpos($1) $endpos($1), $2, bp $4 $startpos($4) $endpos($4), $5)
+  | id=modid sign=option(pair(located(anotate), located(sig_expr))) EQUAL str=structure rest=option(preceded("and", located(strbind))) {
+      StrBind (bp id $startpos(id) $endpos(id), sign, bp str $startpos(str) $endpos(str), rest)
     }
-;
-
-and_strbind_opt:
-  | "and" strbind { Some (bp $2 $startpos($2) $endpos($2)) }
-  | { None }
-;
-
-sigconstraint_opt:
-  | anotate sig_expr { Some ((bp $1 $startpos($1) $endpos($1)), (bp $2 $startpos($2) $endpos($2))) }
-  | { None }
 ;
 
 anotate:
@@ -780,28 +770,23 @@ anotate:
 ;
 
 structure:
-  | atomic_str_seq1 {
-      match $1 with
+  | seq=nonempty_list(located(atomic_str)) {
+      match seq with
       | [s] -> s.value
       | f :: args -> List.fold_left (fun acc arg -> FunctorApp (
           (match acc with StrIdx i -> i | _ -> b (IdxIdx (b "?"))), arg)) f.value args
       | [] -> failwith "impossible: empty structure sequence"
     }
-  | structure COLON sig_expr { AnotateStr (b (IdxIdx (b "?")), bp Transparent $startpos $endpos, bp $1 $startpos($1) $endpos($1)) }
-  | structure COLON_GT sig_expr { AnotateStr (b (IdxIdx (b "?")), bp Opaque $startpos $endpos, bp $1 $startpos($1) $endpos($1)) }
-;
-
-atomic_str_seq1:
-  | atomic_str atomic_str_seq1 { bp $1 $startpos($1) $endpos($1) :: $2 }
-  | atomic_str { [bp $1 $startpos($1) $endpos($1)] }
+  | str=structure COLON sign=sig_expr { AnotateStr (b (IdxIdx (b "?")), bp Transparent $startpos $endpos, bp str $startpos(str) $endpos(str)) }
+  | str=structure COLON_GT sign=sig_expr { AnotateStr (b (IdxIdx (b "?")), bp Opaque $startpos $endpos, bp str $startpos(str) $endpos(str)) }
 ;
 
 atomic_str:
-  | "struct" dec_seq "end" { StructStr (bp $2 $startpos($2) $endpos($2)) }
-  | longid { StrIdx (bp $1 $startpos($1) $endpos($1)) }
-  | "let" dec_seq "in" structure "end" { Ast.LocalDec (bp $2 $startpos($2) $endpos($2), bp $4 $startpos($4) $endpos($4)) }
-  | "(" structure ")" { $2 }
-  | "(" dec_seq ")" { StructStr (bp $2 $startpos($2) $endpos($2)) }
+  | "struct" decs=dec_seq "end" { StructStr (bp decs $startpos(decs) $endpos(decs)) }
+  | id=longid { StrIdx (bp id $startpos(id) $endpos(id)) }
+  | "let" decs=dec_seq "in" str=structure "end" { Ast.LocalDec (bp decs $startpos(decs) $endpos(decs), bp str $startpos(str) $endpos(str)) }
+  | "(" str=structure ")" { str }
+  | "(" decs=dec_seq ")" { StructStr (bp decs $startpos(decs) $endpos(decs)) }
 ;
 
 (* ========================================================================= *)
@@ -810,40 +795,30 @@ atomic_str:
 
 sig_expr:
 
-  | "sig" specification "end" { SignSig (flatten_spec_node (bp $2 $startpos($2) $endpos($2))) }
+  | "sig" spec=specification "end" { SignSig (flatten_spec_node (bp spec $startpos(spec) $endpos(spec))) }
   | "sig" "end" { SignSig [] }
-  | sigid { SignIdx (bp $1 $startpos($1) $endpos($1)) }
-  | sig_expr "where" "type" typrefin { SignWhere (bp $1 $startpos($1) $endpos($1), bp $4 $startpos($4) $endpos($4)) }
-  | "functor" "(" modid COLON sig_expr ")" "->" sig_expr {
-      let param_spec = bp (SpecStr (bp (StrDesc (bp $3 $startpos($3) $endpos($3), bp $5 $startpos($5) $endpos($5), None)) $startpos($3) $endpos($5))) $startpos $endpos in
-      let result_spec = bp (SpecInclude (bp $8 $startpos($8) $endpos($8))) $startpos($8) $endpos($8) in
+  | id=sigid { SignIdx (bp id $startpos(id) $endpos(id)) }
+  | sign=sig_expr "where" "type" ref=typrefin { SignWhere (bp sign $startpos(sign) $endpos(sign), bp ref $startpos(ref) $endpos(ref)) }
+  | "functor" "(" id=modid COLON psig=sig_expr ")" "->" rsig=sig_expr {
+      let param_spec = bp (SpecStr (bp (StrDesc (bp id $startpos(id) $endpos(id), bp psig $startpos(psig) $endpos(psig), None)) $startpos(id) $endpos(psig))) $startpos $endpos in
+      let result_spec = bp (SpecInclude (bp rsig $startpos(rsig) $endpos(rsig))) $startpos(rsig) $endpos(rsig) in
       SignSig (flatten_spec_node (bp (SpecSeq (param_spec, result_spec)) $startpos $endpos))
     }
-  | "functor" modid COLON sig_expr "->" sig_expr {
-      let param_spec = bp (SpecStr (bp (StrDesc (bp $2 $startpos($2) $endpos($2), bp $4 $startpos($4) $endpos($4), None)) $startpos($2) $endpos($4))) $startpos $endpos in
-      let result_spec = bp (SpecInclude (bp $6 $startpos($6) $endpos($6))) $startpos($6) $endpos($6) in
+  | "functor" id=modid COLON psig=sig_expr "->" rsig=sig_expr {
+      let param_spec = bp (SpecStr (bp (StrDesc (bp id $startpos(id) $endpos(id), bp psig $startpos(psig) $endpos(psig), None)) $startpos(id) $endpos(psig))) $startpos $endpos in
+      let result_spec = bp (SpecInclude (bp rsig $startpos(rsig) $endpos(rsig))) $startpos(rsig) $endpos(rsig) in
       SignSig (flatten_spec_node (bp (SpecSeq (param_spec, result_spec)) $startpos $endpos))
     }
 ;
 
 typrefin:
-  | tyvarseq long_tycon EQUAL typ and_typrefin_opt {
-      TypRef ($1, bp $2 $startpos($2) $endpos($2), bp $4 $startpos($4) $endpos($4), match $5 with None -> None | Some r -> Some (bp $4 $startpos($4) $endpos($4), r))
+  | tvs=tyvarseq tc=long_tycon EQUAL t=typ rest=option(preceded("and", preceded("type", located(typrefin)))) {
+      TypRef (tvs, bp tc $startpos(tc) $endpos(tc), bp t $startpos(t) $endpos(t), match rest with None -> None | Some r -> Some (bp t $startpos(t) $endpos(t), r))
     }
 ;
 
-and_typrefin_opt:
-  | "and" "type" typrefin { Some (bp $3 $startpos($3) $endpos($3)) }
-  | { None }
-;
-
 sigbind:
-  | sigid EQUAL sig_expr and_sigbind_opt { SignBind (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3), $4) }
-;
-
-and_sigbind_opt:
-  | "and" sigbind { Some (bp $2 $startpos($2) $endpos($2)) }
-  | { None }
+  | id=sigid EQUAL sign=sig_expr rest=option(preceded("and", located(sigbind))) { SignBind (bp id $startpos(id) $endpos(id), bp sign $startpos(sign) $endpos(sign), rest) }
 ;
 
 (* ========================================================================= *)
@@ -851,157 +826,121 @@ and_sigbind_opt:
 (* ========================================================================= *)
 
 specification:
-  | kwspec { $1 }
-  | specification kwspec { SpecSeq (bp $1 $startpos($1) $endpos($1), bp $2 $startpos($2) $endpos($2)) }
-  | specification "sharing" "type" longid_eq_seq { SpecSharingTyp (bp $1 $startpos($1) $endpos($1), $4) }
-  | specification "sharing" longid_eq_seq { SpecSharingStr (bp $1 $startpos($1) $endpos($1), $3) }
-  | specification SEMICOLON { $1 }
+  | spec=kwspec { spec }
+  | s1=specification s2=kwspec { SpecSeq (bp s1 $startpos(s1) $endpos(s1), bp s2 $startpos(s2) $endpos(s2)) }
+  | spec=specification "sharing" "type" seq=longid_eq_seq { SpecSharingTyp (bp spec $startpos(spec) $endpos(spec), seq) }
+  | spec=specification "sharing" seq=longid_eq_seq { SpecSharingStr (bp spec $startpos(spec) $endpos(spec), seq) }
+  | spec=specification SEMICOLON { spec }
 ;
 
 longid_eq_seq:
-  | longid EQUAL longid_eq_seq { bp $1 $startpos($1) $endpos($1) :: $3 }
-  | longid { [bp $1 $startpos($1) $endpos($1)] }
+  | id=longid EQUAL rest=longid_eq_seq { bp id $startpos(id) $endpos(id) :: rest }
+  | id=longid { [bp id $startpos(id) $endpos(id)] }
 ;
 
 spec_seq:
-  | spec_seq kwspec { bp $2 $startpos($2) $endpos($2) :: $1 }
-  | spec_seq SEMICOLON { $1 }
+  | seq=spec_seq spec=kwspec { bp spec $startpos(spec) $endpos(spec) :: seq }
+  | seq=spec_seq SEMICOLON { seq }
   | { [] }
 ;
 
 corespec_seq:
-  | corespec_seq kwcorespec { bp $2 $startpos($2) $endpos($2) :: $1 }
-  | corespec_seq SEMICOLON { $1 }
+  | seq=corespec_seq spec=kwcorespec { bp spec $startpos(spec) $endpos(spec) :: seq }
+  | seq=corespec_seq SEMICOLON { seq }
   | { [] }
 ;
 
 kwspec:
-  | kwcorespec { $1 }
-  | kwmodulespec { $1 }
+  | spec=kwcorespec { spec }
+  | spec=kwmodulespec { spec }
 ;
 
 kwcorespec:
-  | "val" tyvarseq valdesc { SpecVal (bp $3 $startpos($3) $endpos($3)) }
-  | "type" typbind { SpecTypBind (bp $2 $startpos($2) $endpos($2)) }
-  | "type" typdesc { SpecTyp (bp $2 $startpos($2) $endpos($2)) }
-  | "eqtype" typdesc { SpecEqtyp (bp $2 $startpos($2) $endpos($2)) }
-  | "datatype" datdesc_0 typbind_opt { SpecDat (bp $2 $startpos($2) $endpos($2)) }
-  | "datatype" datdesc_n typbind_opt { SpecDat (bp $2 $startpos($2) $endpos($2)) }
-  | "datatype" tycon EQUAL "datatype" long_tycon { SpecDatAlias (bp $2 $startpos($2) $endpos($2), bp $5 $startpos($5) $endpos($5)) }
-  | "exception" exndesc { SpecExn (bp $2 $startpos($2) $endpos($2)) }
-  | "local" specification "in" specification "end" { SpecSeq (bp $2 $startpos($2) $endpos($2), bp $4 $startpos($4) $endpos($4)) }
-  | "open" longid_seq1 { SpecIncludeIdx $2 }
-  | "infix" digit_opt any_ident_seq1 { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
+  | "val" tvs=tyvarseq desc=valdesc { SpecVal (bp desc $startpos(desc) $endpos(desc)) }
+  | "type" bind=typbind { SpecTypBind (bp bind $startpos(bind) $endpos(bind)) }
+  | "type" desc=typdesc { SpecTyp (bp desc $startpos(desc) $endpos(desc)) }
+  | "eqtype" desc=typdesc { SpecEqtyp (bp desc $startpos(desc) $endpos(desc)) }
+  | "datatype" desc=datdesc_0 wt=typbind_opt { SpecDat (bp desc $startpos(desc) $endpos(desc)) }
+  | "datatype" desc=datdesc_n wt=typbind_opt { SpecDat (bp desc $startpos(desc) $endpos(desc)) }
+  | "datatype" tc=tycon EQUAL "datatype" ltc=long_tycon { SpecDatAlias (bp tc $startpos(tc) $endpos(tc), bp ltc $startpos(ltc) $endpos(ltc)) }
+  | "exception" desc=exndesc { SpecExn (bp desc $startpos(desc) $endpos(desc)) }
+  | "local" s1=specification "in" s2=specification "end" { SpecSeq (bp s1 $startpos(s1) $endpos(s1), bp s2 $startpos(s2) $endpos(s2)) }
+  | "open" ids=nonempty_list(boxed(longid)) { SpecIncludeIdx ids }
+  | "infix" n=option(INT_LIT) ids=nonempty_list(any_ident) { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
                                              b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None))))) }
-  | "infixr" digit_opt any_ident_seq1 { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
+  | "infixr" n=option(INT_LIT) ids=nonempty_list(any_ident) { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
                                               b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None))))) }
-  | "nonfix" any_ident_seq1 { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
+  | "nonfix" ids=nonempty_list(any_ident) { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
                                     b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None))))) }
 ;
 
 kwmodulespec:
-  | "structure" strdesc { SpecStr (bp $2 $startpos($2) $endpos($2)) }
-  | "functor" fundesc { SpecStr (bp $2 $startpos($2) $endpos($2)) }
-  | "include" sig_expr { SpecInclude (bp $2 $startpos($2) $endpos($2)) }
-  | "include" sigid_seq2 { SpecIncludeIdx $2 }
-  | "signature" sigbind { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
+  | "structure" desc=strdesc { SpecStr (bp desc $startpos(desc) $endpos(desc)) }
+  | "functor" desc=fundesc { SpecStr (bp desc $startpos(desc) $endpos(desc)) }
+  | "include" sign=sig_expr { SpecInclude (bp sign $startpos(sign) $endpos(sign)) }
+  | "include" ids=sigid_seq2 { SpecIncludeIdx ids }
+  | "signature" bind=sigbind { SpecSeq (b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None)))),
                                  b (SpecVal (b (ValDesc (b (IdxIdx (b "")), b (TypVar (b (IdxVar (b "")))), None))))) }
 ;
 
 sigid_seq2:
-  | sigid sigid_seq2 { bp $1 $startpos($1) $endpos($1) :: $2 }
-  | sigid sigid { [bp $1 $startpos($1) $endpos($1); bp $2 $startpos($2) $endpos($2)] }
+  | id=sigid rest=nonempty_list(located(sigid)) { bp id $startpos(id) $endpos(id) :: rest }
 ;
 
 valdesc:
-  | any_ident COLON typ and_valdesc_opt {
-      ValDesc ($1, bp $3 $startpos($3) $endpos($3), $4)
+  | id=any_ident COLON t=typ rest=option(preceded("and", located(valdesc))) {
+      ValDesc (id, bp t $startpos(t) $endpos(t), rest)
     }
-;
-
-and_valdesc_opt:
-  | "and" valdesc { Some (bp $2 $startpos($2) $endpos($2)) }
-  | { None }
 ;
 
 typdesc:
-  | tyvarseq tycon and_typdesc_opt { TypDesc ($1, bp $2 $startpos($2) $endpos($2), $3) }
-;
-
-and_typdesc_opt:
-  | "and" typdesc { Some (bp $2 $startpos($2) $endpos($2)) }
-  | { None }
+  | tvs=tyvarseq tc=tycon rest=option(preceded("and", located(typdesc))) { TypDesc (tvs, bp tc $startpos(tc) $endpos(tc), rest) }
 ;
 
 datdesc:
-  | tyvarseq tycon EQUAL condesc and_datdesc_opt { DatDesc ($1, bp $2 $startpos($2) $endpos($2), bp $4 $startpos($4) $endpos($4), $5) }
+  | tvs=tyvarseq tc=tycon EQUAL cons=condesc rest=option(preceded("and", located(datdesc))) { DatDesc (tvs, bp tc $startpos(tc) $endpos(tc), bp cons $startpos(cons) $endpos(cons), rest) }
 ;
 
 datdesc_0:
-  | tycon EQUAL condesc and_datdesc_opt { DatDesc ([], bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3), $4) }
+  | tc=tycon EQUAL cons=condesc rest=option(preceded("and", located(datdesc))) { DatDesc ([], bp tc $startpos(tc) $endpos(tc), bp cons $startpos(cons) $endpos(cons), rest) }
 ;
 
 datdesc_n:
-  | tyvarseq1 tycon EQUAL condesc and_datdesc_opt { DatDesc ($1, bp $2 $startpos($2) $endpos($2), bp $4 $startpos($4) $endpos($4), $5) }
-;
-
-and_datdesc_opt:
-  | "and" datdesc { Some (bp $2 $startpos($2) $endpos($2)) }
-  | { None }
+  | tvs=tyvarseq1 tc=tycon EQUAL cons=condesc rest=option(preceded("and", located(datdesc))) { DatDesc (tvs, bp tc $startpos(tc) $endpos(tc), bp cons $startpos(cons) $endpos(cons), rest) }
 ;
 
 condesc:
-  | op_ident of_typ_opt bar_condesc_opt {
-      ConDesc ((match $1 with WithOp i -> i | WithoutOp i -> i), $2, $3)
+  | id=op_ident ty=option(preceded("of", located(typ))) rest=option(preceded(BAR, located(condesc))) {
+      ConDesc ((match id with WithOp i -> i | WithoutOp i -> i), ty, rest)
     }
-;
-%inline
-bar_condesc_opt:
-  | BAR condesc { Some (bp $2 $startpos($2) $endpos($2)) }
-  | { None }
 ;
 
 exndesc:
-  | op_ident of_typ_opt and_exndesc_opt {
-      ExnDesc ((match $1 with WithOp i -> i | WithoutOp i -> i), $2, $3)
+  | id=op_ident ty=option(preceded("of", located(typ))) rest=option(preceded("and", located(exndesc))) {
+      ExnDesc ((match id with WithOp i -> i | WithoutOp i -> i), ty, rest)
     }
-;
-%inline
-and_exndesc_opt:
-  | "and" exndesc { Some (bp $2 $startpos($2) $endpos($2)) }
-  | { None }
 ;
 
 strdesc:
-  | modid COLON sig_expr and_strdesc_opt { StrDesc (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3), $4) }
-;
-%inline
-and_strdesc_opt:
-  | "and" strdesc { Some (bp $2 $startpos($2) $endpos($2)) }
-  | { None }
+  | id=modid COLON sign=sig_expr rest=option(preceded("and", located(strdesc))) { StrDesc (bp id $startpos(id) $endpos(id), bp sign $startpos(sign) $endpos(sign), rest) }
 ;
 
 fundesc:
-  | modid fundesctail and_fundesc_opt { StrDesc (bp $1 $startpos($1) $endpos($1), bp $2 $startpos($2) $endpos($2), $3) }
+  | id=modid tail=fundesctail rest=option(preceded("and", located(fundesc))) { StrDesc (bp id $startpos(id) $endpos(id), bp tail $startpos(tail) $endpos(tail), rest) }
 ;
 
 fundesctail:
-  | COLON sig_expr { $2 }
-  | "(" modid COLON sig_expr ")" fundesctail {
-      let param_spec = bp (SpecStr (bp (StrDesc (bp $2 $startpos($2) $endpos($2), bp $4 $startpos($4) $endpos($4), None)) $startpos($2) $endpos($4))) $startpos $endpos in
-      let result_spec = bp (SpecInclude (bp $6 $startpos($6) $endpos($6))) $startpos($6) $endpos($6) in
+  | COLON sign=sig_expr { sign }
+  | "(" id=modid COLON psig=sig_expr ")" tail=fundesctail {
+      let param_spec = bp (SpecStr (bp (StrDesc (bp id $startpos(id) $endpos(id), bp psig $startpos(psig) $endpos(psig), None)) $startpos(id) $endpos(psig))) $startpos $endpos in
+      let result_spec = bp (SpecInclude (bp tail $startpos(tail) $endpos(tail))) $startpos(tail) $endpos(tail) in
       SignSig (flatten_spec_node (bp (SpecSeq (param_spec, result_spec)) $startpos $endpos))
     }
-  | modid COLON sig_expr fundesctail {
-      let param_spec = bp (SpecStr (bp (StrDesc (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3), None)) $startpos($1) $endpos($3))) $startpos $endpos in
-      let result_spec = bp (SpecInclude (bp $4 $startpos($4) $endpos($4))) $startpos($4) $endpos($4) in
+  | id=modid COLON psig=sig_expr tail=fundesctail {
+      let param_spec = bp (SpecStr (bp (StrDesc (bp id $startpos(id) $endpos(id), bp psig $startpos(psig) $endpos(psig), None)) $startpos(id) $endpos(psig))) $startpos $endpos in
+      let result_spec = bp (SpecInclude (bp tail $startpos(tail) $endpos(tail))) $startpos(tail) $endpos(tail) in
       SignSig (flatten_spec_node (bp (SpecSeq (param_spec, result_spec)) $startpos $endpos))
     }
-;
-%inline
-and_fundesc_opt:
-  | "and" fundesc { Some (bp $2 $startpos($2) $endpos($2)) }
-  | { None }
 ;
 
 (* ========================================================================= *)
@@ -1009,20 +948,15 @@ and_fundesc_opt:
 (* ========================================================================= *)
 
 fctbind:
-  | modid "(" modid COLON sig_expr ")" sigconstraint_opt EQUAL structure and_fctbind_opt {
-      FctBind (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3), bp $5 $startpos($5) $endpos($5), $7, bp $9 $startpos($9) $endpos($9), $10)
+  | fid=modid "(" pid=modid COLON psig=sig_expr ")" sign=option(pair(located(anotate), located(sig_expr))) EQUAL str=structure rest=option(preceded("and", located(fctbind))) {
+      FctBind (bp fid $startpos(fid) $endpos(fid), bp pid $startpos(pid) $endpos(pid), bp psig $startpos(psig) $endpos(psig), sign, bp str $startpos(str) $endpos(str), rest)
     }
-  | modid "(" specification ")" sigconstraint_opt EQUAL structure and_fctbind_opt {
-      FctBindOpen (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3), $5, bp $7 $startpos($7) $endpos($7), $8)
+  | fid=modid "(" spec=specification ")" sign=option(pair(located(anotate), located(sig_expr))) EQUAL str=structure rest=option(preceded("and", located(fctbind))) {
+      FctBindOpen (bp fid $startpos(fid) $endpos(fid), bp spec $startpos(spec) $endpos(spec), sign, bp str $startpos(str) $endpos(str), rest)
     }
-  | modid "(" ")" sigconstraint_opt EQUAL structure and_fctbind_opt {
-      FctGen (bp $1 $startpos($1) $endpos($1), $4, bp $6 $startpos($6) $endpos($6), $7)
+  | fid=modid "(" ")" sign=option(pair(located(anotate), located(sig_expr))) EQUAL str=structure rest=option(preceded("and", located(fctbind))) {
+      FctGen (bp fid $startpos(fid) $endpos(fid), sign, bp str $startpos(str) $endpos(str), rest)
     }
-;
-%inline
-and_fctbind_opt:
-  | "and" fctbind { Some (bp $2 $startpos($2) $endpos($2)) }
-  | { None }
 ;
 
 (* ========================================================================= *)
@@ -1031,29 +965,29 @@ and_fctbind_opt:
 
 (* Program that can be empty - used for final position *)
 program:
-  | dec_seq { (ProgDec (bp $1 $startpos($1) $endpos($1))) }
-  | "functor" fctbind { (ProgFun (bp $2 $startpos($2) $endpos($2))) }
-  | "signature" sigbind { (ProgStr (bp $2 $startpos($2) $endpos($2))) }
+  | decs=dec_seq { (ProgDec (bp decs $startpos(decs) $endpos(decs))) }
+  | "functor" bind=fctbind { (ProgFun (bp bind $startpos(bind) $endpos(bind))) }
+  | "signature" bind=sigbind { (ProgStr (bp bind $startpos(bind) $endpos(bind))) }
 ;
 
 (* Non-empty program - must start with a keyword *)
 nonempty_program:
-  | nonempty_dec_seq { (ProgDec (bp $1 $startpos($1) $endpos($1))) }
-  | "functor" fctbind { (ProgFun (bp $2 $startpos($2) $endpos($2))) }
-  | "signature" sigbind { (ProgStr (bp $2 $startpos($2) $endpos($2))) }
+  | decs=nonempty_dec_seq { (ProgDec (bp decs $startpos(decs) $endpos(decs))) }
+  | "functor" bind=fctbind { (ProgFun (bp bind $startpos(bind) $endpos(bind))) }
+  | "signature" bind=sigbind { (ProgStr (bp bind $startpos(bind) $endpos(bind))) }
 ;
 
 (* Program list - allows consecutive programs without semicolons *)
 (* Each non-final program must be non-empty to break the cycle *)
 program_list:
-  | nonempty_program SEMICOLON? program_list %prec PROGRAM_SEP { ProgSeq (b $1, b $3) }
+  | p1=nonempty_program SEMICOLON? p2=program_list %prec PROGRAM_SEP { ProgSeq (b p1, b p2) }
   (* | nonempty_program program_list { ProgSeq (b $1, b $2) } *)
-  | program { $1 }
+  | p=program { p }
   ;
 
 %inline
 file:
-  program_list { $1 }
+  plist=program_list { plist }
   ;
-main: 
-  | file EOF { ($1, $2) }
+main:
+  | f=file eof=EOF { (f, eof) }

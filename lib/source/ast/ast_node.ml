@@ -175,3 +175,8 @@ let box_node (v : 'a) : 'a node = { value = v; pos = None }
     @param n The node to unwrap
     @return The underlying AST value (constructor) *)
 let unbox_node (n : 'a node) : 'a = n.value
+
+let pp_node pp fmt (n : 'a node) = pp fmt n.value
+
+let map_node : f:('a -> 'b) -> 'a node -> 'b node =
+ fun ~f n -> { value = f n.value; pos = n.pos }

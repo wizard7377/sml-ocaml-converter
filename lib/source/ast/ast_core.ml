@@ -324,7 +324,7 @@ and constant =
           surrounding quotes, with escapes preserved.
 
           Examples: ["hello"], ["line1\\nline2"] *)
-
+  
 (** {2 Identifiers}
 
     {[
@@ -3832,3 +3832,7 @@ and pat_row =
             (* SML: x : int *)
             PatRowVar (x_id, Some int_typ, None, None)
           ]} *)
+
+let unwrap_op = function
+  | WithOp id -> id
+  | WithoutOp id -> id

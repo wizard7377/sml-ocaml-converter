@@ -67,9 +67,15 @@ class process ?(store = Context.create []) cfg_init =
             res
         | StdIn -> assert false
       with e ->
+        let err =
+          begin match e with
+          | Frontend.FrontendError msg -> msg
+          | _ -> Printexc.to_string e
+          end
+        in
         Log.log ~level:High ~kind:Negative
           ~msg:
-            (Printf.sprintf "%s in %s" (Printexc.to_string e)
+            (Printf.sprintf "%s in %s" err
                (match input with
                | File files -> String.concat ", " files
                | _ -> "standard input"))

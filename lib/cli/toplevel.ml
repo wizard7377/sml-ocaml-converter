@@ -205,6 +205,8 @@ let process_sml_files (input_path : path) (output_path : path)
 
   (failures, warnings, List.length res)
 
+type results = { failures : int; warnings : int; successes : int; total : int }
+
 let convert_group ~(input_dir : path) ~(output_dir : path)
     ~(options : Common.options) : int =
   (* Check if input and output are the same *)
@@ -253,10 +255,34 @@ let convert_group ~(input_dir : path) ~(output_dir : path)
   let failures, warnings, total =
     process_sml_files input_dir output_dir source_files_rel options
   in
-  let () =
-    Printf.printf
-      "Conversion complete: %d successes, %d warnings, %d failures %d total.\n"
-      (total - failures - warnings)
-      warnings failures total
+  let successes = total - failures - warnings in
+  let fmt_lines =
+    Fmt.concat ~sep:Fmt.nop (List.init 5 (fun _ -> Fmt.const Fmt.string "="))
   in
+  let results = { failures; warnings; successes; total } in
+  let title : Fmt.style list = Fmt.[ `Bold; `Underline ] in
+  let fmt =
+    Fmt.(
+      Fmt.vbox ~indent:2
+      @@ Fmt.concat ~sep:(Fmt.sps 1)
+           [
+             Fmt.nop;
+             Fmt.nop;
+             List.fold_right
+               (fun style acc -> Fmt.styled style acc)
+               title
+               (Fmt.const Fmt.string "CONVERSION RESULTS");
+             Fmt.using (fun r -> r.total) Fmt.int
+             ++ Fmt.const Fmt.string " files processed.";
+             Fmt.using (fun r -> r.successes) Fmt.int
+             ++ Fmt.const Fmt.string " successful conversions.";
+             Fmt.using (fun r -> r.warnings) Fmt.int
+             ++ Fmt.const Fmt.string " conversions with warnings.";
+             Fmt.using (fun r -> r.failures) Fmt.int
+             ++ Fmt.const Fmt.string " conversions failed.";
+             Fmt.nop;
+             Fmt.nop;
+           ])
+  in
+  let () = fmt Fmt.stderr results in
   if failures = 0 then 0 else 1

@@ -1,7 +1,7 @@
 (library
  (public_name shibboleth.ast)
  (name ast)
- (modules ast_node ast_cm ast_core ast)
- (libraries ppx_deriving)
+ (modules pretty ast_node ast_cm ast_core ast)
+ (libraries fmt ppx_deriving)
  (preprocess
   (pps ppx_deriving.show ppx_deriving.make ppx_deriving.eq ppx_deriving.ord)))

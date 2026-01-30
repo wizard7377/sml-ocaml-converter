@@ -1,5 +1,7 @@
 type 'a grammar
 
+exception FrontendError of string
+
 val expression_grammar : Ast.expression grammar
 val main_grammar : Ast.prog grammar
 val pat_grammar : Ast.pat grammar

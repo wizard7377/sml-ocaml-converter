@@ -80,6 +80,7 @@ let hexnum = hexdigit+
 (* Identifiers *)
 let alphanum_id = letter alphanumeric*
 let symbolic_id = symbolic+
+let any_id = alphanum_id | symbolic_id
 
 (* Type variables *)
 let tyvar = '\'' alphanumeric*
@@ -136,7 +137,7 @@ rule token = parse
   | ']'           { RBRACKET }
   | ','           { COMMA }
   | ';'           { SEMICOLON }
-  | "::"          { CONS }
+  | "::"           { CONS }
   | ":>"          { COLON_GT }
   | ':'           { COLON }
   | '='           { EQUAL }
