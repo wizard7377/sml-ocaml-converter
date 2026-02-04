@@ -2231,4 +2231,12 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     let structure = process_prog prog in
     let _ = labeller#destruct () in
     [ Parsetree.Ptop_def structure ]
+
+  (** Get all constructors from the registry for manifest generation *)
+  let get_all_constructors () : Constructor_registry.constructor_info list =
+    let constructors = ref [] in
+    Hashtbl.iter (fun _path info ->
+      constructors := info :: !constructors
+    ) Context.context.constructor_registry.qualified;
+    !constructors
 end

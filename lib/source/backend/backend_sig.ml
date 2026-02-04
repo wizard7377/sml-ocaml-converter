@@ -36,4 +36,5 @@ module type BACKEND = sig
   val process_dat_bind : Ast.data_binding -> Parsetree.type_declaration list
   val process_exn_bind : Ast.exn_bind -> Parsetree.extension_constructor list
   val process_prog : Ast.prog -> Parsetree.structure
+  val get_all_constructors : unit -> Constructor_registry.constructor_info list
 end
