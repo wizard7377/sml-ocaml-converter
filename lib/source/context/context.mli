@@ -12,3 +12,7 @@ val create : Info.t -> t
 
 val basis_context : t
 (** Basis context pre-populated with standard constructors *)
+
+val load_module_constructors : t -> module_name:string -> search_paths:string list -> bool
+(** Load constructor information from a module's manifest file.
+    Returns true if manifest was found and loaded, false otherwise. *)

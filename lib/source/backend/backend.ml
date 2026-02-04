@@ -527,6 +527,11 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                 List.fold_right
                   (fun (id : Ast.idx Ast.node) acc ->
                     let module_path = idx_to_name id.value in
+                    let module_name = String.concat "." module_path in
+                    (* Try to load module constructors from manifest *)
+                    let search_paths = ["."] in (* TODO: add configured include paths *)
+                    let _loaded = ContextLib.load_module_constructors
+                      Context.context ~module_name ~search_paths in
                     (* Bring constructors from module into unqualified scope *)
                     Constructor_registry.open_module
                       Context.context.constructor_registry
@@ -1988,6 +1993,11 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
             List.map
               (fun (id : Ast.idx Ast.node) ->
                 let module_path = idx_to_name id.value in
+                let module_name = String.concat "." module_path in
+                (* Try to load module constructors from manifest *)
+                let search_paths = ["."] in (* TODO: add configured include paths *)
+                let _loaded = ContextLib.load_module_constructors
+                  Context.context ~module_name ~search_paths in
                 (* Bring constructors from module into unqualified scope *)
                 Constructor_registry.open_module
                   Context.context.constructor_registry

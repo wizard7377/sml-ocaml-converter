@@ -41,3 +41,19 @@ let create info =
   { info; constructor_registry = registry }
 
 let basis_context = create Basis.basis_context
+
+let load_module_constructors context ~module_name ~search_paths =
+  (* Try manifest file first *)
+  match Constructor_manifest.find_manifest ~search_paths ~module_name with
+  | Some manifest_path ->
+      (try
+        let constructors = Constructor_manifest.read_file manifest_path in
+        List.iter (fun info ->
+          Constructor_registry.add_constructor context.constructor_registry
+            ~path:info.Constructor_registry.path
+            ~name:info.name
+            ~ocaml_name:info.ocaml_name
+        ) constructors;
+        true
+      with _ -> false)
+  | None -> false
