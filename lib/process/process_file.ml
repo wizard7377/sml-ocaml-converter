@@ -56,7 +56,7 @@ class process_file ?(store = Context.create (Context.Info.create [])) cfg_init =
           let manifest_path = output_path ^ ".shibboleth-constructors" in
           let constructors = Backend.get_all_constructors () in
           (try
-            Constructor_manifest.write_file manifest_path constructors;
+            Context.Constructor_manifest.write_file manifest_path constructors;
             Log.log_with ~cfg ~level:Low ~kind:Neutral
               ~msg:(Printf.sprintf "Wrote constructor manifest to %s" manifest_path) ()
           with e ->

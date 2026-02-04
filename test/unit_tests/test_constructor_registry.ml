@@ -1,33 +1,33 @@
 open Alcotest
 
 let test_add_and_lookup () =
-  let registry = Constructor_registry.create () in
-  Constructor_registry.add_constructor registry
+  let registry = Context.Constructor_registry.create () in
+  Context.Constructor_registry.add_constructor registry
     ~path:["SOME"] ~name:"SOME" ~ocaml_name:"Some";
 
-  let result = Constructor_registry.lookup registry ~path:None "SOME" in
+  let result = Context.Constructor_registry.lookup registry ~path:None "SOME" in
   check (option string) "lookup unqualified SOME"
-    (Some "Some") (Option.map (fun info -> info.Constructor_registry.ocaml_name) result)
+    (Some "Some") (Option.map (fun info -> info.Context.Constructor_registry.ocaml_name) result)
 
 let test_qualified_lookup () =
-  let registry = Constructor_registry.create () in
-  Constructor_registry.add_constructor registry
+  let registry = Context.Constructor_registry.create () in
+  Context.Constructor_registry.add_constructor registry
     ~path:["M"; "Cons"] ~name:"Cons" ~ocaml_name:"Cons_";
 
-  let result = Constructor_registry.lookup registry ~path:(Some ["M"]) "Cons" in
+  let result = Context.Constructor_registry.lookup registry ~path:(Some ["M"]) "Cons" in
   check (option string) "lookup M.Cons"
-    (Some "Cons_") (Option.map (fun info -> info.Constructor_registry.ocaml_name) result)
+    (Some "Cons_") (Option.map (fun info -> info.Context.Constructor_registry.ocaml_name) result)
 
 let test_open_module () =
-  let registry = Constructor_registry.create () in
-  Constructor_registry.add_constructor registry
+  let registry = Context.Constructor_registry.create () in
+  Context.Constructor_registry.add_constructor registry
     ~path:["M"; "Foo"] ~name:"Foo" ~ocaml_name:"Foo_";
 
-  Constructor_registry.open_module registry ~module_path:["M"];
+  Context.Constructor_registry.open_module registry ~module_path:["M"];
 
-  let result = Constructor_registry.lookup registry ~path:None "Foo" in
+  let result = Context.Constructor_registry.lookup registry ~path:None "Foo" in
   check (option string) "lookup Foo after open M"
-    (Some "Foo_") (Option.map (fun info -> info.Constructor_registry.ocaml_name) result)
+    (Some "Foo_") (Option.map (fun info -> info.Context.Constructor_registry.ocaml_name) result)
 
 let () =
   run "Constructor_registry" [
