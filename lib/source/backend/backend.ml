@@ -735,34 +735,79 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         | WithOp op ->
             let op_name = idx_to_name op.value in
             let op_str = idx_to_string op.value in
-            if (is_head || not (is_variable_identifier op_str)) then
-              let name_longident = build_longident op_name in
-              Builder.ppat_construct (ghost name_longident) None
-            else
-              let name_str = process_lowercase (name_to_string op_name) in
-              Builder.ppat_var (ghost name_str)
+            (* Extract module path if qualified *)
+            let qual_path =
+              if List.length op_name > 1 then
+                Some (List.rev (List.tl (List.rev op_name)))
+              else None
+            in
+            (* Try to look up as constructor *)
+            let lookup_result = Constructor_registry.lookup
+              Context.context.constructor_registry ~path:qual_path op_str in
+            (match lookup_result with
+            | Some ctor_info when is_head || not (is_variable_identifier op_str) ->
+                (* It's a constructor - use transformed name *)
+                let transformed_parts = match qual_path with
+                  | Some path -> path @ [ctor_info.Constructor_registry.ocaml_name]
+                  | None -> [ctor_info.ocaml_name]
+                in
+                let name_longident = build_longident transformed_parts in
+                Builder.ppat_construct (ghost name_longident) None
+            | _ ->
+                (* It's a variable - force lowercase *)
+                let name_str = Constructor_transform.transform_to_lowercase op_str in
+                Builder.ppat_var (ghost name_str))
         | WithoutOp id ->
             let id_name = idx_to_name id.value in
             let id_str = idx_to_string id.value in
-            if is_head || not (is_variable_identifier id_str) then
-              let name_longident = build_longident id_name in
-              Builder.ppat_construct (ghost name_longident) None
-            else
-              let name_str = process_lowercase (name_to_string id_name) in
-              Builder.ppat_var (ghost name_str))
+            (* Extract module path if qualified *)
+            let qual_path =
+              if List.length id_name > 1 then
+                Some (List.rev (List.tl (List.rev id_name)))
+              else None
+            in
+            (* Try to look up as constructor *)
+            let lookup_result = Constructor_registry.lookup
+              Context.context.constructor_registry ~path:qual_path id_str in
+            (match lookup_result with
+            | Some ctor_info when is_head || not (is_variable_identifier id_str) ->
+                (* It's a constructor - use transformed name *)
+                let transformed_parts = match qual_path with
+                  | Some path -> path @ [ctor_info.Constructor_registry.ocaml_name]
+                  | None -> [ctor_info.ocaml_name]
+                in
+                let name_longident = build_longident transformed_parts in
+                Builder.ppat_construct (ghost name_longident) None
+            | _ ->
+                (* It's a variable - force lowercase *)
+                let name_str = Constructor_transform.transform_to_lowercase id_str in
+                Builder.ppat_var (ghost name_str)))
     | PatApp (node, p) when pat_head_eq_ref node -> let loc = Ppxlib.Location.none in ([%pat? { contents = [%p process_pat ~is_arg ~is_head p] }])
     | PatApp (wo, p) ->
         (* Constructor application: SOME x *)
         let const_name = process_with_op wo.value in
         let arg_pat = process_pat p in
+        (* Look up constructor and use transformed name *)
+        let lookup_result = Constructor_registry.lookup
+          Context.context.constructor_registry ~path:None const_name in
+        let final_name = match lookup_result with
+          | Some ctor_info -> ctor_info.Constructor_registry.ocaml_name
+          | None -> const_name
+        in
         Builder.ppat_construct
-          (ghost (build_longident [ const_name ]))
+          (ghost (build_longident [ final_name ]))
           (Some arg_pat)
     | PatInfix (p1, id, p2) ->
         (* Infix constructor pattern: x :: xs *)
-        let op_longident =
-          build_longident (idx_to_name id.value)
+        let op_name = idx_to_string id.value in
+        (* Look up constructor and use transformed name *)
+        let lookup_result = Constructor_registry.lookup
+          Context.context.constructor_registry ~path:None op_name in
+        let final_name = match lookup_result with
+          | Some ctor_info -> ctor_info.Constructor_registry.ocaml_name
+          | None -> op_name
         in
+        let op_longident = build_longident [final_name] in
         let p1' = process_pat p1 in
         let p2' = process_pat p2 in
         Builder.ppat_construct (ghost op_longident)
