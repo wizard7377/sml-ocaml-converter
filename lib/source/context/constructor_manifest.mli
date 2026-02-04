@@ -1,7 +1,38 @@
-(** Manifest file I/O for constructor information *)
+(** Manifest file I/O for constructor information.
+
+    Manifest files (with .shibboleth-constructors extension) store constructor
+    transformation mappings in JSON format. These files enable cross-module
+    constructor resolution by recording all constructors defined in a module.
+
+    Manifest file format:
+    {[
+      [
+        {
+          "name": "ok",
+          "path": ["Result", "ok"],
+          "ocaml_name": "Ok_"
+        },
+        ...
+      ]
+    ]}
+
+    Usage pattern:
+    {[
+      (* Writing manifest after compilation *)
+      let constructors = Backend.get_all_constructors () in
+      write_file "output.ml.shibboleth-constructors" constructors;
+
+      (* Reading manifest to resolve imported constructors *)
+      let imported = read_file "imported.ml.shibboleth-constructors" in
+      List.iter (fun info ->
+        Constructor_registry.add_constructor registry
+          ~path:info.path ~name:info.name ~ocaml_name:info.ocaml_name
+      ) imported;
+    ]}
+*)
 
 val to_json : Constructor_registry.constructor_info list -> Yojson.Safe.t
-(** Convert constructor list to JSON *)
+(** Convert constructor list to JSON representation. *)
 
 val from_json : Yojson.Safe.t -> Constructor_registry.constructor_info list
 (** Parse constructor list from JSON *)
