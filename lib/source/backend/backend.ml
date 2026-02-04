@@ -93,6 +93,23 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   let current_path : string list ref = ref []
 
+  let push_module name =
+    current_path := !current_path @ [name]
+
+  let pop_module () =
+    match List.rev !current_path with
+    | _ :: rest -> current_path := List.rev rest
+    | [] -> ()
+
+  let register_constructor name =
+    let ocaml_name = Constructor_transform.transform_constructor name in
+    let full_path = !current_path @ [name] in
+    Constructor_registry.add_constructor
+      Context.context.constructor_registry
+      ~path:full_path
+      ~name
+      ~ocaml_name
+
   exception BadAst of (Lexing.position * Lexing.position) option * string
 
   let mkBadAst ?loc (msg : string) : exn = BadAst (loc, msg)
@@ -1208,6 +1225,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | ConBind (id, ty_opt, rest_opt) ->
         let original_name = idx_to_name id.value in
         let name_str = name_to_string original_name in
+        (* Register constructor in registry *)
+        register_constructor name_str;
         let args =
           match ty_opt with
           | None -> Parsetree.Pcstr_tuple []
@@ -1238,6 +1257,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | ExnBind (id, ty_opt, rest_opt) ->
         let original_name = idx_to_name id.value in
         let name_str = name_to_string original_name in
+        (* Register exception as constructor in registry *)
+        register_constructor name_str;
         let args =
           match ty_opt with
           | None -> Parsetree.Pcstr_tuple []
@@ -1256,6 +1277,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         let name1_str =
           name_to_string (idx_to_name id1.value)
         in
+        (* Register aliased exception as constructor *)
+        register_constructor name1_str;
         let longid2 =
           build_longident (idx_to_name id2.value)
         in
