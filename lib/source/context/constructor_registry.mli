@@ -1,9 +1,28 @@
-(** Constructor registry for tracking SML constructors across modules *)
+(** Constructor registry for tracking SML constructors across modules.
+
+    This module maintains a registry of all constructors encountered during
+    SML-to-OCaml compilation, enabling correct name resolution even when SML
+    uses lowercase constructor names (which are illegal in OCaml).
+
+    The registry supports:
+    - Qualified lookups: M.ok looks up constructor "ok" in module M
+    - Unqualified lookups: ok looks for constructors named "ok" in scope
+    - Open module handling: bringing module constructors into scope
+
+    Example usage:
+    {[
+      let registry = create () in
+      add_constructor registry ~path:["Result"; "ok"] ~name:"ok" ~ocaml_name:"Ok_";
+      match lookup registry ~path:None "ok" with
+      | Some info -> (* Found: info.ocaml_name = "Ok_" *)
+      | None -> (* Not found *)
+    ]}
+*)
 
 type constructor_info = {
-  name: string;         (** Original SML name *)
-  path: string list;    (** Module path including constructor name *)
-  ocaml_name: string;   (** Transformed OCaml name *)
+  name: string;         (** Original SML name (e.g., "ok") *)
+  path: string list;    (** Module path including constructor name (e.g., ["Result"; "ok"]) *)
+  ocaml_name: string;   (** Transformed OCaml name (e.g., "Ok_") *)
 }
 
 type t
