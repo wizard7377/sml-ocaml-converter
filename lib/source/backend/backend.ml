@@ -30,11 +30,13 @@ module Idx_utils = Idx_utils
 module Type_var_utils = Type_var_utils
 module Capital_utils = Capital_utils
 
-module Make (Context : CONTEXT) (Config : CONFIG) = struct
+module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
+  (* Alias to avoid shadowing the Context library module *)
+  module ContextLib = Context
   let config = Config.config
   let quoter = Ppxlib.Expansion_helpers.Quoter.create ()
-  let labeller = new Process_label.process_label config Context.lexbuf
-  let lexbuf = Context.lexbuf
+  let labeller = new Process_label.process_label config Ctx.lexbuf
+  let lexbuf = Ctx.lexbuf
   let current_temp : int ref = ref 0 
   let get_current_then (i : int) : int =
     let res = !current_temp in
@@ -105,7 +107,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     let ocaml_name = Constructor_transform.transform_constructor name in
     let full_path = !current_path @ [name] in
     Context.Constructor_registry.add_constructor
-      Context.context.constructor_registry
+      Ctx.context.constructor_registry
       ~path:full_path
       ~name
       ~ocaml_name
@@ -305,7 +307,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
             let idx_str = idx_to_string idx_node.value in
             (* Look up constructor in registry *)
             let lookup_result = Context.Constructor_registry.lookup
-              Context.context.constructor_registry ~path:None idx_str in
+              Ctx.context.constructor_registry ~path:None idx_str in
             (match lookup_result with
             | Some ctor_info ->
                 (* It's a constructor - use transformed name *)
@@ -335,7 +337,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         in
         (* Try to look up as constructor *)
         let lookup_result = Context.Constructor_registry.lookup
-          Context.context.constructor_registry ~path:qual_path simple_name in
+          Ctx.context.constructor_registry ~path:qual_path simple_name in
         (match lookup_result with
         | Some ctor_info ->
             (* Constructor reference - use transformed name *)
@@ -353,7 +355,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         let op_name = idx_to_string op.value in
         (* Look up constructor in registry for infix operators like :: *)
         let lookup_result = Context.Constructor_registry.lookup
-          Context.context.constructor_registry ~path:None op_name in
+          Ctx.context.constructor_registry ~path:None op_name in
         (match lookup_result with
         | Some ctor_info ->
             (* Infix constructor - use pexp_construct *)
@@ -531,10 +533,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                     (* Try to load module constructors from manifest *)
                     let search_paths = ["."] in (* TODO: add configured include paths *)
                     let _loaded = ContextLib.load_module_constructors
-                      Context.context ~module_name ~search_paths in
+                      Ctx.context ~module_name ~search_paths in
                     (* Bring constructors from module into unqualified scope *)
                     Context.Constructor_registry.open_module
-                      Context.context.constructor_registry
+                      Ctx.context.constructor_registry
                       ~module_path;
                     let longid = build_longident module_path in
                     let mod_expr = Builder.pmod_ident (ghost longid) in
@@ -786,7 +788,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
             in
             (* Try to look up as constructor *)
             let lookup_result = Context.Constructor_registry.lookup
-              Context.context.constructor_registry ~path:qual_path op_str in
+              Ctx.context.constructor_registry ~path:qual_path op_str in
             (match lookup_result with
             | Some ctor_info when is_head || not (is_variable_identifier op_str) ->
                 (* It's a constructor - use transformed name *)
@@ -811,7 +813,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
             in
             (* Try to look up as constructor *)
             let lookup_result = Context.Constructor_registry.lookup
-              Context.context.constructor_registry ~path:qual_path id_str in
+              Ctx.context.constructor_registry ~path:qual_path id_str in
             (match lookup_result with
             | Some ctor_info when is_head || not (is_variable_identifier id_str) ->
                 (* It's a constructor - use transformed name *)
@@ -832,7 +834,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         let arg_pat = process_pat p in
         (* Look up constructor and use transformed name *)
         let lookup_result = Context.Constructor_registry.lookup
-          Context.context.constructor_registry ~path:None const_name in
+          Ctx.context.constructor_registry ~path:None const_name in
         let final_name = match lookup_result with
           | Some ctor_info -> ctor_info.Context.Constructor_registry.ocaml_name
           | None -> const_name
@@ -845,7 +847,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         let op_name = idx_to_string id.value in
         (* Look up constructor and use transformed name *)
         let lookup_result = Context.Constructor_registry.lookup
-          Context.context.constructor_registry ~path:None op_name in
+          Ctx.context.constructor_registry ~path:None op_name in
         let final_name = match lookup_result with
           | Some ctor_info -> ctor_info.Context.Constructor_registry.ocaml_name
           | None -> op_name
@@ -2004,10 +2006,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                 (* Try to load module constructors from manifest *)
                 let search_paths = ["."] in (* TODO: add configured include paths *)
                 let _loaded = ContextLib.load_module_constructors
-                  Context.context ~module_name ~search_paths in
+                  Ctx.context ~module_name ~search_paths in
                 (* Bring constructors from module into unqualified scope *)
                 Context.Constructor_registry.open_module
-                  Context.context.constructor_registry
+                  Ctx.context.constructor_registry
                   ~module_path;
                 let longid = build_longident module_path in
                 let module_expr = Builder.pmod_ident (ghost longid) in
@@ -2251,9 +2253,5 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
 
   (** Get all constructors from the registry for manifest generation *)
   let get_all_constructors () : Context.Constructor_registry.constructor_info list =
-    let constructors = ref [] in
-    Hashtbl.iter (fun _path info ->
-      constructors := info :: !constructors
-    ) Context.context.constructor_registry.qualified;
-    !constructors
+    Context.Constructor_registry.get_all_constructors Ctx.context.constructor_registry
 end
