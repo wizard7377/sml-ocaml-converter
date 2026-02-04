@@ -526,9 +526,12 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                 (* Process open declarations from right to left to maintain proper scoping *)
                 List.fold_right
                   (fun (id : Ast.idx Ast.node) acc ->
-                    let longid =
-                      build_longident (idx_to_name id.value)
-                    in
+                    let module_path = idx_to_name id.value in
+                    (* Bring constructors from module into unqualified scope *)
+                    Constructor_registry.open_module
+                      Context.context.constructor_registry
+                      ~module_path;
+                    let longid = build_longident module_path in
                     let mod_expr = Builder.pmod_ident (ghost longid) in
                     let open_infos =
                       Builder.open_infos ~override:Asttypes.Fresh ~expr:mod_expr
@@ -1984,9 +1987,12 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         | OpenDec ids ->
             List.map
               (fun (id : Ast.idx Ast.node) ->
-                let longid =
-                  build_longident (idx_to_name id.value)
-                in
+                let module_path = idx_to_name id.value in
+                (* Bring constructors from module into unqualified scope *)
+                Constructor_registry.open_module
+                  Context.context.constructor_registry
+                  ~module_path;
+                let longid = build_longident module_path in
                 let module_expr = Builder.pmod_ident (ghost longid) in
                 let open_info =
                   labeller#cite Helpers.Attr.open_infos id.pos
