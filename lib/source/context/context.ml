@@ -40,6 +40,26 @@ let create info =
 
   { info; constructor_registry = registry }
 
+let merge t1 t2 =
+  (* Merge info *)
+  let merged_info = Info.merge t1.info t2.info in
+  (* Create new context with merged info *)
+  let merged_ctx = create merged_info in
+  (* Copy constructors from both registries into the merged one *)
+  Hashtbl.iter (fun path info ->
+    Constructor_registry.add_constructor merged_ctx.constructor_registry
+      ~path:info.Constructor_registry.path
+      ~name:info.name
+      ~ocaml_name:info.ocaml_name
+  ) t1.constructor_registry.qualified;
+  Hashtbl.iter (fun path info ->
+    Constructor_registry.add_constructor merged_ctx.constructor_registry
+      ~path:info.Constructor_registry.path
+      ~name:info.name
+      ~ocaml_name:info.ocaml_name
+  ) t2.constructor_registry.qualified;
+  merged_ctx
+
 let basis_context = create Basis.basis_context
 
 let load_module_constructors context ~module_name ~search_paths =

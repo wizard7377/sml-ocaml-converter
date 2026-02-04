@@ -10,6 +10,9 @@ type t = {
 val create : Info.t -> t
 (** Create a context with the given info and an initialized constructor registry *)
 
+val merge : t -> t -> t
+(** Merge two contexts, combining both info and constructor registries *)
+
 val basis_context : t
 (** Basis context pre-populated with standard constructors *)
 
