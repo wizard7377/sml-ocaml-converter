@@ -303,16 +303,20 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         | (ExpIdx idx_node, TupleExp args) -> (
             let idx_name = idx_to_name idx_node.value in
             let idx_str = idx_to_string idx_node.value in
-            (* If it looks like a constructor (not lowercase variable), use pexp_construct *)
-            if not (is_variable_identifier idx_str) then
-              let name_longident = build_longident idx_name in
-              let arg_tuple = Builder.pexp_tuple (List.map process_exp args) in
-              Builder.pexp_construct (ghost name_longident) (Some arg_tuple)
-            else
-              (* Variable applied to tuple - use regular application *)
-              let e1' = process_exp e1 in
-              let e2' = Builder.pexp_tuple (List.map process_exp args) in
-              Builder.pexp_apply e1' [ (Nolabel, e2') ]
+            (* Look up constructor in registry *)
+            let lookup_result = Constructor_registry.lookup
+              Context.context.constructor_registry ~path:None idx_str in
+            (match lookup_result with
+            | Some ctor_info ->
+                (* It's a constructor - use transformed name *)
+                let name_longident = build_longident [ctor_info.Constructor_registry.ocaml_name] in
+                let arg_tuple = Builder.pexp_tuple (List.map process_exp args) in
+                Builder.pexp_construct (ghost name_longident) (Some arg_tuple)
+            | None ->
+                (* Variable applied to tuple - use regular application *)
+                let e1' = process_exp e1 in
+                let e2' = Builder.pexp_tuple (List.map process_exp args) in
+                Builder.pexp_apply e1' [ (Nolabel, e2') ])
           )
         | _ ->
             (* Regular application *)
@@ -322,15 +326,46 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
       )
     | ExpIdx idx ->
         let scoped_name = idx_to_name idx.value in
-        let name_longident = build_longident scoped_name in
-        Builder.pexp_ident (ghost name_longident)
-    | InfixApp (e1, op, e2) ->
-        let op_longident =
-          build_longident (idx_to_name op.value)
+        let simple_name = name_to_string scoped_name in
+        (* Extract module path if qualified *)
+        let qual_path =
+          if List.length scoped_name > 1 then
+            Some (List.rev (List.tl (List.rev scoped_name)))
+          else None
         in
-        Builder.pexp_apply
-          (Builder.pexp_ident (ghost op_longident))
-          [ (Nolabel, process_exp e1); (Nolabel, process_exp e2) ]
+        (* Try to look up as constructor *)
+        let lookup_result = Constructor_registry.lookup
+          Context.context.constructor_registry ~path:qual_path simple_name in
+        (match lookup_result with
+        | Some ctor_info ->
+            (* Constructor reference - use transformed name *)
+            let transformed_parts = match qual_path with
+              | Some path -> path @ [ctor_info.Constructor_registry.ocaml_name]
+              | None -> [ctor_info.ocaml_name]
+            in
+            let name_longident = build_longident transformed_parts in
+            Builder.pexp_construct (ghost name_longident) None
+        | None ->
+            (* Value reference - use original logic *)
+            let name_longident = build_longident scoped_name in
+            Builder.pexp_ident (ghost name_longident))
+    | InfixApp (e1, op, e2) ->
+        let op_name = idx_to_string op.value in
+        (* Look up constructor in registry for infix operators like :: *)
+        let lookup_result = Constructor_registry.lookup
+          Context.context.constructor_registry ~path:None op_name in
+        (match lookup_result with
+        | Some ctor_info ->
+            (* Infix constructor - use pexp_construct *)
+            let name_longident = build_longident [ctor_info.Constructor_registry.ocaml_name] in
+            let tuple = Builder.pexp_tuple [process_exp e1; process_exp e2] in
+            Builder.pexp_construct (ghost name_longident) (Some tuple)
+        | None ->
+            (* Regular infix operator *)
+            let op_longident = build_longident (idx_to_name op.value) in
+            Builder.pexp_apply
+              (Builder.pexp_ident (ghost op_longident))
+              [ (Nolabel, process_exp e1); (Nolabel, process_exp e2) ])
     | ParenExp e -> process_exp e
     | TupleExp [] ->
         Builder.pexp_construct (ghost (Ppxlib.Longident.Lident "()")) None
