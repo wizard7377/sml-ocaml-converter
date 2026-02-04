@@ -20,3 +20,6 @@ val lookup : t -> path:string list option -> string -> constructor_info option
 
 val open_module : t -> module_path:string list -> unit
 (** Bring all constructors from a module into unqualified scope *)
+
+val get_all_constructors : t -> constructor_info list
+(** Get all constructors from the registry *)

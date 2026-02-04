@@ -1,6 +1,8 @@
 module Info = Info
 module Basis = Basis
 module Get_context = Get_context
+module Constructor_registry = Constructor_registry
+module Constructor_manifest = Constructor_manifest
 
 type t = {
   info : Info.t;

@@ -51,3 +51,10 @@ let open_module registry ~module_path =
       let existing = Hashtbl.find_opt registry.unqualified info.name |> Option.value ~default:[] in
       Hashtbl.replace registry.unqualified info.name (info :: existing)
   ) registry.qualified
+
+let get_all_constructors registry =
+  let constructors = ref [] in
+  Hashtbl.iter (fun _path info ->
+    constructors := info :: !constructors
+  ) registry.qualified;
+  !constructors

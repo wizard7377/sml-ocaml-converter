@@ -448,9 +448,9 @@ class process_ocaml ~(opts : Common.options) =
     method! constructor_declaration ctx cd =
       Log.log_with ~cfg:config ~level:Debug ~kind:Neutral
         ~msg:("Processing constructor declaration: " ^ cd.pcd_name.txt) ();
-      let new_name = self#process_identifier InConstructorDecl cd.pcd_name.txt in
-      let new_cd = super#constructor_declaration ctx cd in
-      { new_cd with pcd_name = { cd.pcd_name with txt = new_name } }
+      (* Backend has already applied constructor transformations via registry,
+         so preserve the name as-is instead of re-processing *)
+      super#constructor_declaration ctx cd
 
     (** Override label declaration (record fields) *)
     method! label_declaration ctx ld =

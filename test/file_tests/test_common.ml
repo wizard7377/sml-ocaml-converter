@@ -24,7 +24,7 @@ end
 
 module TestStore (* TODO *) = struct
   let lexbuf = ""
-  let context = Context.create []
+  let context = Context.create (Context.Info.create [])
 end
 
 (** Instantiate Backend with test config *)
@@ -34,7 +34,7 @@ end) =
   Backend.Make
     (struct
       let lexbuf = Ctx.lexbuf
-      let context = Context.create []
+      let context = Context.create (Context.Info.create [])
     end)
     (TestConfig)
 

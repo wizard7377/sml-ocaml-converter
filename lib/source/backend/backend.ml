@@ -104,7 +104,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
   let register_constructor name =
     let ocaml_name = Constructor_transform.transform_constructor name in
     let full_path = !current_path @ [name] in
-    Constructor_registry.add_constructor
+    Context.Constructor_registry.add_constructor
       Context.context.constructor_registry
       ~path:full_path
       ~name
@@ -304,12 +304,12 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
             let idx_name = idx_to_name idx_node.value in
             let idx_str = idx_to_string idx_node.value in
             (* Look up constructor in registry *)
-            let lookup_result = Constructor_registry.lookup
+            let lookup_result = Context.Constructor_registry.lookup
               Context.context.constructor_registry ~path:None idx_str in
             (match lookup_result with
             | Some ctor_info ->
                 (* It's a constructor - use transformed name *)
-                let name_longident = build_longident [ctor_info.Constructor_registry.ocaml_name] in
+                let name_longident = build_longident [ctor_info.Context.Constructor_registry.ocaml_name] in
                 let arg_tuple = Builder.pexp_tuple (List.map process_exp args) in
                 Builder.pexp_construct (ghost name_longident) (Some arg_tuple)
             | None ->
@@ -334,13 +334,13 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
           else None
         in
         (* Try to look up as constructor *)
-        let lookup_result = Constructor_registry.lookup
+        let lookup_result = Context.Constructor_registry.lookup
           Context.context.constructor_registry ~path:qual_path simple_name in
         (match lookup_result with
         | Some ctor_info ->
             (* Constructor reference - use transformed name *)
             let transformed_parts = match qual_path with
-              | Some path -> path @ [ctor_info.Constructor_registry.ocaml_name]
+              | Some path -> path @ [ctor_info.Context.Constructor_registry.ocaml_name]
               | None -> [ctor_info.ocaml_name]
             in
             let name_longident = build_longident transformed_parts in
@@ -352,12 +352,12 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     | InfixApp (e1, op, e2) ->
         let op_name = idx_to_string op.value in
         (* Look up constructor in registry for infix operators like :: *)
-        let lookup_result = Constructor_registry.lookup
+        let lookup_result = Context.Constructor_registry.lookup
           Context.context.constructor_registry ~path:None op_name in
         (match lookup_result with
         | Some ctor_info ->
             (* Infix constructor - use pexp_construct *)
-            let name_longident = build_longident [ctor_info.Constructor_registry.ocaml_name] in
+            let name_longident = build_longident [ctor_info.Context.Constructor_registry.ocaml_name] in
             let tuple = Builder.pexp_tuple [process_exp e1; process_exp e2] in
             Builder.pexp_construct (ghost name_longident) (Some tuple)
         | None ->
@@ -533,7 +533,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                     let _loaded = ContextLib.load_module_constructors
                       Context.context ~module_name ~search_paths in
                     (* Bring constructors from module into unqualified scope *)
-                    Constructor_registry.open_module
+                    Context.Constructor_registry.open_module
                       Context.context.constructor_registry
                       ~module_path;
                     let longid = build_longident module_path in
@@ -785,13 +785,13 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
               else None
             in
             (* Try to look up as constructor *)
-            let lookup_result = Constructor_registry.lookup
+            let lookup_result = Context.Constructor_registry.lookup
               Context.context.constructor_registry ~path:qual_path op_str in
             (match lookup_result with
             | Some ctor_info when is_head || not (is_variable_identifier op_str) ->
                 (* It's a constructor - use transformed name *)
                 let transformed_parts = match qual_path with
-                  | Some path -> path @ [ctor_info.Constructor_registry.ocaml_name]
+                  | Some path -> path @ [ctor_info.Context.Constructor_registry.ocaml_name]
                   | None -> [ctor_info.ocaml_name]
                 in
                 let name_longident = build_longident transformed_parts in
@@ -810,13 +810,13 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
               else None
             in
             (* Try to look up as constructor *)
-            let lookup_result = Constructor_registry.lookup
+            let lookup_result = Context.Constructor_registry.lookup
               Context.context.constructor_registry ~path:qual_path id_str in
             (match lookup_result with
             | Some ctor_info when is_head || not (is_variable_identifier id_str) ->
                 (* It's a constructor - use transformed name *)
                 let transformed_parts = match qual_path with
-                  | Some path -> path @ [ctor_info.Constructor_registry.ocaml_name]
+                  | Some path -> path @ [ctor_info.Context.Constructor_registry.ocaml_name]
                   | None -> [ctor_info.ocaml_name]
                 in
                 let name_longident = build_longident transformed_parts in
@@ -831,10 +831,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         let const_name = process_with_op wo.value in
         let arg_pat = process_pat p in
         (* Look up constructor and use transformed name *)
-        let lookup_result = Constructor_registry.lookup
+        let lookup_result = Context.Constructor_registry.lookup
           Context.context.constructor_registry ~path:None const_name in
         let final_name = match lookup_result with
-          | Some ctor_info -> ctor_info.Constructor_registry.ocaml_name
+          | Some ctor_info -> ctor_info.Context.Constructor_registry.ocaml_name
           | None -> const_name
         in
         Builder.ppat_construct
@@ -844,10 +844,10 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         (* Infix constructor pattern: x :: xs *)
         let op_name = idx_to_string id.value in
         (* Look up constructor and use transformed name *)
-        let lookup_result = Constructor_registry.lookup
+        let lookup_result = Context.Constructor_registry.lookup
           Context.context.constructor_registry ~path:None op_name in
         let final_name = match lookup_result with
-          | Some ctor_info -> ctor_info.Constructor_registry.ocaml_name
+          | Some ctor_info -> ctor_info.Context.Constructor_registry.ocaml_name
           | None -> op_name
         in
         let op_longident = build_longident [final_name] in
@@ -1315,6 +1315,9 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         let name_str = name_to_string original_name in
         (* Register constructor in registry *)
         register_constructor name_str;
+        (* Use transformed name for constructor declaration *)
+        let transformed_name = Constructor_transform.transform_constructor name_str in
+        Printf.eprintf "DEBUG: Constructor '%s' -> '%s'\n%!" name_str transformed_name;
         let args =
           match ty_opt with
           | None -> Parsetree.Pcstr_tuple []
@@ -1322,7 +1325,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         in
         let cdecl =
           labeller#cite Helpers.Attr.constructor_declaration id.pos
-            (Builder.constructor_declaration ~name:(ghost name_str) ~args
+            (Builder.constructor_declaration ~name:(ghost transformed_name) ~args
                ~res:None)
         in
         let rest =
@@ -1347,6 +1350,8 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         let name_str = name_to_string original_name in
         (* Register exception as constructor in registry *)
         register_constructor name_str;
+        (* Use transformed name for exception declaration *)
+        let transformed_name = Constructor_transform.transform_constructor name_str in
         let args =
           match ty_opt with
           | None -> Parsetree.Pcstr_tuple []
@@ -1354,7 +1359,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
         in
         let ext_constr =
           labeller#cite Helpers.Attr.exception_constructor id.pos
-            (Builder.extension_constructor ~name:(ghost name_str)
+            (Builder.extension_constructor ~name:(ghost transformed_name)
                ~kind:(Parsetree.Pext_decl ([], args, None)))
         in
         let rest =
@@ -1941,7 +1946,9 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
             let tdecls = process_typ_bind tb.value in
             [ Builder.pstr_type Asttypes.Nonrecursive tdecls ]
         | DatDec (db, tb_opt) -> (
+            Printf.eprintf "DEBUG: Processing DatDec\n%!";
             let tdecls = process_dat_bind db.value in
+            Printf.eprintf "DEBUG: After process_dat_bind, got %d type decls\n%!" (List.length tdecls);
             let type_item = Builder.pstr_type Asttypes.Recursive tdecls in
             match tb_opt with
             | None -> [ type_item ]
@@ -1999,7 +2006,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
                 let _loaded = ContextLib.load_module_constructors
                   Context.context ~module_name ~search_paths in
                 (* Bring constructors from module into unqualified scope *)
-                Constructor_registry.open_module
+                Context.Constructor_registry.open_module
                   Context.context.constructor_registry
                   ~module_path;
                 let longid = build_longident module_path in
@@ -2243,7 +2250,7 @@ module Make (Context : CONTEXT) (Config : CONFIG) = struct
     [ Parsetree.Ptop_def structure ]
 
   (** Get all constructors from the registry for manifest generation *)
-  let get_all_constructors () : Constructor_registry.constructor_info list =
+  let get_all_constructors () : Context.Constructor_registry.constructor_info list =
     let constructors = ref [] in
     Hashtbl.iter (fun _path info ->
       constructors := info :: !constructors

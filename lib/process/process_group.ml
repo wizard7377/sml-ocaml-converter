@@ -12,7 +12,7 @@ type t = {
 class process_group path cfg_init =
   object (self)
     val mutable cfg = cfg_init
-    val mutable store : Context.t = Context.create []
+    val mutable store : Context.t = Context.create (Context.Info.create [])
     val mutable path : string = path
 
     val mutable members : t =

@@ -8,7 +8,7 @@ module Log = Common.Make (struct
   let group = "process_file"
 end)
 
-class process_file ?(store = Context.create []) cfg_init =
+class process_file ?(store = Context.create (Context.Info.create [])) cfg_init =
   object (self)
     val mutable cfg = cfg_init
     val mutable store = store
@@ -33,7 +33,7 @@ class process_file ?(store = Context.create []) cfg_init =
     method convert_to_ocaml (sml : sml_code) : ocaml_code =
       Log.log_with ~cfg ~level:Low ~kind:Neutral
         ~msg:"Starting conversion from SML to OCaml..." ();
-      let ctx = Context.create [] in
+      let ctx = Context.create (Context.Info.create []) in
       Log.log_with ~cfg ~level:Debug ~kind:Neutral
         ~msg:"Building initial context..." ();
       let ctx0 = Context.merge ctx (self#get_store ()) in

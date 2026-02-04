@@ -10,7 +10,7 @@ module Log = Common.Make (struct
   let group = "process"
 end)
 
-class process ?(store = Context.create []) cfg_init =
+class process ?(store = Context.create (Context.Info.create [])) cfg_init =
   object (self)
     val mutable cfg : options = cfg_init
     val mutable store : Context.t = store

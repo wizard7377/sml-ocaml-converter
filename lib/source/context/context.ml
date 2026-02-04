@@ -1,6 +1,8 @@
 module Info = Info
 module Basis = Basis
 module Get_context = Get_context
+module Constructor_registry = Constructor_registry
+module Constructor_manifest = Constructor_manifest
 
 type t = {
   info : Info.t;
@@ -46,18 +48,20 @@ let merge t1 t2 =
   (* Create new context with merged info *)
   let merged_ctx = create merged_info in
   (* Copy constructors from both registries into the merged one *)
-  Hashtbl.iter (fun path info ->
+  let constructors1 = Constructor_registry.get_all_constructors t1.constructor_registry in
+  let constructors2 = Constructor_registry.get_all_constructors t2.constructor_registry in
+  List.iter (fun info ->
     Constructor_registry.add_constructor merged_ctx.constructor_registry
       ~path:info.Constructor_registry.path
       ~name:info.name
       ~ocaml_name:info.ocaml_name
-  ) t1.constructor_registry.qualified;
-  Hashtbl.iter (fun path info ->
+  ) constructors1;
+  List.iter (fun info ->
     Constructor_registry.add_constructor merged_ctx.constructor_registry
       ~path:info.Constructor_registry.path
       ~name:info.name
       ~ocaml_name:info.ocaml_name
-  ) t2.constructor_registry.qualified;
+  ) constructors2;
   merged_ctx
 
 let basis_context = create Basis.basis_context

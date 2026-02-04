@@ -28,6 +28,7 @@ depends: [
   "re"
   "ez_file"
   "fmt"
+  "yojson" {>= "2.0.0"}
   "odoc" {with-doc}
 ]
 build: [
