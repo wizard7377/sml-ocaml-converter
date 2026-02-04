@@ -42,6 +42,8 @@
   containers
   re
   ez_file
-  fmt)
+  fmt
+  (yojson
+   (>= 2.0.0)))
  (tags
   (ocaml sml)))
