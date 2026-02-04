@@ -1319,7 +1319,6 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
         register_constructor name_str;
         (* Use transformed name for constructor declaration *)
         let transformed_name = Constructor_transform.transform_constructor name_str in
-        Printf.eprintf "DEBUG: Constructor '%s' -> '%s'\n%!" name_str transformed_name;
         let args =
           match ty_opt with
           | None -> Parsetree.Pcstr_tuple []
@@ -1948,9 +1947,7 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
             let tdecls = process_typ_bind tb.value in
             [ Builder.pstr_type Asttypes.Nonrecursive tdecls ]
         | DatDec (db, tb_opt) -> (
-            Printf.eprintf "DEBUG: Processing DatDec\n%!";
             let tdecls = process_dat_bind db.value in
-            Printf.eprintf "DEBUG: After process_dat_bind, got %d type decls\n%!" (List.length tdecls);
             let type_item = Builder.pstr_type Asttypes.Recursive tdecls in
             match tb_opt with
             | None -> [ type_item ]
