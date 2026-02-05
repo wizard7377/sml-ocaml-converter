@@ -9,14 +9,9 @@ let print_error ~(err : Syntaxerr.error) : string =
   Format.pp_print_flush fmt ();
   Buffer.contents buffer
 
-let display_error_context ?(context = 4) (filename : string)
+let display_error_context_lines ?(context = 4) (file_content : string list)
     (p0 : Lexing.position) (p1 : Lexing.position) =
-  let path' = Filename.current_dir_name ^ "/" ^ filename in
-  let file_content =
-    try Bos.OS.File.read_lines (Fpath.v path') |> Result.get_ok with _ -> []
-  in
   let start_line = max 1 (p0.pos_lnum - context) in
-
   let max_line = List.length file_content - 1 in
   let end_line = min max_line (p1.pos_lnum + context) in
   let contents =
@@ -30,8 +25,20 @@ let display_error_context ?(context = 4) (filename : string)
         else Printf.sprintf "   %4d | %s" line_no line)
       contents
   in
-  let contents1 = String.concat "\n" contents0 in
-  contents1
+  String.concat "\n" contents0
+
+let display_error_context ?(context = 4) (filename : string)
+    (p0 : Lexing.position) (p1 : Lexing.position) =
+  let path' = Filename.current_dir_name ^ "/" ^ filename in
+  let file_content =
+    try Bos.OS.File.read_lines (Fpath.v path') |> Result.get_ok with _ -> []
+  in
+  display_error_context_lines ~context file_content p0 p1
+
+let display_error_context_from_string ?(context = 4) (_filename : string)
+    (content : string) (p0 : Lexing.position) (p1 : Lexing.position) =
+  let file_content = String.split_on_char '\n' content in
+  display_error_context_lines ~context file_content p0 p1
 
 let get_output_file (config : Common.options) : string =
   match Common.get_output_file config with
@@ -58,25 +65,35 @@ let check_output ~(config : Common.options)
     Good
   with
   | Syntaxerr.Error e ->
-      let file =
+      let source_files =
         match Common.get_input_file config with
-        | Common.File path -> String.concat " , " path ^ " "
+        | Common.File path -> String.concat " , " path
         | Common.StdIn -> "standard input"
       in
       let loc = Syntaxerr.location_of_error e in
+      (* Show context from the generated output, using the actual output_file path *)
       let file_content =
-        display_error_context loc.loc_start.pos_fname loc.loc_start loc.loc_end
+        display_error_context_from_string output_file input loc.loc_start loc.loc_end
       in
-      let msg = file ^ print_error ~err:e ^ "\n\n" ^ file_content in
+      let msg = Printf.sprintf "Source: %s\nGenerated: %s\n%s\n\n%s"
+        source_files
+        output_file
+        (print_error ~err:e)
+        file_content
+      in
       Log.log ~level:High ~kind:Warning ~msg ();
       Bad e
-  | Lexer.Error (e, warn) ->
-      let file =
+  | Lexer.Error (_e, warn) ->
+      let source_files =
         match Common.get_input_file config with
-        | Common.File path -> String.concat " , " path ^ " "
+        | Common.File path -> String.concat " , " path
         | Common.StdIn -> "standard input"
       in
-      let msg = "Error in file " ^ file in
+      let msg = Printf.sprintf "Source: %s\nGenerated: %s\nLexer error: %s"
+        source_files
+        output_file
+        (Location.print_loc Format.str_formatter warn; Format.flush_str_formatter ())
+      in
       Log.log ~level:High ~kind:Warning ~msg ();
       Bad (Syntaxerr.Other warn)
   | e ->

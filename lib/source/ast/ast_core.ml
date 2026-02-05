@@ -559,173 +559,68 @@ and expression =
           ]}
 
           @see idx Identifier types
-          @see ExpApp Function application
-          @see InfixApp Infix operator usage *)
+          @see ExpApp Function application *)
   | ExpApp of expression node list
-      (** Function application - applying a function to an argument.
+      (** Flat juxtaposition sequence - function application and infix operators.
 
-          Applies the function (first expression) to the argument (second expression).
-          SML uses left-associative application, so [f x y] parses as [(f x) y].
-          Multi-argument functions are either curried or use tuple arguments.
+          Represents a flat sequence of expressions that can contain mixed values,
+          functions, and operators. The parser produces these flat sequences, and
+          the backend's precedence resolver restructures them according to operator
+          precedence rules.
 
           {3 SML Syntax}
 
           {v
-            expression ::= exp1 exp2    (* left-associative function application *)
+            expression ::= exp1 exp2 ... expn   (* juxtaposition *)
           v}
 
           {3 Examples}
 
           {[
-            (* SML: f x  -- simple application *)
-            ExpApp (
-              box_node (ExpIdx (box_node (IdxIdx (box_node "f")))),
-              box_node (ExpIdx (box_node (IdxIdx (box_node "x"))))
-            )
+            (* SML: f x y  -- function application *)
+            ExpApp [f; x; y]
+            (* → Resolved to: (f x) y *)
 
-            (* SML: f x y  -- curried application: (f x) y *)
-            ExpApp (
-              box_node (ExpApp (
-                box_node (ExpIdx (box_node (IdxIdx (box_node "f")))),
-                box_node (ExpIdx (box_node (IdxIdx (box_node "x"))))
-              )),
-              box_node (ExpIdx (box_node (IdxIdx (box_node "y"))))
-            )
+            (* SML: x + y  -- infix operator *)
+            ExpApp [x; +; y]
+            (* → Resolved to: (+) x y *)
 
-            (* SML: SOME 42  -- constructor application *)
-            ExpApp (
-              box_node (ExpIdx (box_node (IdxIdx (box_node "SOME")))),
-              box_node (ExpCon (box_node (ConInt (box_node "42"))))
-            )
+            (* SML: f x + g y z  -- mixed application and operators *)
+            ExpApp [f; x; +; g; y; z]
+            (* → Resolved to: (f x) + ((g y) z) *)
 
-            (* SML: (fn x => x + 1) 5  -- applying anonymous function *)
-            ExpApp (
-              box_node (FnExp (box_node (Case (x_pat, x_plus_1, None)))),
-              box_node (ExpCon (box_node (ConInt (box_node "5"))))
-            )
+            (* SML: 1 + 2 * 3  -- operator precedence *)
+            ExpApp [1; +; 2; *; 3]
+            (* → Resolved to: 1 + (2 * 3) *)
 
-            (* SML: length [1,2,3]  -- list argument *)
-            ExpApp (
-              box_node (ExpIdx (box_node (IdxIdx (box_node "length")))),
-              box_node (ListExp [one; two; three])
-            )
+            (* SML: x :: y :: z  -- right-associative operator *)
+            ExpApp [x; ::; y; ::; z]
+            (* → Resolved to: x :: (y :: z) *)
           ]}
 
-          {3 Semantics}
+          {3 Precedence Resolution}
 
-          - Left expression must evaluate to a function value
-          - Right expression (argument) is evaluated first
-          - Then function is applied to the argument value
-          - Raises exception if left side is not a function
-          - Order of evaluation: argument before function application
+          The backend applies the following rules:
+          - Finds operators using heuristics (symbolic characters)
+          - Splits at lowest-precedence operator (respecting associativity)
+          - Left-associative: [a + b - c] splits at rightmost [+] or [-]
+          - Right-associative: [a :: b :: c] splits at leftmost [::]
+          - Pure application (no operators): [f x y] → left-associative
+          - Single item: [x] → just [x]
 
-          {3 Associativity}
+          {3 Operator Precedence Table}
 
-          Application is {b left-associative}:
-          {[
-            (* SML: f x y z  parses as  ((f x) y) z *)
-            ExpApp (
-              ExpApp (
-                ExpApp (f, x),
-                y
-              ),
-              z
-            )
-          ]}
-
-          This enables currying - partial application of multi-argument functions.
+          Standard SML precedence (higher binds tighter):
+          - Level 7: [*], [/], [div], [mod]
+          - Level 6: [+], [-], [^]
+          - Level 5: [::], [@] (right-associative)
+          - Level 4: [=], [<>], [<], [>], [<=], [>=]
+          - Level 3: [:=], [o]
+          - Level 0: [before]
 
           @see FnExp Anonymous functions
-          @see InfixApp Infix operator application
-          @see ExpIdx Variable and constructor references *)
-  | InfixApp of expression node * idx node * expression node
-      (** Infix operator application - binary operator usage.
-
-          Applies an infix operator to two operand expressions. The operator
-          must be declared [infix] or [infixr] with a precedence (0-9).
-          The parser resolves precedence and associativity to build the correct
-          AST structure.
-
-          {3 SML Syntax}
-
-          {v
-            expression ::= exp1 id exp2    (* id must be declared infix *)
-          v}
-
-          {3 Examples}
-
-          {[
-            (* SML: 1 + 2  -- arithmetic operator *)
-            InfixApp (
-              box_node (ExpCon (box_node (ConInt (box_node "1")))),
-              box_node (IdxIdx (box_node "+")),
-              box_node (ExpCon (box_node (ConInt (box_node "2"))))
-            )
-
-            (* SML: x :: xs  -- cons operator *)
-            InfixApp (
-              box_node (ExpIdx (box_node (IdxIdx (box_node "x")))),
-              box_node (IdxIdx (box_node "::")),
-              box_node (ExpIdx (box_node (IdxIdx (box_node "xs"))))
-            )
-
-            (* SML: a andalso b  -- boolean operator *)
-            (* Note: andalso/orelse have dedicated constructors *)
-
-            (* SML: name ^ " world"  -- string concatenation *)
-            InfixApp (
-              box_node (ExpIdx (box_node (IdxIdx (box_node "name")))),
-              box_node (IdxIdx (box_node "^")),
-              box_node (ExpCon (box_node (ConString (box_node " world"))))
-            )
-
-            (* SML: 1 + 2 * 3  -- precedence: parses as 1 + (2 * 3) *)
-            InfixApp (
-              box_node (ExpCon (box_node (ConInt (box_node "1")))),
-              box_node (IdxIdx (box_node "+")),
-              box_node (InfixApp (two, times, three))
-            )
-          ]}
-
-          {3 Semantics}
-
-          - Both operands are evaluated (order unspecified in SML)
-          - Operator is applied to the two values
-          - Operator must be in scope and declared infix
-          - Actual function may be user-defined or built-in
-
-          {3 Precedence and Associativity}
-
-          Standard SML operator precedence (higher binds tighter):
-          - Precedence 7: [*], [/], [div], [mod]
-          - Precedence 6: [+], [-], [^]
-          - Precedence 5: [::], [@]
-          - Precedence 4: [=], [<>], [<], [>], [<=], [>=]
-          - Precedence 3: [:=], [o]
-          - Precedence 0: [before]
-
-          Left-associative ([infix]): [a + b + c] = [(a + b) + c]
-          Right-associative ([infixr]): [a :: b :: c] = [a :: (b :: c)]
-
-          {3 Custom Operators}
-
-          Users can define custom infix operators:
-          {[
-            (* SML:
-               infix 6 +++
-               fun x +++ y = x + y + 1
-               val z = 1 +++ 2 +++ 3
-            *)
-            InfixApp (
-              box_node (InfixApp (one, plusplus, two)),
-              box_node (IdxIdx (box_node "+++")),
-              three
-            )
-          ]}
-
-          @see FixityDec Fixity declarations
-          @see fixity Operator precedence
-          @see ExpApp Prefix function application *)
+          @see ExpIdx Variable and constructor references
+          @see precedence_resolver.ml Backend precedence resolution *)
   | ParenExp of expression node
       (** Parenthesized expression - explicit grouping.
 
@@ -787,8 +682,7 @@ and expression =
           - [(expr)] → ParenExp
           - [(expr1, expr2, ...)] → TupleExp
 
-          @see TupleExp Tuple expressions (2+ elements)
-          @see InfixApp Operator precedence *)
+          @see TupleExp Tuple expressions (2+ elements) *)
   | TupleExp of expression node list
       (** Tuple expression - ordered collection of heterogeneous values.
 
@@ -1178,9 +1072,7 @@ and expression =
             )
           ]}
 
-          @see InfixApp Cons operator [::] application
-          @see PatList List patterns
-          @see PatInfix Cons pattern [x::xs] *)
+          @see PatList List patterns *)
   | SeqExp of expression node list
       (** Sequential expression - imperative sequencing with semicolons.
 
@@ -3688,26 +3580,22 @@ and pat =
           ]}
 
           @see 'with_op' Handling of op prefix *)
-  | PatApp of with_op node * pat node
-      (** Constructor application pattern: [[op] longid pat].
+  | PatApp of pat node list
+      (** Flat pattern juxtaposition sequence - constructor application and infix patterns.
+
+          Similar to [ExpApp] for expressions, represents a flat sequence of patterns
+          that can contain constructors, values, and infix operators. The backend's
+          precedence resolver restructures these according to operator precedence.
 
           {[
-            (* SML: SOME x *)
-            PatApp
-              ( box_node (WithoutOp (box_node (IdxIdx (box_node "SOME")))),
-                box_node (PatIdx (box_node (WithoutOp x_id))) )
-          ]} *)
-  | PatInfix of pat node * idx node * pat node
-      (** Infix constructor pattern: [pat1 id pat2].
+            (* SML: SOME x  -- constructor application *)
+            PatApp [SOME_pat; x_pat]
 
-          The identifier must be an infix constructor (e.g., [::]).
+            (* SML: x :: xs  -- infix constructor *)
+            PatApp [x_pat; cons_pat; xs_pat]
 
-          {[
-            (* SML: x :: xs *)
-            PatInfix (x_pat, box_node (IdxIdx (box_node "::")), xs_pat)
-
-            (* SML: (a, b) :: rest *)
-            PatInfix (tuple_pat, cons_id, rest_pat)
+            (* SML: x :: y :: z  -- right-associative *)
+            PatApp [x_pat; cons_pat; y_pat; cons_pat; z_pat]
           ]} *)
   | PatParen of pat node
       (** Parenthesized pattern: [( pat )].

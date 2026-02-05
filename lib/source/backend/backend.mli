@@ -1,3 +1,6 @@
+(** Precedence resolver for operator precedence handling *)
+module Precedence_resolver : module type of Precedence_resolver
+
 (** [Make (Store) (Config)] creates a backend transformation module.
 
     This functor instantiates the complete SML-to-OCaml transformation pipeline

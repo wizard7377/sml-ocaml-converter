@@ -125,7 +125,8 @@
 %left PROGRAM_SEP
 %left SEMICOLON
 %left JUXTAPOSE
-%right CONS
+(* Operator precedence declarations removed - handled by precedence_resolver *)
+(* %right CONS *)
 %right AND
 %nonassoc BIGARROW
 %left BAR
@@ -137,10 +138,10 @@
 %right ANDALSO
 %right AS
 %right PREFIX_APP
-%left INFIX_APP
+(* %left INFIX_APP *)
 %right ARROW
-%nonassoc EQUAL
-%right STAR
+(* %nonassoc EQUAL *)
+(* %right STAR *)
 %left COLON COLON_GT
 
 %left PROGRAM_PREC 
@@ -418,26 +419,39 @@ comma_typrow_opt:
 (* ========================================================================= *)
 
 expression:
-  | atomic_exp_seq1 {
+  (* Note: "(" expression ")" is handled via atomic_exp -> "(" expression ")"
+     Having it here would cause ambiguity: (fn x => x) 1 wouldn't parse as application *)
+  | exp_item_seq {
       match $1 with
-      | [e] -> e.value
-      | f :: args -> ExpApp (f :: args)
-      | [] -> failwith "impossible: empty expression sequence"
+      | [single] -> single.value
+      | items -> ExpApp items
     }
-  | expression SYMBOL_IDENT expression %prec INFIX_APP { InfixApp (bp $1 $startpos($1) $endpos($1), b (IdxIdx (b (match $2 with Symbol s -> s | Name s -> s))), bp $3 $startpos($3) $endpos($3)) }
   | expression COLON typ { TypedExp (bp $1 $startpos $endpos, bp $3 $startpos($3) $endpos($3)) }
   | expression "andalso" expression { AndExp (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3)) }
   | expression "orelse" expression { OrExp (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3)) }
-  | expression CONS expression { InfixApp (bp $1 $startpos($1) $endpos($1), b (IdxIdx (b "::")), bp $3 $startpos($3) $endpos($3)) }
   | e=expression "handle" m=match_clause { HandleExp (bp e $startpos(e) $endpos(e), bp m $startpos(m) $endpos(m)) }
   | "raise" e=expression { RaiseExp (bp e $startpos(e) $endpos(e)) }
   | "if" c=expression "then" t=expression "else" f=expression { IfExp (bp c $startpos(c) $endpos(c), bp t $startpos(t) $endpos(t), bp f $startpos(f) $endpos(f)) }
   | "while" c=expression "do" bdy=expression { WhileExp (bp c $startpos(c) $endpos(c), bp bdy $startpos(bdy) $endpos(bdy)) }
   | "case" e=expression "of" m=match_clause { CaseExp (bp e $startpos(e) $endpos(e), bp m $startpos(m) $endpos(m)) }
   | "fn" m=match_clause { FnExp (bp m $startpos(m) $endpos(m)) }
-  | head=SYMBOL_IDENT arg=expression %prec PREFIX_APP { ExpApp [bp (ExpIdx (bp (ident_to_idx head) $startpos(head) $endpos(head))) $startpos(head) $endpos(head); bp arg $startpos(arg) $endpos(arg)] }
   ;
 
+(* Flat sequence of expression items: values, functions, and operators *)
+exp_item_seq:
+  | atomic_exp exp_item_seq { bp $1 $startpos($1) $endpos($1) :: $2 }
+  | SYMBOL_IDENT exp_item_seq { bp (ExpIdx (bp (ident_to_idx $1) $startpos($1) $endpos($1))) $startpos($1) $endpos($1) :: $2 }
+  | CONS exp_item_seq { bp (ExpIdx (bp (IdxIdx (b "::")) $startpos($1) $endpos($1))) $startpos($1) $endpos($1) :: $2 }
+  | EQUAL exp_item_seq { bp (ExpIdx (bp (IdxIdx (b "=")) $startpos($1) $endpos($1))) $startpos($1) $endpos($1) :: $2 }
+  | STAR exp_item_seq { bp (ExpIdx (bp (IdxIdx (b "*")) $startpos($1) $endpos($1))) $startpos($1) $endpos($1) :: $2 }
+  | atomic_exp { [bp $1 $startpos($1) $endpos($1)] }
+  | SYMBOL_IDENT { [bp (ExpIdx (bp (ident_to_idx $1) $startpos($1) $endpos($1))) $startpos($1) $endpos($1)] }
+  | CONS { [bp (ExpIdx (bp (IdxIdx (b "::")) $startpos($1) $endpos($1))) $startpos($1) $endpos($1)] }
+  | EQUAL { [bp (ExpIdx (bp (IdxIdx (b "=")) $startpos($1) $endpos($1))) $startpos($1) $endpos($1)] }
+  | STAR { [bp (ExpIdx (bp (IdxIdx (b "*")) $startpos($1) $endpos($1))) $startpos($1) $endpos($1)] }
+  ;
+
+(* Old atomic sequence rule - kept for backward compatibility if needed *)
 atomic_exp_seq1:
   | atomic_exp atomic_exp_seq1 %prec JUXTAPOSE { bp $1 $startpos($1) $endpos($1) :: $2 }
   | atomic_exp { [bp $1 $startpos($1) $endpos($1)] }
@@ -510,35 +524,39 @@ match_clause:
 (* ========================================================================= *)
 
 pat:
-  | atomic_pat_seq1 {
+  | pat_item_seq {
       match $1 with
       | [p] -> p.value
-      | op :: args ->
-          List.fold_left (fun acc arg -> PatApp (
-            (match acc with
-             | PatIdx w -> w
-             | PatApp (w, _) -> w
-             | _ -> failwith "invalid pattern application"), arg)) op.value args
-
-      | _ -> failwith "impossible: invalid pattern sequence"
+      | pats -> PatApp pats
     }
   | p0=pat BAR p1=pat {
       PatOr (bp p0 $startpos(p0) $endpos(p0), bp p1 $startpos(p1) $endpos(p1))
     }
-  | pat SYMBOL_IDENT pat %prec INFIX_APP { PatInfix (bp $1 $startpos($1) $endpos($1), b (IdxIdx (b (match $2 with Symbol s -> s | Name s -> s))), bp $3 $startpos($3) $endpos($3)) }
-  
   | pat COLON typ { PatTyp (bp $1 $startpos($1) $endpos($1), bp $3 $startpos($3) $endpos($3)) }
-  | pat CONS pat { PatInfix (bp $1 $startpos($1) $endpos($1), b (IdxIdx (b "::")), bp $3 $startpos($3) $endpos($3)) }
-  
   | pat "as" pat {
       match $1 with
       | PatIdx op -> PatAs (op, None, bp $3 $startpos($3) $endpos($3))
       | PatTyp (p, ty) -> (match p.value with PatIdx op -> PatAs (op, Some ty, bp $3 $startpos($3) $endpos($3)) | _ -> failwith "invalid layered pattern")
       | _ -> failwith "invalid layered pattern"
     }
-    | SYMBOL_IDENT pat %prec PREFIX_APP { PatApp (b (WithoutOp (b (IdxIdx (b (match $1 with Symbol s -> s | Name s -> s))))), bp $2 $startpos($2) $endpos($2)) }
 ;
 
+(* Flat sequence of pattern items: values, constructors, and operators *)
+(* Note: EQUAL is NOT included here because = is not a valid infix operator in SML patterns.
+   The = symbol only appears in patterns within record patterns {a = b}, handled in patrow.
+   Including EQUAL here would cause ambiguity with val pat = exp bindings. *)
+pat_item_seq:
+  | atomic_pat pat_item_seq { bp $1 $startpos($1) $endpos($1) :: $2 }
+  | SYMBOL_IDENT pat_item_seq { bp (PatIdx (b (WithoutOp (b (ident_to_idx $1))))) $startpos($1) $endpos($1) :: $2 }
+  | CONS pat_item_seq { bp (PatIdx (b (WithoutOp (b (IdxIdx (b "::")))))) $startpos($1) $endpos($1) :: $2 }
+  | STAR pat_item_seq { bp (PatIdx (b (WithoutOp (b (IdxIdx (b "*")))))) $startpos($1) $endpos($1) :: $2 }
+  | atomic_pat { [bp $1 $startpos($1) $endpos($1)] }
+  | SYMBOL_IDENT { [bp (PatIdx (b (WithoutOp (b (ident_to_idx $1))))) $startpos($1) $endpos($1)] }
+  | CONS { [bp (PatIdx (b (WithoutOp (b (IdxIdx (b "::")))))) $startpos($1) $endpos($1)] }
+  | STAR { [bp (PatIdx (b (WithoutOp (b (IdxIdx (b "*")))))) $startpos($1) $endpos($1)] }
+;
+
+(* Old atomic sequence rule - kept for backward compatibility if needed *)
 atomic_pat_seq1:
   | atomic_pat atomic_pat_seq1 { bp $1 $startpos($1) $endpos($1) :: $2 }
   | atomic_pat { [bp $1 $startpos($1) $endpos($1)] }

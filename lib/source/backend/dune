@@ -15,6 +15,7 @@
   create_ocaml
   idx_utils
   name_processor
+  precedence_resolver
   process_label
   process_names
   type_var_utils)

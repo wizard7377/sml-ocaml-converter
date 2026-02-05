@@ -19,12 +19,11 @@ let add_constructor registry ~path ~name ~ocaml_name =
   let info = { name; path; ocaml_name } in
   Hashtbl.add registry.qualified path info;
 
-  (* Also add to unqualified if path is just [name] *)
-  if path = [ name ] then
-    let existing =
-      Hashtbl.find_opt registry.unqualified name |> Option.value ~default:[]
-    in
-    Hashtbl.replace registry.unqualified name (info :: existing)
+  (* Also add to unqualified lookup table for local scope access *)
+  let existing =
+    Hashtbl.find_opt registry.unqualified name |> Option.value ~default:[]
+  in
+  Hashtbl.replace registry.unqualified name (info :: existing)
 
 let lookup registry ~path name =
   match path with

@@ -29,6 +29,7 @@ module ContextLib = Context  (* Library Context module before shadowing *)
 module Idx_utils = Idx_utils
 module Type_var_utils = Type_var_utils
 module Capital_utils = Capital_utils
+module Precedence_resolver = Precedence_resolver
 
 module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
   (* Alias to avoid shadowing the Context library module *)
@@ -74,9 +75,28 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
       s;
     Buffer.contents buf
 
+  (** Capitalize all but the last element in a list (for module path capitalization).
+      ["test"; "foo"; "ok"] becomes ["Test_"; "Foo_"; "ok"] 
+      Module names in OCaml must start uppercase; we append _ if name was lowercase. *)
+  let capitalize_module_path (parts : string list) : string list =
+    let rec aux = function
+      | [] -> []
+      | [last] -> [last]  (* Leave the final element unchanged *)
+      | first :: rest ->
+          let cap_first = 
+            if Capital_utils.is_variable_identifier first then
+              String.capitalize_ascii first ^ "_"
+            else
+              first
+          in
+          cap_first :: aux rest
+    in
+    aux parts
+
   (** Build a Longident from name parts (sanitized to valid OCaml identifiers) *)
-  let build_longident (parts : string list) : Ppxlib.Longident.t =
-    match parts |> List.map sanitize_ident with
+  let build_longident ?(capitalize_modules=false) (parts : string list) : Ppxlib.Longident.t =
+    let parts' = if capitalize_modules then capitalize_module_path parts else parts in
+    match parts' |> List.map sanitize_ident with
     | [] -> failwith "empty name"
     | [ x ] -> Longident.Lident x
     | first :: rest ->
@@ -252,9 +272,7 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
       process_exp (ExpApp (ExpIdx "f", ExpIdx "x"))
       (* → OCaml Parsetree for: f x *)
 
-      (* SML: x + y *)
-      process_exp (InfixApp (ExpIdx "x", "+", ExpIdx "y"))
-      (* → OCaml Parsetree for: (+) x y *)
+      (* Note: InfixApp removed - see precedence_resolver.ml for operator handling *)
     ]} *)
 
   let rec process_exp (expression : Ast.expression Ast.node) :
@@ -265,7 +283,6 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
          | ExpCon _ -> "ExpCon"
          | ExpApp _ -> "ExpApp"
          | ExpIdx _ -> "ExpIdx"
-         | InfixApp _ -> "InfixApp"
          | ParenExp _ -> "ParenExp"
          | TupleExp _ -> "TupleExp"
          | RecordExp _ -> "RecordExp"
@@ -284,49 +301,87 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
          | CaseExp _ -> "CaseExp"
          | FnExp _ -> "FnExp"))
       ();
+
+    (* Helper to process resolved expressions from precedence resolver *)
+    let rec process_resolved_exp (resolved : Precedence_resolver.resolved_exp) : Parsetree.expression =
+      match resolved with
+      | ResolvedSingle e ->
+          process_exp { value = e; pos = None }
+
+      | ResolvedApp (f, args) ->
+          (* Check if f is a constructor - if so, wrap args in tuple *)
+          let is_ctor_app = match f with
+            | ResolvedSingle (ExpIdx idx) ->
+                let name = idx_to_name idx.value in
+                let simple_name = name_to_string name in
+                let qual_path =
+                  if List.length name > 1 then
+                    Some (List.rev (List.tl (List.rev name)))
+                  else None
+                in
+                Context.Constructor_registry.lookup
+                  Ctx.context.constructor_registry ~path:qual_path simple_name
+            | _ -> None
+          in
+          (match is_ctor_app with
+          | Some ctor ->
+              (* Constructor application - wrap args in tuple *)
+              let name = match f with
+                | ResolvedSingle (ExpIdx idx) -> idx_to_name idx.value
+                | _ -> failwith "impossible: already matched ExpIdx"
+              in
+              let qual_path =
+                if List.length name > 1 then
+                  Some (List.rev (List.tl (List.rev name)))
+                else None
+              in
+              let transformed_parts = match qual_path with
+                | Some path -> path @ [ctor.Context.Constructor_registry.ocaml_name]
+                | None -> [ctor.ocaml_name]
+              in
+              let name_longident = build_longident ~capitalize_modules:true transformed_parts in
+              let arg_exps = List.map (fun arg -> process_exp arg) args in
+              let arg_exp = match arg_exps with
+                | [single] -> single
+                | _ -> Builder.pexp_tuple arg_exps
+              in
+              Builder.pexp_construct (ghost name_longident) (Some arg_exp)
+          | None ->
+              (* Regular function application - left-associative *)
+              let f_exp = process_resolved_exp f in
+              let arg_exps = List.map (fun arg -> process_exp arg) args in
+              List.fold_left (fun acc arg ->
+                Builder.pexp_apply acc [(Nolabel, arg)]
+              ) f_exp arg_exps)
+
+      | ResolvedInfix (left, op, right) ->
+          (* Binary operator - check constructor registry *)
+          let op_name = idx_to_string op.value in
+          let left_exp = process_resolved_exp left in
+          let right_exp = process_resolved_exp right in
+
+          let lookup_result = Context.Constructor_registry.lookup
+            Ctx.context.constructor_registry ~path:None op_name in
+          (match lookup_result with
+          | Some ctor ->
+              (* Constructor like :: *)
+              let name_longident = build_longident [ctor.Context.Constructor_registry.ocaml_name] in
+              let tuple = Builder.pexp_tuple [left_exp; right_exp] in
+              Builder.pexp_construct (ghost name_longident) (Some tuple)
+          | None ->
+              (* Regular operator like + *)
+              let op_longident = build_longident (idx_to_name op.value) in
+              Builder.pexp_apply
+                (Builder.pexp_ident (ghost op_longident))
+                [(Nolabel, left_exp); (Nolabel, right_exp)])
+    in
+
     let res = begin match expression.value with
     | ExpCon c -> Builder.pexp_constant (process_con c)
-    | ExpApp [e1; e2] when is_operator e2 ->
-        let op_name =
-          match e2.value with
-          | ExpIdx idx -> idx_to_name idx.value
-          | ParenExp e -> (
-              match e.value with
-              | ExpIdx idx -> idx_to_name idx.value
-              | _ -> failwith "Expected operator identifier")
-          | _ -> failwith "Expected operator identifier"
-        in
-        let op_longident = build_longident op_name in
-        Builder.pexp_apply
-          (Builder.pexp_ident (ghost op_longident))
-          [ (Nolabel, process_exp e1) ]
-    | ExpApp [e1; e2]-> (
-        (* Check if this is a constructor applied to a tuple *)
-        match (e1.value, e2.value) with
-        | (ExpIdx idx_node, TupleExp args) -> (
-            let idx_name = idx_to_name idx_node.value in
-            let idx_str = idx_to_string idx_node.value in
-            (* Look up constructor in registry *)
-            let lookup_result = Context.Constructor_registry.lookup
-              Ctx.context.constructor_registry ~path:None idx_str in
-            (match lookup_result with
-            | Some ctor_info ->
-                (* It's a constructor - use transformed name *)
-                let name_longident = build_longident [ctor_info.Context.Constructor_registry.ocaml_name] in
-                let arg_tuple = Builder.pexp_tuple (List.map process_exp args) in
-                Builder.pexp_construct (ghost name_longident) (Some arg_tuple)
-            | None ->
-                (* Variable applied to tuple - use regular application *)
-                let e1' = process_exp e1 in
-                let e2' = Builder.pexp_tuple (List.map process_exp args) in
-                Builder.pexp_apply e1' [ (Nolabel, e2') ])
-          )
-        | _ ->
-            (* Regular application *)
-            let e1' = process_exp e1 in
-            let e2' = process_exp e2 in
-            Builder.pexp_apply e1' [ (Nolabel, e2') ]
-      )
+    | ExpApp exp_list ->
+        (* Resolve precedence to get structured expression *)
+        let resolved = Precedence_resolver.resolve_precedence exp_list in
+        process_resolved_exp resolved
     | ExpIdx idx ->
         let scoped_name = idx_to_name idx.value in
         let simple_name = name_to_string scoped_name in
@@ -346,29 +401,27 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
               | Some path -> path @ [ctor_info.Context.Constructor_registry.ocaml_name]
               | None -> [ctor_info.ocaml_name]
             in
-            let name_longident = build_longident transformed_parts in
+            let name_longident = build_longident ~capitalize_modules:true transformed_parts in
             Builder.pexp_construct (ghost name_longident) None
         | None ->
             (* Value reference - use original logic *)
             let name_longident = build_longident scoped_name in
             Builder.pexp_ident (ghost name_longident))
-    | InfixApp (e1, op, e2) ->
+    (* TODO: InfixApp removed - will be replaced by precedence-resolved ExpApp *)
+    (* | InfixApp (e1, op, e2) ->
         let op_name = idx_to_string op.value in
-        (* Look up constructor in registry for infix operators like :: *)
         let lookup_result = Context.Constructor_registry.lookup
           Ctx.context.constructor_registry ~path:None op_name in
         (match lookup_result with
         | Some ctor_info ->
-            (* Infix constructor - use pexp_construct *)
             let name_longident = build_longident [ctor_info.Context.Constructor_registry.ocaml_name] in
             let tuple = Builder.pexp_tuple [process_exp e1; process_exp e2] in
             Builder.pexp_construct (ghost name_longident) (Some tuple)
         | None ->
-            (* Regular infix operator *)
             let op_longident = build_longident (idx_to_name op.value) in
             Builder.pexp_apply
               (Builder.pexp_ident (ghost op_longident))
-              [ (Nolabel, process_exp e1); (Nolabel, process_exp e2) ])
+              [ (Nolabel, process_exp e1); (Nolabel, process_exp e2) ]) *)
     | ParenExp e -> process_exp e
     | TupleExp [] ->
         Builder.pexp_construct (ghost (Ppxlib.Longident.Lident "()")) None
@@ -759,7 +812,6 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
          | PatWildcard -> "PatWildcard"
          | PatIdx _ -> "PatIdx"
          | PatApp _ -> "PatApp"
-         | PatInfix _ -> "PatInfix"
          | PatParen _ -> "PatParen"
          | PatTuple _ -> "PatTuple"
          | PatRecord _ -> "PatRecord"
@@ -773,6 +825,79 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
     (* Enter accumulation mode for comment hoisting *)
     labeller#enter_accumulate_context;
 
+    let rec process_resolved_pat ~is_arg ~is_head (resolved : Precedence_resolver.resolved_pat) : Parsetree.pattern =
+      match resolved with
+      | ResolvedPatSingle p ->
+          process_pat ~is_arg ~is_head { value = p; pos = None }
+
+      | ResolvedPatApp (f, args) ->
+          (* Pattern application: constructor with arguments *)
+          (* First check if f is a simple constructor *)
+          (match f with
+          | ResolvedPatSingle (PatIdx wo) ->
+              (match wo.value with
+              | WithoutOp idx ->
+                  let name = idx_to_name idx.value in
+                  let simple_name = name_to_string name in
+                  (* Extract module path if qualified *)
+                  let qual_path =
+                    if List.length name > 1 then
+                      Some (List.rev (List.tl (List.rev name)))
+                    else None
+                  in
+                  (* Look up as constructor *)
+                  let lookup_result = Context.Constructor_registry.lookup
+                    Ctx.context.constructor_registry ~path:qual_path simple_name in
+                  (match lookup_result with
+                  | Some ctor ->
+                      (* It's a constructor - build constructor pattern with qualified name *)
+                      let transformed_parts = match qual_path with
+                        | Some path -> path @ [ctor.Context.Constructor_registry.ocaml_name]
+                        | None -> [ctor.ocaml_name]
+                      in
+                      let name_longident = build_longident ~capitalize_modules:true transformed_parts in
+                      let arg_pats = List.map (fun arg -> process_pat ~is_arg:true ~is_head:false arg) args in
+                      let arg_pattern = match arg_pats with
+                        | [single] -> single
+                        | _ -> Builder.ppat_tuple arg_pats
+                      in
+                      Builder.ppat_construct (ghost name_longident) (Some arg_pattern)
+                  | None ->
+                      (* Not a constructor - treat as nested pattern (shouldn't happen often) *)
+                      let f_pat = process_resolved_pat ~is_arg:false ~is_head:true f in
+                      let arg_pats = List.map (fun arg -> process_pat ~is_arg:true ~is_head:false arg) args in
+                      (* Build tuple of all parts *)
+                      Builder.ppat_tuple (f_pat :: arg_pats))
+              | WithOp _ ->
+                  (* op prefix - build as tuple *)
+                  let f_pat = process_resolved_pat ~is_arg:false ~is_head:true f in
+                  let arg_pats = List.map (fun arg -> process_pat ~is_arg:true ~is_head:false arg) args in
+                  Builder.ppat_tuple (f_pat :: arg_pats))
+          | _ ->
+              (* Complex pattern - build as tuple *)
+              let f_pat = process_resolved_pat ~is_arg:false ~is_head:true f in
+              let arg_pats = List.map (fun arg -> process_pat ~is_arg:true ~is_head:false arg) args in
+              Builder.ppat_tuple (f_pat :: arg_pats))
+
+      | ResolvedPatInfix (left, op, right) ->
+          (* Binary infix pattern - check constructor registry *)
+          let op_name = idx_to_string op.value in
+          let left_pat = process_resolved_pat ~is_arg:false ~is_head:false left in
+          let right_pat = process_resolved_pat ~is_arg:false ~is_head:false right in
+
+          let lookup_result = Context.Constructor_registry.lookup
+            Ctx.context.constructor_registry ~path:None op_name in
+          (match lookup_result with
+          | Some ctor ->
+              (* Constructor like :: *)
+              let name_longident = build_longident [ctor.Context.Constructor_registry.ocaml_name] in
+              let tuple = Builder.ppat_tuple [left_pat; right_pat] in
+              Builder.ppat_construct (ghost name_longident) (Some tuple)
+          | None ->
+              (* Should not happen - operators in patterns should be constructors *)
+              failwith (Printf.sprintf "Unknown pattern operator: %s" op_name))
+    in
+
     let res = begin match pat.value with
     | PatCon c -> Builder.ppat_constant (process_con c)
     | PatWildcard -> Builder.ppat_any
@@ -780,7 +905,7 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
         match wo.value with
         | WithOp op ->
             let op_name = idx_to_name op.value in
-            let op_str = idx_to_string op.value in
+            let simple_name = name_to_string op_name in
             (* Extract module path if qualified *)
             let qual_path =
               if List.length op_name > 1 then
@@ -789,23 +914,24 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
             in
             (* Try to look up as constructor *)
             let lookup_result = Context.Constructor_registry.lookup
-              Ctx.context.constructor_registry ~path:qual_path op_str in
+              Ctx.context.constructor_registry ~path:qual_path simple_name in
             (match lookup_result with
-            | Some ctor_info when is_head || not (is_variable_identifier op_str) ->
+            (* Qualified names (qual_path is Some) must be constructors *)
+            | Some ctor_info when is_head || Option.is_some qual_path || not (is_variable_identifier simple_name) ->
                 (* It's a constructor - use transformed name *)
                 let transformed_parts = match qual_path with
                   | Some path -> path @ [ctor_info.Context.Constructor_registry.ocaml_name]
                   | None -> [ctor_info.ocaml_name]
                 in
-                let name_longident = build_longident transformed_parts in
+                let name_longident = build_longident ~capitalize_modules:true transformed_parts in
                 Builder.ppat_construct (ghost name_longident) None
             | _ ->
                 (* It's a variable - force lowercase *)
-                let name_str = Constructor_transform.transform_to_lowercase op_str in
+                let name_str = Constructor_transform.transform_to_lowercase simple_name in
                 Builder.ppat_var (ghost name_str))
         | WithoutOp id ->
             let id_name = idx_to_name id.value in
-            let id_str = idx_to_string id.value in
+            let simple_name = name_to_string id_name in
             (* Extract module path if qualified *)
             let qual_path =
               if List.length id_name > 1 then
@@ -814,39 +940,28 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
             in
             (* Try to look up as constructor *)
             let lookup_result = Context.Constructor_registry.lookup
-              Ctx.context.constructor_registry ~path:qual_path id_str in
+              Ctx.context.constructor_registry ~path:qual_path simple_name in
             (match lookup_result with
-            | Some ctor_info when is_head || not (is_variable_identifier id_str) ->
+            (* Qualified names (qual_path is Some) must be constructors *)
+            | Some ctor_info when is_head || Option.is_some qual_path || not (is_variable_identifier simple_name) ->
                 (* It's a constructor - use transformed name *)
                 let transformed_parts = match qual_path with
                   | Some path -> path @ [ctor_info.Context.Constructor_registry.ocaml_name]
                   | None -> [ctor_info.ocaml_name]
                 in
-                let name_longident = build_longident transformed_parts in
+                let name_longident = build_longident ~capitalize_modules:true transformed_parts in
                 Builder.ppat_construct (ghost name_longident) None
             | _ ->
                 (* It's a variable - force lowercase *)
-                let name_str = Constructor_transform.transform_to_lowercase id_str in
+                let name_str = Constructor_transform.transform_to_lowercase simple_name in
                 Builder.ppat_var (ghost name_str)))
-    | PatApp (node, p) when pat_head_eq_ref node -> let loc = Ppxlib.Location.none in ([%pat? { contents = [%p process_pat ~is_arg ~is_head p] }])
-    | PatApp (wo, p) ->
-        (* Constructor application: SOME x *)
-        let const_name = process_with_op wo.value in
-        let arg_pat = process_pat p in
-        (* Look up constructor and use transformed name *)
-        let lookup_result = Context.Constructor_registry.lookup
-          Ctx.context.constructor_registry ~path:None const_name in
-        let final_name = match lookup_result with
-          | Some ctor_info -> ctor_info.Context.Constructor_registry.ocaml_name
-          | None -> const_name
-        in
-        Builder.ppat_construct
-          (ghost (build_longident [ final_name ]))
-          (Some arg_pat)
-    | PatInfix (p1, id, p2) ->
-        (* Infix constructor pattern: x :: xs *)
+    | PatApp pat_list ->
+        (* Resolve precedence to get structured pattern *)
+        let resolved = Precedence_resolver.resolve_pat_precedence pat_list in
+        process_resolved_pat ~is_arg ~is_head resolved
+    (* TODO: PatInfix removed - will be replaced by precedence-resolved PatApp *)
+    (* | PatInfix (p1, id, p2) ->
         let op_name = idx_to_string id.value in
-        (* Look up constructor and use transformed name *)
         let lookup_result = Context.Constructor_registry.lookup
           Ctx.context.constructor_registry ~path:None op_name in
         let final_name = match lookup_result with
@@ -857,7 +972,7 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
         let p1' = process_pat p1 in
         let p2' = process_pat p2 in
         Builder.ppat_construct (ghost op_longident)
-          (Some (Builder.ppat_tuple [ p1'; p2' ]))
+          (Some (Builder.ppat_tuple [ p1'; p2' ])) *)
     | PatParen p -> process_pat p
     | PatTuple [] ->
         Builder.ppat_construct (ghost (Ppxlib.Longident.Lident "()")) None
@@ -1545,8 +1660,12 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
             let name_str =
               name_to_string (idx_to_name id.value)
             in
+            (* Push module name onto path for constructor registration *)
+            push_module name_str;
             (* Convert the structure body to a module expression *)
             let module_expr = structure_to_module_expr structure.value in
+            (* Pop module name from path *)
+            pop_module ();
             let module_expr_with_sig =
               match annot_opt with
               | None -> module_expr
