@@ -38,6 +38,7 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
   let labeller = new Process_label.process_label config Ctx.lexbuf
   let lexbuf = Ctx.lexbuf
   let current_temp : int ref = ref 0 
+
   let get_current_then (i : int) : int =
     let res = !current_temp in
     current_temp := !current_temp + i;
@@ -285,7 +286,7 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
       ();
     let res = begin match expression.value with
     | ExpCon c -> Builder.pexp_constant (process_con c)
-    | ExpApp (e1, e2) when is_operator e2 ->
+    | ExpApp [e1; e2] when is_operator e2 ->
         let op_name =
           match e2.value with
           | ExpIdx idx -> idx_to_name idx.value
@@ -299,7 +300,7 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
         Builder.pexp_apply
           (Builder.pexp_ident (ghost op_longident))
           [ (Nolabel, process_exp e1) ]
-    | ExpApp (e1, e2) -> (
+    | ExpApp [e1; e2]-> (
         (* Check if this is a constructor applied to a tuple *)
         match (e1.value, e2.value) with
         | (ExpIdx idx_node, TupleExp args) -> (

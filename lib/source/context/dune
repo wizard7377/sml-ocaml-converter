@@ -2,6 +2,5 @@
  (name context)
  (public_name shibboleth.context)
  (preprocess
-  (pps ppx_import ppx_deriving.show ppx_deriving.eq))
- (libraries ast common yojson)
-)
+  (pps ppx_import ppx_deriving.show ppx_deriving.eq ppx_sexp_conv))
+ (libraries ast common sexplib sexplib0))

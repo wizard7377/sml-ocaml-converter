@@ -561,7 +561,7 @@ and expression =
           @see idx Identifier types
           @see ExpApp Function application
           @see InfixApp Infix operator usage *)
-  | ExpApp of expression node * expression node
+  | ExpApp of expression node list
       (** Function application - applying a function to an argument.
 
           Applies the function (first expression) to the argument (second expression).

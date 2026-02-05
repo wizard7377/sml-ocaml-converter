@@ -6,20 +6,21 @@
     avoiding conflicts with existing identifiers.
 
     Transformation rules:
-    - Lowercase constructors: append "_" and capitalize (ok -> Ok_, some -> Some_)
+    - Lowercase constructors: append "_" and capitalize (ok -> Ok_, some ->
+      Some_)
     - Already uppercase: preserve as-is (Foo -> Foo, Bar -> Bar)
     - All caps: convert to proper case (SOME -> Some, NONE -> None)
     - Trailing underscore: add extra underscore to avoid collision (B_ -> B__)
 
     Examples:
     {[
-      transform_constructor "ok"     = "Ok_"
-      transform_constructor "some"   = "Some_"
-      transform_constructor "Foo"    = "Foo"
-      transform_constructor "SOME"   = "Some"
-      transform_constructor "B_"     = "B__"
-    ]}
-*)
+      transform_constructor "ok"
+      = "Ok_" transform_constructor "some"
+      = "Some_" transform_constructor "Foo"
+      = "Foo" transform_constructor "SOME"
+      = "Some" transform_constructor "B_"
+      = "B__"
+    ]} *)
 
 val transform_constructor : string -> string
 (** Transform a constructor name to valid OCaml format.

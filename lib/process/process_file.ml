@@ -52,17 +52,21 @@ class process_file ?(store = Context.create (Context.Info.create [])) cfg_init =
       let raw_ocaml = Backend.process_sml ~prog:sml in
       (* Generate constructor manifest if output file is specified *)
       (match get_output_file cfg with
-      | FileOut output_path ->
+      | FileOut output_path -> (
           let manifest_path = output_path ^ ".shibboleth-constructors" in
           let constructors = Backend.get_all_constructors () in
-          (try
+          try
             Context.Constructor_manifest.write_file manifest_path constructors;
             Log.log_with ~cfg ~level:Low ~kind:Neutral
-              ~msg:(Printf.sprintf "Wrote constructor manifest to %s" manifest_path) ()
+              ~msg:
+                (Printf.sprintf "Wrote constructor manifest to %s" manifest_path)
+              ()
           with e ->
             Log.log_with ~cfg ~level:Low ~kind:Warning
-              ~msg:(Printf.sprintf "Failed to write constructor manifest: %s"
-                (Printexc.to_string e)) ())
+              ~msg:
+                (Printf.sprintf "Failed to write constructor manifest: %s"
+                   (Printexc.to_string e))
+              ())
       | _ -> ());
       Log.log_with ~cfg ~level:Low ~kind:Neutral
         ~msg:"Post-processing names (ocaml phase)..." ();

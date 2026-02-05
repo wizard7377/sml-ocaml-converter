@@ -1,5 +1,4 @@
-let is_all_uppercase s =
-  String.for_all (fun c -> Char.uppercase_ascii c = c) s
+let is_all_uppercase s = String.for_all (fun c -> Char.uppercase_ascii c = c) s
 
 let transform_constructor name =
   if String.length name = 0 then name

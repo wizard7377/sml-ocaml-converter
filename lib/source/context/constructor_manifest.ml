@@ -1,59 +1,40 @@
-open Yojson.Safe
+open Sexplib0.Sexp_conv
 
-let to_json (constructors : Constructor_registry.constructor_info list) : t =
-  `Assoc [
-    "constructors", `List (
-      List.map (fun info ->
-        `Assoc [
-          "name", `String info.Constructor_registry.name;
-          "path", `List (List.map (fun s -> `String s) info.path);
-          "ocaml_name", `String info.ocaml_name;
-        ]
-      ) constructors
-    )
-  ]
+let to_sexp (constructors : Constructor_registry.constructor_info list) :
+    Sexplib0.Sexp.t =
+  sexp_of_list Constructor_registry.sexp_of_constructor_info constructors
 
-let from_json (json : t) : Constructor_registry.constructor_info list =
-  match json with
-  | `Assoc assoc ->
-      (match List.assoc_opt "constructors" assoc with
-      | Some (`List items) ->
-          List.map (fun item ->
-            match item with
-            | `Assoc fields ->
-                let name = match List.assoc_opt "name" fields with
-                  | Some (`String s) -> s
-                  | _ -> failwith "missing name" in
-                let path = match List.assoc_opt "path" fields with
-                  | Some (`List parts) ->
-                      List.map (function `String s -> s | _ -> failwith "invalid path") parts
-                  | _ -> failwith "missing path" in
-                let ocaml_name = match List.assoc_opt "ocaml_name" fields with
-                  | Some (`String s) -> s
-                  | _ -> failwith "missing ocaml_name" in
-                { Constructor_registry.name; path; ocaml_name }
-            | _ -> failwith "invalid constructor entry"
-          ) items
-      | _ -> failwith "missing constructors array")
-  | _ -> failwith "invalid manifest format"
+let from_sexp (sexp : Sexplib0.Sexp.t) :
+    Constructor_registry.constructor_info list =
+  list_of_sexp Constructor_registry.constructor_info_of_sexp sexp
 
 let write_file path constructors =
-  let json = to_json constructors in
+  let sexp = to_sexp constructors in
+  let content = Sexplib0.Sexp.to_string_hum sexp in
   let oc = open_out path in
   try
-    Yojson.Safe.pretty_to_channel oc json;
+    output_string oc content;
+    output_char oc '\n';
     close_out oc
   with e ->
     close_out_noerr oc;
     raise e
 
 let read_file path =
-  let json = from_file path in
-  from_json json
+  let ic = open_in path in
+  try
+    let content = really_input_string ic (in_channel_length ic) in
+    close_in ic;
+    let sexp = Sexplib.Sexp.of_string content in
+    from_sexp sexp
+  with e ->
+    close_in_noerr ic;
+    raise e
 
 let find_manifest ~search_paths ~module_name =
   let filename = module_name ^ ".shibboleth-constructors" in
-  List.find_map (fun dir ->
-    let path = Filename.concat dir filename in
-    if Sys.file_exists path then Some path else None
-  ) search_paths
+  List.find_map
+    (fun dir ->
+      let path = Filename.concat dir filename in
+      if Sys.file_exists path then Some path else None)
+    search_paths

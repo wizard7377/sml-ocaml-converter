@@ -16,14 +16,15 @@
       match lookup registry ~path:None "ok" with
       | Some info -> (* Found: info.ocaml_name = "Ok_" *)
       | None -> (* Not found *)
-    ]}
-*)
+    ]} *)
 
 type constructor_info = {
-  name: string;         (** Original SML name (e.g., "ok") *)
-  path: string list;    (** Module path including constructor name (e.g., ["Result"; "ok"]) *)
-  ocaml_name: string;   (** Transformed OCaml name (e.g., "Ok_") *)
+  name : string;  (** Original SML name (e.g., "ok") *)
+  path : string list;
+      (** Module path including constructor name (e.g., ["Result"; "ok"]) *)
+  ocaml_name : string;  (** Transformed OCaml name (e.g., "Ok_") *)
 }
+[@@deriving sexp]
 
 type t
 (** The constructor registry type *)
@@ -31,7 +32,8 @@ type t
 val create : unit -> t
 (** Create a new empty registry *)
 
-val add_constructor : t -> path:string list -> name:string -> ocaml_name:string -> unit
+val add_constructor :
+  t -> path:string list -> name:string -> ocaml_name:string -> unit
 (** Add a constructor to the registry with its fully qualified path *)
 
 val lookup : t -> path:string list option -> string -> constructor_info option

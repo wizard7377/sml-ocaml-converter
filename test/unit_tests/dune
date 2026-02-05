@@ -18,3 +18,8 @@
  (name test_constructor_registry)
  (modules test_constructor_registry)
  (libraries alcotest context))
+
+(executable
+ (name test_constructor_manifest)
+ (modules test_constructor_manifest)
+ (libraries alcotest context))

@@ -1,19 +1,14 @@
 (** Manifest file I/O for constructor information.
 
     Manifest files (with .shibboleth-constructors extension) store constructor
-    transformation mappings in JSON format. These files enable cross-module
+    transformation mappings in S-expression format. These files enable cross-module
     constructor resolution by recording all constructors defined in a module.
 
-    Manifest file format:
+    Manifest file format (S-expression):
     {[
-      [
-        {
-          "name": "ok",
-          "path": ["Result", "ok"],
-          "ocaml_name": "Ok_"
-        },
-        ...
-      ]
+      ((name ok) (path (Result ok)) (ocaml_name Ok_))
+      ((name error) (path (Result error)) (ocaml_name Error_))
+      ...
     ]}
 
     Usage pattern:
@@ -24,18 +19,18 @@
 
       (* Reading manifest to resolve imported constructors *)
       let imported = read_file "imported.ml.shibboleth-constructors" in
-      List.iter (fun info ->
-        Constructor_registry.add_constructor registry
-          ~path:info.path ~name:info.name ~ocaml_name:info.ocaml_name
-      ) imported;
-    ]}
-*)
+      List.iter
+        (fun info ->
+          Constructor_registry.add_constructor registry ~path:info.path
+            ~name:info.name ~ocaml_name:info.ocaml_name)
+        imported
+    ]} *)
 
-val to_json : Constructor_registry.constructor_info list -> Yojson.Safe.t
-(** Convert constructor list to JSON representation. *)
+val to_sexp : Constructor_registry.constructor_info list -> Sexplib0.Sexp.t
+(** Convert constructor list to S-expression representation. *)
 
-val from_json : Yojson.Safe.t -> Constructor_registry.constructor_info list
-(** Parse constructor list from JSON *)
+val from_sexp : Sexplib0.Sexp.t -> Constructor_registry.constructor_info list
+(** Parse constructor list from S-expression *)
 
 val write_file : string -> Constructor_registry.constructor_info list -> unit
 (** Write constructors to a manifest file *)
@@ -43,5 +38,6 @@ val write_file : string -> Constructor_registry.constructor_info list -> unit
 val read_file : string -> Constructor_registry.constructor_info list
 (** Read constructors from a manifest file *)
 
-val find_manifest : search_paths:string list -> module_name:string -> string option
+val find_manifest :
+  search_paths:string list -> module_name:string -> string option
 (** Find a manifest file for a module in the search paths *)

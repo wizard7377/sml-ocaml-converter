@@ -421,7 +421,7 @@ expression:
   | atomic_exp_seq1 {
       match $1 with
       | [e] -> e.value
-      | f :: args -> List.fold_left (fun acc arg -> ExpApp (b acc, arg)) f.value args
+      | f :: args -> ExpApp (f :: args)
       | [] -> failwith "impossible: empty expression sequence"
     }
   | expression SYMBOL_IDENT expression %prec INFIX_APP { InfixApp (bp $1 $startpos($1) $endpos($1), b (IdxIdx (b (match $2 with Symbol s -> s | Name s -> s))), bp $3 $startpos($3) $endpos($3)) }
@@ -435,7 +435,7 @@ expression:
   | "while" c=expression "do" bdy=expression { WhileExp (bp c $startpos(c) $endpos(c), bp bdy $startpos(bdy) $endpos(bdy)) }
   | "case" e=expression "of" m=match_clause { CaseExp (bp e $startpos(e) $endpos(e), bp m $startpos(m) $endpos(m)) }
   | "fn" m=match_clause { FnExp (bp m $startpos(m) $endpos(m)) }
-  | head=SYMBOL_IDENT arg=expression %prec PREFIX_APP { ExpApp ((bp (ExpIdx (bp (ident_to_idx head) $startpos(head) $endpos(head))) $startpos(head) $endpos(head)), bp arg $startpos(arg) $endpos(arg)) }
+  | head=SYMBOL_IDENT arg=expression %prec PREFIX_APP { ExpApp [bp (ExpIdx (bp (ident_to_idx head) $startpos(head) $endpos(head))) $startpos(head) $endpos(head); bp arg $startpos(arg) $endpos(arg)] }
   ;
 
 atomic_exp_seq1:
