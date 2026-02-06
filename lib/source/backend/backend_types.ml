@@ -13,7 +13,7 @@ module type TYPE_DEPS = sig
   val build_longident : ?capitalize_modules:bool -> string list -> Ppxlib.Longident.t
   val name_to_string : string list -> string
   val ghost : 'a -> 'a Location.loc
-  val config : Common.options
+  val config : Common.t
 end
 
 (** Module type for type processing interface *)
@@ -72,7 +72,7 @@ module Make (Deps : TYPE_DEPS) : TYPE_PROCESSOR = struct
         | Some rest' -> here :: process_object_field_type rest'
         | None -> [ here ])
   and make_arrow (ty1 : Ast.typ Ast.node) (ty2 : Ast.typ Ast.node) = 
-    if not @@ Common.engaged @@ Common.get_curry_types config then 
+    if not @@ Common.engaged @@ Common.get Curry_types config then 
       Builder.ptyp_arrow Nolabel (process_type_value ty1) (process_type_value ty2)
     else
     begin match ty1.value with

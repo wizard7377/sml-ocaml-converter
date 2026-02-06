@@ -6,13 +6,13 @@ type input = Common.source
 type output = Common.target
 
 module Log = Common.Make (struct
-  let config = Common.mkOptions ()
+  let config = Common.make ()
   let group = "process"
 end)
 
 class process ?(store = Context.create (Context.Info.create [])) cfg_init =
   object (self)
-    val mutable cfg : options = cfg_init
+    val mutable cfg : t = cfg_init
     val mutable store : Context.t = store
     val mutable successes : int = 0
     val mutable failures : int = 0
@@ -27,11 +27,11 @@ class process ?(store = Context.create (Context.Info.create [])) cfg_init =
     method set_store s = store <- s
 
     method private write_output (content : string) : bool =
-      match get_output_file cfg with
+      match Common.get Output_file cfg with
       | FileOut path ->
           let fpath = Fpath.v path in
           let path' =
-            if Common.get_dash_to_underscore cfg then
+            if Common.get Dash_to_underscore cfg then
               Common.convert_path_dashes_to_underscores fpath
             else fpath
           in
@@ -88,13 +88,13 @@ class process ?(store = Context.create (Context.Info.create [])) cfg_init =
               ();
             try
               let ocaml_code, checked = self#run_single_file file in
-              let output_target = get_output_file cfg in
+              let output_target = Common.get Output_file cfg in
 
               (match output_target with
               | FileOut path ->
                   let fpath = Fpath.v path in
                   let path' =
-                    if Common.get_dash_to_underscore cfg then
+                    if Common.get Dash_to_underscore cfg then
                       Common.convert_path_dashes_to_underscores fpath
                     else fpath
                   in
@@ -129,12 +129,12 @@ class process ?(store = Context.create (Context.Info.create [])) cfg_init =
               errors_store <- (file, Printexc.to_string e) :: errors_store;
               has_errors <- true;
               failures <- failures + 1;
-              begin match get_output_file cfg with
+              begin match Common.get Output_file cfg with
               | FileOut out_path -> begin
                   let content = Bos.OS.File.read (Fpath.v file) in
                   let error_fpath = Fpath.v (out_path ^ ".error") in
                   let error_path' =
-                    if Common.get_dash_to_underscore cfg then
+                    if Common.get Dash_to_underscore cfg then
                       Common.convert_path_dashes_to_underscores error_fpath
                     else error_fpath
                   in
@@ -152,7 +152,7 @@ class process ?(store = Context.create (Context.Info.create [])) cfg_init =
           files
       in
       let _ =
-        if Common.get_concat_output cfg then
+        if Common.get Concat_output cfg then
           let _ = self#write_output @@ String.concat "\n\n\n" res in
           0
         else (
@@ -190,23 +190,23 @@ class process ?(store = Context.create (Context.Info.create [])) cfg_init =
       let process = new process_file cfg in
       close_in ic;
       let sml_ast = process#parse_sml content in
-      if Common.get_verbosity_default cfg 0 > 2 then
+      if Common.get Verbosity cfg > 2 then
         Log.log_with ~cfg ~level:Low ~kind:Neutral
           ~msg:"Finished parsing SML AST." ();
       let ocaml_ast = process#convert_to_ocaml sml_ast in
-      if Common.get_verbosity_default cfg 0 > 2 then
+      if Common.get Verbosity cfg > 2 then
         Log.log_with ~cfg ~level:Low ~kind:Neutral
           ~msg:"Finished converting to OCaml AST." ();
       let ocaml_code' = process#print_ocaml ocaml_ast in
-      if Common.get_verbosity_default cfg 0 > 2 then
+      if Common.get Verbosity cfg > 2 then
         Log.log_with ~cfg ~level:Low ~kind:Neutral
           ~msg:"Finished printing OCaml code." ();
       let ocaml_code = Polish.polish ocaml_code' in
-      if Common.get_verbosity_default cfg 0 > 2 then
+      if Common.get Verbosity cfg > 2 then
         Log.log_with ~cfg ~level:Low ~kind:Neutral
           ~msg:"Finished polishing OCaml code." ();
       let checked =
-        if Common.get_check_ocaml cfg then
+        if Common.get Check_ocaml cfg then
           Process_common.check_output ~config:cfg ocaml_code
         else Process_common.Good
       in

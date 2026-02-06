@@ -4,7 +4,7 @@ type sml_code = Ast.prog
 type ocaml_code = Parsetree.toplevel_phrase list
 
 module Log = Common.Make (struct
-  let config = Common.mkOptions ()
+  let config = Common.make ()
   let group = "process_file"
 end)
 
@@ -15,11 +15,11 @@ class process_file ?(store = Context.create (Context.Info.create [])) cfg_init =
     val mutable lexbuf : string = ""
     method get_store () : Context.t = store
     method set_store (s : Context.t) = store <- s
-    method get_config () : options = cfg
-    method set_config (c : options) = cfg <- c
+    method get_config () : t = cfg
+    method set_config (c : t) = cfg <- c
 
     method private get_fmt =
-      match get_output_file cfg with
+      match Common.get Output_file cfg with
       | FileOut path ->
           let oc = open_out path in
           Stdlib.Format.formatter_of_out_channel oc
@@ -51,7 +51,7 @@ class process_file ?(store = Context.create (Context.Info.create [])) cfg_init =
       let module Backend = Backend.Make (BackendContext) (BackendConfig) in
       let raw_ocaml = Backend.process_sml ~prog:sml in
       (* Generate constructor manifest if output file is specified *)
-      (match get_output_file cfg with
+      (match Common.get Output_file cfg with
       | FileOut output_path -> (
           let manifest_path = output_path ^ ".shibboleth-constructors" in
           let constructors = Backend.get_all_constructors () in

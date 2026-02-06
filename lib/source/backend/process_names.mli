@@ -35,7 +35,7 @@ val process_uppercase : string -> string
 val process_caps : string -> string
 val is_lowercase : string -> bool
 
-class process_names : Common.options ref -> Context.t ref -> object
+class process_names : Common.t ref -> Context.t ref -> object
   method is_good : ?ctx:context -> name:string list -> bool
   method process_name : ?ctx:context -> name:string list -> Longident.t * bool
   method push_context : unit -> note

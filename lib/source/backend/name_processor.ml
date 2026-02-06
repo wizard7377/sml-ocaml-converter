@@ -11,7 +11,7 @@
     - Integration with {!Idx_utils} for AST identifier handling *)
 
 module type CONFIG = sig
-  val config : Common.options
+  val config : Common.t
   val context : Context.t
 end
 
@@ -77,7 +77,7 @@ val vector : 'a list -> 'a vector 	Vector.fromList
 
   *)
   let process_special (name : string list) : string list option = 
-    if not @@ Common.engaged @@ Common.get_toplevel_names Config.config then 
+    if not @@ Common.engaged @@ Common.get Toplevel_names Config.config then 
       None 
     else 
       match name with 
@@ -105,7 +105,7 @@ val vector : 'a list -> 'a vector 	Vector.fromList
       | None ->
     match name with
     | [ name ] when in_core_lang ctx ->
-        (match Common.get_guess_var Config.config with
+        (match Common.get Guess_var Config.config with
         | Some regex ->
 
             (* Check if the variable name matches the regex pattern *)
@@ -160,7 +160,7 @@ val vector : 'a list -> 'a vector 	Vector.fromList
   let get_name (from : string) : string = namer#get_name from
 
   let matches_pattern (name : string) : bool =
-    match Common.get_guess_var Config.config with
+    match Common.get Guess_var Config.config with
     | Some regex ->
         Re.Str.string_match (Re.Str.regexp ("^" ^ regex ^ "$")) name 0
     | None -> false  

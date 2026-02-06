@@ -40,4 +40,4 @@
     - [conversions]: Flags controlling which semantic transformations to apply
 *)
 
-val common_options : Common.options Cmdliner.Term.t
+val common_options : Common.t Cmdliner.Term.t

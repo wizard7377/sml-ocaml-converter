@@ -70,12 +70,12 @@ let context_to_string (ctx : name_context) : string =
 (** Overall context for processing, including configuration options *)
 type context = {
   name_ctx : name_context;
-  config : Common.options;
+  config : Common.t;
 }
 let update context f = { context with name_ctx = f context.name_ctx }
 let default_context : context = {
   name_ctx = EmptyContext;
-  config = Common.mkOptions ();
+  config = Common.make ();
 }
 
 (** Track identifiers that need cascading renames *)
@@ -84,10 +84,10 @@ module Builder = Ast_builder.Make(struct
   let loc = Location.none
 end)
 module Log = Common.Make (struct
-  let config = Common.mkOptions ()
+  let config = Common.make ()
   let group = "process_names"
 end)
-class process_ocaml ~(opts : Common.options) =
+class process_ocaml ~(opts : Common.t) =
   object (self)
     inherit [context] Ast_traverse.map_with_context as super
 
@@ -108,7 +108,7 @@ class process_ocaml ~(opts : Common.options) =
 
     (** Check if currying is enabled *)
     method private should_curry : bool =
-      Common.engaged (Common.get_curry_expressions config)
+      Common.engaged (Common.get Curry_expressions config)
 
     (** Extract patterns from a tuple pattern for currying.
         Handles nested parentheses and type constraints. *)
@@ -160,7 +160,7 @@ class process_ocaml ~(opts : Common.options) =
 
     (** Check if a name needs keyword escaping *)
     method private needs_keyword_escape (name : string) : bool =
-      Keyword.is_keyword name && Common.is_flag_enabled (Common.get_convert_keywords config)
+      Keyword.is_keyword name && Common.is_flag_enabled (Common.get Convert_keywords config)
 
     (** Apply cascading rename: if name_ exists, become name__, otherwise become name_ *)
     method private escape_keyword (name : string) : string =
@@ -207,12 +207,12 @@ class process_ocaml ~(opts : Common.options) =
       
       | InPattern _ | InVariableContext (InPattern _) ->
           (* In patterns, guess based on capitalization if --guess-var is set *)
-          (match Common.get_guess_var config with
+          (match Common.get Guess_var config with
            | Some pattern ->
                let regex = Re.Str.regexp ({|\b|} ^ pattern ^ {|\b|}) in
                if Re.Str.string_match regex name_after_escape 0 then
                  (* Matches guess pattern - treat as variable *)
-                 if Common.is_flag_enabled (Common.get_convert_names config) then
+                 if Common.is_flag_enabled (Common.get Convert_names config) then
                    Capital.process_lowercase name_after_escape
                  else
                    name_after_escape
@@ -223,17 +223,17 @@ class process_ocaml ~(opts : Common.options) =
                (* No guess pattern - use SML capitalization as-is *)
                name_after_escape)
 
-      | InTypeDecl | InQualifiedName InTypeDecl | InVariableContext _ when Common.is_flag_enabled (Common.get_rename_types config) ->
+      | InTypeDecl | InQualifiedName InTypeDecl | InVariableContext _ when Common.is_flag_enabled (Common.get Rename_types config) ->
           (* Type declarations must be lowercase *)
           let lowered = Capital.process_lowercase name_after_escape in
           if Capital.is_variable_identifier lowered then lowered
           else lowered ^ "_"
       
-      | InTypeName | InQualifiedName InTypeName when Common.is_flag_enabled (Common.get_rename_types config) ->
+      | InTypeName | InQualifiedName InTypeName when Common.is_flag_enabled (Common.get Rename_types config) ->
           let lowered = Capital.process_lowercase name_after_escape in
           if Capital.is_variable_identifier lowered then lowered
           else lowered ^ "_"
-      | InConstructorDecl when Common.is_flag_enabled (Common.get_convert_names config) ->
+      | InConstructorDecl when Common.is_flag_enabled (Common.get Convert_names config) ->
           Log.log_with ~cfg:config ~level:Debug ~kind:Neutral
             ~msg:("Processing constructor declaration name: " ^ name_after_escape) ();
           (* Map SML basis constructors to OCaml equivalents *)
@@ -253,11 +253,11 @@ class process_ocaml ~(opts : Common.options) =
           (* Constructors must be uppercase *)
           Capital.process_uppercase mapped
 
-      | InPatternHead when Common.is_flag_enabled (Common.get_guess_pattern config) ->
+      | InPatternHead when Common.is_flag_enabled (Common.get Guess_pattern config) ->
           (* Pattern heads are always constructors *)
           Capital.process_uppercase name_after_escape
 
-      | InValue | InLabel when Common.is_flag_enabled (Common.get_convert_names config) ->
+      | InValue | InLabel when Common.is_flag_enabled (Common.get Convert_names config) ->
           (* Values and labels should be lowercase *)
           Capital.process_lowercase name_after_escape
 

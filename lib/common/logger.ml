@@ -9,7 +9,7 @@ module type LOG = sig
     ?subgroup:string -> ?level:level -> ?kind:kind -> msg:string -> unit -> unit
 
   val log_with :
-    cfg:Options.options ->
+    cfg:Config_lib.t ->
     ?subgroup:string ->
     ?level:level ->
     ?kind:kind ->
@@ -19,7 +19,7 @@ module type LOG = sig
 end
 
 module type S = sig
-  include Options.CONFIG
+  val config : Config_lib.t
 
   val group : string
 end
@@ -36,17 +36,17 @@ module Make (C : S) : LOG = struct
      1. Debug flags bypass everything (always print if matched)
      2. Quiet mode suppresses all except errors (kind=Negative)
      3. Verbosity level filtering (based on message importance) *)
-  let get_should_print ?(subgroup = "") ?(cfg : Options.options = C.config)
+  let get_should_print ?(subgroup = "") ?(cfg : Config_lib.t = C.config)
       (level : level) (kind : kind) : bool =
-    let debug_flags = Options.get_debug cfg in
+    let debug_flags = Config_lib.get Debug cfg in
 
     (* Priority 1: Debug flags bypass everything *)
     if List.exists (matches_debug_flag ~group:C.group ~subgroup) debug_flags
     then true (* Priority 2: Quiet mode suppresses non-errors *)
-    else if Options.get_quiet cfg && kind <> Negative then false
+    else if Config_lib.get Quiet cfg && kind <> Negative then false
     (* Priority 3: Verbosity level filtering *)
       else
-      let verbosity = Options.get_verbosity_default cfg 0 in
+      let verbosity = Config_lib.get Verbosity cfg in
       let level_value =
         match level with High -> 0 | Medium -> 1 | Low -> 2 | Debug -> 3
       in

@@ -16,7 +16,7 @@ module type TEST_CASE = sig
   val run_test : unit test_case
 end
 
-let test_config = Common.mkOptions ()
+let test_config = Common.make ()
 
 module TestConfig : Common.CONFIG = struct
   let config = test_config

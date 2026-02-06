@@ -147,8 +147,8 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
   let depth : int ref = ref 0
 
   let trace_part ?(level = 2) ?(ast = "") ?(msg = "") ~value : 'a =
-    match get_verbosity config with
-    | Some v when v >= level ->
+    let verbosity = Common.get Verbosity config in
+    if verbosity >= level then begin
         (* TODO use level *)
         let indent = !depth in
         depth := indent + 1;
@@ -161,7 +161,8 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
           ~msg:(Stdlib.Format.sprintf "%dExiting %s %s" !depth ast msg)
           ();
         res
-    | _ -> value ()
+    end
+    else value ()
 
   (* Use helper modules for common operations *)
   let is_variable_identifier = Capital_utils.is_variable_identifier
@@ -2410,7 +2411,7 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
       converted structure in a toplevel phrase for output. *)
   and process_sml ~(prog : Ast.prog) : res =
     let output_src =
-      match Common.get_verbosity config with None -> false | Some n -> n >= 2
+      Common.get Verbosity config >= 2
     in
     if output_src then Stdlib.Format.eprintf "@,Lexical source: @[%s@]@," lexbuf;
     let structure = process_prog prog in

@@ -68,18 +68,18 @@ let rec get_in_scope (scope:scope) (name:string) : string option =
   Stack.fold (get_scope_level name) None scope
 
 module Log = Common.Make (struct 
-    let config = Common.mkOptions ()
+    let config = Common.make ()
     let group = "process_names"
   end)
-class process_names (config : Common.options ref) (store : Context.t ref) =
+class process_names (config : Common.t ref) (store : Context.t ref) =
   object (self)
     val store : Context.t ref = store
-    val config : Common.options ref = config
+    val config : Common.t ref = config
     val mutable current_depth : int = 0 
     val mutable context_stack : string StringMap.t Stack.t = Stack.create () 
     val mutable global_map : string StringMap.t = StringMap.empty
     method private guess_matches (n : string) : bool =
-      match Common.get_guess_var !config with
+      match Common.get Guess_var !config with
       | Some pattern ->
           let regex = Re.Str.regexp pattern in
           Re.Str.string_match regex n 0
@@ -194,7 +194,7 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
         | name''' -> name''' in
       let (res, b) =
         (match ctx with
-        | Type when Common.is_flag_enabled (Common.get_rename_types !config) -> (
+        | Type when Common.is_flag_enabled (Common.get Rename_types !config) -> (
             let rec process_parts parts =
               match parts with
               | [] -> []
@@ -204,7 +204,7 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
             let new_name = process_parts name' in
             (new_name, true)
           )
-        | Functor when Common.is_flag_enabled (Common.get_make_make_functor !config) -> (
+        | Functor when Common.is_flag_enabled (Common.get Make_make_functor !config) -> (
             let rec process_parts parts =
               match parts with
               | [] -> []
@@ -215,16 +215,16 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
             (new_name, true)
           )
         | Functor -> (name', false)
-        | PatternHead when Common.is_flag_enabled (Common.get_guess_pattern !config) -> let res = map_last process_uppercase name' in (res, name' <> res)
-        | PatternTail when Common.is_flag_enabled (Common.get_convert_names !config) -> begin match name' with
+        | PatternHead when Common.is_flag_enabled (Common.get Guess_pattern !config) -> let res = map_last process_uppercase name' in (res, name' <> res)
+        | PatternTail when Common.is_flag_enabled (Common.get Convert_names !config) -> begin match name' with
             | [ last ] -> let res = process_lowercase last in ( [ res ], last <> res)
             | _ -> (name', false)
           end
-        | Value when Common.is_flag_enabled (Common.get_convert_names !config) -> begin match name' with
+        | Value when Common.is_flag_enabled (Common.get Convert_names !config) -> begin match name' with
             | [ last ] -> let res = process_lowercase last in ( [ res ], last <> res)
             | _ -> (name', false)
           end
-        | Constructor when Common.is_flag_enabled (Common.get_convert_names !config) ->
+        | Constructor when Common.is_flag_enabled (Common.get Convert_names !config) ->
             (* Map SML basis constructors to OCaml equivalents *)
             let mapped_name = match name' with
               | ["SOME"] -> ["Some"]
@@ -250,7 +250,7 @@ class process_names (config : Common.options ref) (store : Context.t ref) =
         )
           in 
       let (scope, basename) = self#split_name res in
-      let (res0, res1) = (if Ppxlib.Keyword.is_keyword basename && Common.is_flag_enabled (Common.get_convert_keywords !config) then
+      let (res0, res1) = (if Ppxlib.Keyword.is_keyword basename && Common.is_flag_enabled (Common.get Convert_keywords !config) then
         let new_basename = basename ^ "_" in
         let full_name = scope @ [ new_basename ] in
         (self#build_longident full_name, b)

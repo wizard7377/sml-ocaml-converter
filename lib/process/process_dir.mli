@@ -2,7 +2,7 @@ open Common
 
 exception DirectoryExists
 
-class process_dir : string -> options -> object
+class process_dir : string -> Common.t -> object
   method set_dir : string -> unit
   method setup_dir : string -> unit
   method copy_other_files : string -> unit

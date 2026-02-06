@@ -51,7 +51,7 @@ let verb : int Term.t =
   in
   Arg.(value & opt int 0 & info [ "v"; "verbose" ] ~doc)
 
-let conversion_flags : (bool * Common.conversions) Term.t =
+let conversion_flags : (bool * Common.t) Term.t =
   let convert_names_doc =
     {|
     Flag conversion of identifiers that are invalid in OCaml with attributes.
@@ -416,7 +416,7 @@ let conversion_flags : (bool * Common.conversions) Term.t =
   and+ curry_types = curry_types_flag
   and+ tuple_select = tuple_select_flag in
   ( force,
-    Common.mkConversions ~convert_names ~convert_comments ~add_line_numbers
+    Common.make ~convert_names ~convert_comments ~add_line_numbers
       ~convert_keywords ~rename_types ~make_make_functor ~rename_constructors
       ~guess_pattern ~deref_pattern ~curry_expressions ~curry_types
       ~tuple_select () )
@@ -632,7 +632,7 @@ let check_ocaml_doc =
 let check_ocaml_flag : bool Term.t =
   Arg.(value & flag & info [ "check-ocaml" ] ~doc:check_ocaml_doc)
 
-let common_options : Common.options Cmdliner.Term.t =
+let common_options : Common.t Cmdliner.Term.t =
   let+ v = verb
   and+ force, c = conversion_flags
   and+ co = concat_output
@@ -642,6 +642,26 @@ let common_options : Common.options Cmdliner.Term.t =
   and+ var_reg = variable_regex_flag
   and+ check_ocaml = check_ocaml_flag
   and+ dash_to_underscore = dash_to_underscore_flag in
-  Common.mkOptions ~verbosity:(Some v) ~conversions:c ~concat_output:co ~force
-    ~quiet:q ~guess_var:gv ~debug:dbg ~variable_regex:var_reg ~check_ocaml
-    ~dash_to_underscore ()
+  Common.make 
+    ~verbosity:v 
+    ~convert_names:(Common.get Convert_names c)
+    ~convert_comments:(Common.get Convert_comments c)
+    ~add_line_numbers:(Common.get Add_line_numbers c)
+    ~convert_keywords:(Common.get Convert_keywords c)
+    ~rename_types:(Common.get Rename_types c)
+    ~make_make_functor:(Common.get Make_make_functor c)
+    ~rename_constructors:(Common.get Rename_constructors c)
+    ~guess_pattern:(Common.get Guess_pattern c)
+    ~deref_pattern:(Common.get Deref_pattern c)
+    ~curry_expressions:(Common.get Curry_expressions c)
+    ~curry_types:(Common.get Curry_types c)
+    ~tuple_select:(Common.get Tuple_select c)
+    ~concat_output:co 
+    ~force
+    ~quiet:q 
+    ~guess_var:gv 
+    ~debug:dbg 
+    ~variable_regex:var_reg 
+    ~check_ocaml
+    ~dash_to_underscore 
+    ()

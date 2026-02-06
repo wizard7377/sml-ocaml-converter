@@ -20,8 +20,8 @@ class process_group path cfg_init =
 
     method get_store () : Context.t = store
     method set_store (s : Context.t) = store <- s
-    method get_config () : options = cfg
-    method set_config (c : options) = cfg <- c
+    method get_config () : Common.t = cfg
+    method set_config (c : Common.t) = cfg <- c
 
     method find_members (group_file : string) : t =
       {

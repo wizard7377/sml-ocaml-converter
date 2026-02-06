@@ -1,7 +1,7 @@
 (** Centralized name processing for SML to OCaml conversion. *)
 
 module type CONFIG = sig
-  val config : Common.options
+  val config : Common.t
   val context : Context.t
 end
 

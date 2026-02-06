@@ -6,7 +6,7 @@ module type TYPE_DEPS = sig
   val build_longident : ?capitalize_modules:bool -> string list -> Ppxlib.Longident.t
   val name_to_string : string list -> string
   val ghost : 'a -> 'a Location.loc
-  val config : Common.options
+  val config : Common.t
 end
 
 (** Module type for type processing interface *)

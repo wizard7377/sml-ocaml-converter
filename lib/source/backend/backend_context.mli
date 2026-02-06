@@ -7,7 +7,7 @@ open Process_names
 
 (** Module type for the shared backend context *)
 module type BACKEND_CONTEXT = sig
-  val config : Common.options
+  val config : Common.t
   val lexbuf : string
   val labeller : Process_label.process_label
   val namer : Process_names.process_names

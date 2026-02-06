@@ -86,8 +86,32 @@ val convert_path_dashes_to_underscores : Fpath.t -> Fpath.t
     @param path The input path
     @return A new path with dashes replaced by underscores in each component *)
 
-include module type of Options
-include module type of Logger
+include module type of Config_lib
+
+(** Logger types *)
+type level = Logger.level = High | Medium | Low | Debug
+type kind = Logger.kind = Positive | Negative | Neutral | Warning
+
+module type LOG = sig
+  val log :
+    ?subgroup:string -> ?level:level -> ?kind:kind -> msg:string -> unit -> unit
+
+  val log_with :
+    cfg:t ->
+    ?subgroup:string ->
+    ?level:level ->
+    ?kind:kind ->
+    msg:string ->
+    unit ->
+    unit
+end
+
+module type S = sig
+  val config : t
+  val group : string
+end
+
+module Make (C : S) : LOG
 
 (** {1 Pretty Printing}
 

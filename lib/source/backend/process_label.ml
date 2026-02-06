@@ -52,7 +52,7 @@ let rec get_all_comments (lexbuf : string) : (string * int * int) list =
 
 class process_label opts lexbuf =
   object (self)
-    val options : Common.options = opts
+    val config : Common.t = opts
     val mutable comments : (string * int * int) list = get_all_comments lexbuf
 
     val mutable lexbuf : string =

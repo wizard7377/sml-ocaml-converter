@@ -1,7 +1,7 @@
 (** Shared types and utilities for backend converters *)
 
 type env = {
-  config : Common.options ref;
+  config : Common.t ref;
   labeller : Process_label.process_label;
   name_processor : Process_names.process_names;
   lexbuf : Lexing.lexbuf;

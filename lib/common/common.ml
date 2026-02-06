@@ -32,6 +32,18 @@ let convert_path_dashes_to_underscores (p : Fpath.t) : Fpath.t =
   in
   Fpath.v (String.concat Fpath.dir_sep converted_segments)
 
-include Options
+include Config_lib
 include Logger
+
+(* Override Logger.S and Make to use Common.t (= Config_lib.t) *)
+module type S = sig
+  val config : t
+  val group : string
+end
+
+module Make (C : S) = Logger.Make(struct
+  let config = C.config
+  let group = C.group
+end)
+
 module Format = Format

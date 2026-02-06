@@ -1,5 +1,5 @@
 (library
  (public_name shibboleth.common)
  (name common)
- (modules common options format logger)
- (libraries ppxlib re fmt fmt.tty bos fpath))
+ (modules common format logger)
+ (libraries config_lib ppxlib re fmt fmt.tty bos fpath))

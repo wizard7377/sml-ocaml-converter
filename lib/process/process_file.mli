@@ -79,15 +79,15 @@ type ocaml_code
     @param config
       Conversion configuration including input/output paths and transformation
       flags *)
-class process_file : ?store:Context.t -> options -> object
-  method set_config : options -> unit
+class process_file : ?store:Context.t -> Common.t -> object
+  method set_config : Common.t -> unit
   (** [set_config cfg] updates the processor's configuration.
 
       This allows reusing a processor instance with different settings.
 
       @param cfg New configuration to apply *)
 
-  method get_config : unit -> options
+  method get_config : unit -> Common.t
   (** [get_config ()] retrieves the current configuration.
 
       @return The active configuration settings *)

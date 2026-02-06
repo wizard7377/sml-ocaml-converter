@@ -13,7 +13,7 @@ let path_to_string (p : path) : string = Fpath.to_string p
 let string_to_path (s : string) : path = Fpath.v s
 
 let convert_file ~(input_files : path list) ?(output_file : path option)
-    ~(options : Common.options) : int =
+    ~(options : Common.t) : int =
   let input_files'' =
     match input_files with
     | [] -> Common.StdIn
@@ -25,15 +25,32 @@ let convert_file ~(input_files : path list) ?(output_file : path option)
     | Some p -> Common.FileOut (path_to_string p)
   in
   let cfg =
-    Common.mkOptions ~input_file:input_files'' ~output_file:output_target
-      ~verbosity:(Common.get_verbosity options)
-      ~conversions:(Common.get_conversions options)
-      ~concat_output:(Common.get_concat_output options)
-      ~force:(Common.get_force options) ~quiet:(Common.get_quiet options)
-      ~guess_var:(Common.get_guess_var options)
-      ~debug:(Common.get_debug options)
-      ~check_ocaml:(Common.get_check_ocaml options)
-      ~variable_regex:(Common.get_variable_regex options)
+    Common.make 
+      ~input_file:input_files'' 
+      ~output_file:output_target
+      ~verbosity:(Common.get Verbosity options)
+      ~convert_names:(Common.get Convert_names options)
+      ~convert_comments:(Common.get Convert_comments options)
+      ~add_line_numbers:(Common.get Add_line_numbers options)
+      ~convert_keywords:(Common.get Convert_keywords options)
+      ~rename_types:(Common.get Rename_types options)
+      ~make_make_functor:(Common.get Make_make_functor options)
+      ~rename_constructors:(Common.get Rename_constructors options)
+      ~guess_pattern:(Common.get Guess_pattern options)
+      ~deref_pattern:(Common.get Deref_pattern options)
+      ~curry_expressions:(Common.get Curry_expressions options)
+      ~curry_types:(Common.get Curry_types options)
+      ~tuple_select:(Common.get Tuple_select options)
+      ~toplevel_names:(Common.get Toplevel_names options)
+      ~concat_output:(Common.get Concat_output options)
+      ~force:(Common.get Force options) 
+      ~quiet:(Common.get Quiet options)
+      ~guess_var:(Common.get Guess_var options)
+      ~debug:(Common.get Debug options)
+      ~check_ocaml:(Common.get Check_ocaml options)
+      ~variable_regex:(Common.get Variable_regex options)
+      ~dash_to_underscore:(Common.get Dash_to_underscore options)
+      ~basis_shim:(Common.get Basis_shim options)
       ()
   in
   let process = new process cfg in
@@ -130,7 +147,7 @@ let order_files (input_path0 : path) (input_path1 : path) : int =
   | n -> n
 
 let process_sml_files (input_path : path) (output_path : path)
-    (sml_files : path list) (options : Common.options) : int * int * int =
+    (sml_files : path list) (options : Common.t) : int * int * int =
   let files = List.map Fpath.rem_ext sml_files in
   let groups = List.sort_uniq Fpath.compare files in
   let res =
@@ -157,12 +174,12 @@ let process_sml_files (input_path : path) (output_path : path)
           in
           (* Convert dashes to underscores in both directory and file paths *)
           let output_path' =
-            if Common.get_dash_to_underscore options then
+            if Common.get Dash_to_underscore options then
               Common.convert_path_dashes_to_underscores output_path
             else output_path
           in
           let f' =
-            if Common.get_dash_to_underscore options then
+            if Common.get Dash_to_underscore options then
               Common.convert_path_dashes_to_underscores f
             else f
           in
@@ -174,7 +191,7 @@ let process_sml_files (input_path : path) (output_path : path)
           let should_convert =
             match Bos.OS.File.exists output_file with
             | Ok true ->
-                if Common.get_force options then true
+                if Common.get Force options then true
                 else begin
                   Printf.eprintf
                     "Skipping %s (already exists, use --force to overwrite)\n"
@@ -206,7 +223,7 @@ let process_sml_files (input_path : path) (output_path : path)
   (failures, warnings, List.length res)
 
 let convert_group ~(input_dir : path) ~(output_dir : path)
-    ~(options : Common.options) : int =
+    ~(options : Common.t) : int =
   (* Check if input and output are the same *)
   if Fpath.equal input_dir output_dir then begin
     Printf.eprintf "Input and output directories cannot be the same.\n";
@@ -217,7 +234,7 @@ let convert_group ~(input_dir : path) ~(output_dir : path)
   let dir_exists =
     Result.value ~default:false @@ Bos.OS.Dir.exists output_dir
   in
-  if dir_exists && not (Common.get_force options) then begin
+  if dir_exists && not (Common.get Force options) then begin
     Printf.eprintf
       "Output directory %s already exists. Use --force to overwrite existing \
        files.\n"
@@ -246,7 +263,7 @@ let convert_group ~(input_dir : path) ~(output_dir : path)
   let _ =
     List.iter
       (fun f ->
-        copy_file ~force:(Common.get_force options) (Fpath.( // ) input_dir f)
+        copy_file ~force:(Common.get Force options) (Fpath.( // ) input_dir f)
           (Fpath.( // ) output_dir f))
       normal_files_rel
   in

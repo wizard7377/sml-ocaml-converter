@@ -6,7 +6,7 @@ type 'a citer = 'a -> attr -> 'a
 val change_name : string -> string -> attr
 val fixed_name : string -> string -> attr
 
-class process_label : Common.options -> string -> object
+class process_label : Common.t -> string -> object
   method cite :
     'a. 'a citer -> (Lexing.position * Lexing.position) option -> 'a -> 'a
 

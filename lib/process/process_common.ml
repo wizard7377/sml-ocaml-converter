@@ -40,14 +40,14 @@ let display_error_context_from_string ?(context = 4) (_filename : string)
   let file_content = String.split_on_char '\n' content in
   display_error_context_lines ~context file_content p0 p1
 
-let get_output_file (config : Common.options) : string =
-  match Common.get_output_file config with
+let get_output_file_path (config : Common.t) : string =
+  match Common.get Output_file config with
   | Common.FileOut path -> path
   | Common.StdOut -> "standard output"
   | Common.Silent -> "silent output"
 
-let check_output ~(config : Common.options)
-    ?(output_file = get_output_file config) (input : string) : check_result =
+let check_output ~(config : Common.t)
+    ?(output_file = get_output_file_path config) (input : string) : check_result =
   let module Log = Common.Make (struct
     let config = config
     let group = "process_common"
@@ -66,7 +66,7 @@ let check_output ~(config : Common.options)
   with
   | Syntaxerr.Error e ->
       let source_files =
-        match Common.get_input_file config with
+        match Common.get Input_file config with
         | Common.File path -> String.concat " , " path
         | Common.StdIn -> "standard input"
       in
@@ -85,7 +85,7 @@ let check_output ~(config : Common.options)
       Bad e
   | Lexer.Error (_e, warn) ->
       let source_files =
-        match Common.get_input_file config with
+        match Common.get Input_file config with
         | Common.File path -> String.concat " , " path
         | Common.StdIn -> "standard input"
       in

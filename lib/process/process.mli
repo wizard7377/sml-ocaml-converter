@@ -18,7 +18,7 @@
     {1 Architecture}
 
     The {!process} class encapsulates the entire conversion state:
-    - Configuration settings ({!Common.options})
+    - Configuration settings ({!Common.t})
     - Name store for tracking identifiers ({!Names.Store.t})
     - Input/output handling
 
@@ -99,13 +99,13 @@ type output = Common.target
     @param config
       Conversion configuration including input/output paths, verbosity level,
       and conversion flags. *)
-class process : ?store:Context.t -> options -> object
-  method set_config : options -> unit
+class process : ?store:Context.t -> Common.t -> object
+  method set_config : Common.t -> unit
   (** [set_config cfg] updates the processor's configuration.
 
       @param cfg New configuration to use for subsequent conversions. *)
 
-  method get_config : unit -> options
+  method get_config : unit -> Common.t
   (** [get_config ()] retrieves the current configuration.
 
       @return The active configuration settings. *)

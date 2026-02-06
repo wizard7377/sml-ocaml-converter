@@ -2,10 +2,10 @@ open Common
 
 exception DirectoryExists
 
-class process_dir (dir : string) (options : options) =
+class process_dir (dir : string) (config : Common.t) =
   object
     val mutable dir : string = dir
-    val mutable cfg : options = options
+    val mutable cfg : Common.t = config
     method set_dir (d : string) : unit = dir <- d
 
     method setup_dir (d : string) : unit =

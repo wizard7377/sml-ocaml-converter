@@ -10,8 +10,8 @@ module PR = Backend.Precedence_resolver
 (** Test configuration *)
 module TestConfig : Common.CONFIG = struct
   let config =
-    Common.mkOptions ~input_file:Common.StdIn ~output_file:Common.Silent
-      ~verbosity:(Some 3) ~conversions:(Common.mkConversions ()) ()
+    Common.make ~input_file:Common.StdIn ~output_file:Common.Silent
+      ~verbosity:3 ()
 end
 
 module TestContext (* TODO *) = struct
@@ -625,8 +625,8 @@ let test_process_pat_as () =
 (** Test configuration with guess_var enabled *)
 module TestConfigWithGuessVar : Common.CONFIG = struct
   let config =
-    Common.mkOptions ~input_file:Common.StdIn ~output_file:Common.Silent
-      ~verbosity:(Some 3) ~conversions:(Common.mkConversions ())
+    Common.make ~input_file:Common.StdIn ~output_file:Common.Silent
+      ~verbosity:3 
       ~guess_var:(Some "[A-Z][a-zA-Z0-9_]*") ()
 end
 
@@ -1657,14 +1657,13 @@ let test_twelf_file (file_path : string) () : unit =
 
   (* Configure the converter *)
   let config =
-    Common.mkOptions ~input_file:(Common.File [ file_path ])
+    Common.make ~input_file:(Common.File [ file_path ])
       ~output_file:Common.Silent
-      ~verbosity:(Some 0) (* Silent verbosity for tests *)
-      ~conversions:
-        (Common.mkConversions ~convert_names:Enable ~convert_comments:Enable
-           ~convert_keywords:Enable ~rename_types:Enable
-           ~rename_constructors:Enable ~deref_pattern:Enable
-           ~guess_pattern:Enable ())
+      ~verbosity:0 (* Silent verbosity for tests *)
+      ~convert_names:Enable ~convert_comments:Enable
+      ~convert_keywords:Enable ~rename_types:Enable
+      ~rename_constructors:Enable ~deref_pattern:Enable
+      ~guess_pattern:Enable 
       ~guess_var:(Some {|[A-Z]s?[0-9]?'?|}) ~variable_regex:{|[A-Z]s?[0-9]?'?|}
       ()
   in
