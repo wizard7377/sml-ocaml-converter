@@ -1014,8 +1014,8 @@ and bindings f (rf, l) =
       vbox
         (fun f () ->
           binding "let" rf f x;
-          Fmt.comma f ();
-          list ~sep:Fmt.comma (binding "and" Nonrecursive) f xs)
+          Fmt.sp f ();
+          list ~sep:Fmt.sp (binding "and" Nonrecursive) f xs)
         f ()
 
 and binding_body f { pvb_pat = p; pvb_expr = x; _ } =

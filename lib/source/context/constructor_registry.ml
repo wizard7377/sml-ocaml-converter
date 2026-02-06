@@ -75,11 +75,12 @@ let add_module_alias registry ~alias ~target =
       in
       if has_prefix target path then
         (* Replace target prefix with alias prefix *)
-        let suffix = 
-          let rec drop n lst = match n, lst with
+        let suffix =
+          let rec drop n lst =
+            match (n, lst) with
             | 0, lst -> lst
             | _, [] -> []
-            | n, _ :: rest -> drop (n-1) rest
+            | n, _ :: rest -> drop (n - 1) rest
           in
           drop target_len path
         in

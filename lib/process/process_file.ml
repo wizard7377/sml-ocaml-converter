@@ -4,7 +4,7 @@ type sml_code = Ast.prog
 type ocaml_code = Parsetree.toplevel_phrase list
 
 module Log = Common.Make (struct
-  let config = Common.make ()
+  let config = Common.create []
   let group = "process_file"
 end)
 
@@ -53,7 +53,7 @@ class process_file ?(store = Context.create (Context.Info.create [])) cfg_init =
       (* Generate constructor manifest if output file is specified *)
       (match Common.get Output_file cfg with
       | FileOut output_path -> (
-          let manifest_path = output_path ^ ".shibboleth-constructors" in
+          let manifest_path = output_path ^ ".sctx" in
           let constructors = Backend.get_all_constructors () in
           try
             Context.Constructor_manifest.write_file manifest_path constructors;

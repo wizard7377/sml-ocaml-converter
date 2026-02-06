@@ -80,60 +80,6 @@ let conversion_flags : (bool * Common.t) Term.t =
     @@ convert_flag_arg Common.Disable
          (Cmdliner.Arg.info [ "convert-names" ] ~doc:convert_names_doc)
   in
-  let convert_comments_doc =
-    {|
-  Convert SML comments to OCaml comments.
-
-  PROCESS:
-  Standard ML uses (* ... *) style comments (same as OCaml), but comment placement
-  and semantics may differ. The converter:
-  1. Extracts comments from SML AST nodes
-  2. Temporarily converts them to attributes for AST transformation
-  3. Replaces attributes with OCaml comments in the final output
-
-  LIMITATIONS:
-  - Comment position may shift slightly due to AST transformations
-  - Nested comment handling may differ between SML and OCaml
-  - Some comment-doc conventions may not translate directly
-
-  WHEN TO DISABLE:
-  Disable if comment conversion causes issues or if you plan to re-document
-  the converted code manually.
-
-  Default: warn (convert comments and report any issues)
-  |}
-  in
-  let convert_comments_flag : Common.convert_flag Term.t =
-    Arg.value
-    @@ convert_flag_arg Common.Warn
-         (Cmdliner.Arg.info [ "convert-comments" ] ~doc:convert_comments_doc)
-  in
-  let add_line_numbers_doc =
-    {|
-  Annotate converted code with original SML line numbers.
-
-  BEHAVIOR:
-  Adds attributes indicating the source line number from the original SML file:
-    [@sml.line 42]
-
-  USE CASES:
-  - Debugging: Trace OCaml errors back to original SML source
-  - Code review: Understand correspondence between SML and OCaml code
-  - Incremental migration: Track which parts of converted code map to original
-  - Comparison: Side-by-side analysis of SML vs OCaml
-
-  NOTE:
-  These annotations are purely informational and don't affect code semantics.
-  They can be removed after conversion if no longer needed.
-
-  Default: disable (no line number annotations)
-  |}
-  in
-  let add_line_numbers_flag : Common.convert_flag Term.t =
-    Arg.value
-    @@ convert_flag_arg Common.Disable
-         (Cmdliner.Arg.info [ "add-line-numbers" ] ~doc:add_line_numbers_doc)
-  in
   let convert_keywords_doc =
     {|
   Handle SML identifiers that conflict with OCaml reserved keywords.
@@ -211,60 +157,37 @@ let conversion_flags : (bool * Common.t) Term.t =
     @@ convert_flag_arg Common.Note
          (Cmdliner.Arg.info [ "make-make-functor" ] ~doc:make_make_functor_doc)
   in
-  let rename_constructors_doc =
+  let guess_pattern_doc =
     {|
-  Adjust datatype constructor names for OCaml naming conventions.
+  Use heuristics to classify pattern identifiers as constructors or variables.
 
-  CONVENTIONS:
-  - Both SML and OCaml require constructors to start with uppercase
-  - However, specific naming patterns may differ (e.g., CONSTANT vs Constant)
-  - Some SML constructors may use naming styles uncommon in OCaml
+  THE PROBLEM:
+  In patterns, it's sometimes ambiguous whether an identifier is a constructor or a variable:
+    case x of Foo => ...  (* Is Foo a constructor or variable binding? *)
 
-  TRANSFORMATIONS:
-  This flag applies OCaml-idiomatic naming patterns to constructors, such as:
-  - Converting ALL_CAPS to PascalCase
-  - Adjusting constructor names that might conflict with types
-  - Standardizing multi-word constructor naming
+  SML uses capitalization as a hint, but not a rule. OCaml requires constructors to be
+  capitalized and variables to be lowercase.
 
-  CAUTION:
-  Renaming constructors changes the API. Only enable if you're willing to update
-  pattern matches and constructor calls throughout the codebase.
+  HEURISTICS APPLIED:
+  - Starts with uppercase → likely constructor
+  - Previously seen as constructor → constructor
+  - Appears in a datatype definition → constructor
+  - Context-based disambiguation using local definitions
 
-  Default: note (apply transformation and log informational notes)
-  |}
-  in
-  let rename_constructors_flag : Common.convert_flag Term.t =
-    Arg.value
-    @@ convert_flag_arg Common.Note
-         (Cmdliner.Arg.info [ "rename-constructors" ]
-            ~doc:rename_constructors_doc)
-  in
-  let deref_pattern_doc =
-    {|
-  Transform reference patterns to match OCaml's reference handling.
-
-  BEHAVIOR:
-  SML and OCaml handle references differently in pattern matching:
-  - SML allows direct pattern matching on ref cells: ref x
-  - OCaml typically requires explicit dereferencing: !x
-
-  This flag automatically transforms SML reference patterns to OCaml equivalents,
-  inserting dereferencing operations where needed.
-
-  Example transformation:
-    SML: case !r of ref x => ...
-    OCaml: match !r with {contents = x} -> ...
+  LIMITATIONS:
+  Heuristics are not perfect. Review generated code for incorrect classifications,
+  especially for identifiers that violate typical naming conventions.
 
   RECOMMENDATION:
-  Keep enabled unless you're manually handling reference semantics.
+  Enable with warnings to catch ambiguous cases that need manual review.
 
-  Default: enable (apply transformation silently)
+  Default: warn (apply heuristics and report uncertain cases)
   |}
   in
-  let deref_pattern_flag : Common.convert_flag Term.t =
+  let guess_pattern_flag : Common.convert_flag Term.t =
     Arg.value
-    @@ convert_flag_arg Common.Enable
-         (Cmdliner.Arg.info [ "deref-pattern" ] ~doc:deref_pattern_doc)
+    @@ convert_flag_arg Common.Warn
+         (Cmdliner.Arg.info [ "guess-pattern" ] ~doc:guess_pattern_doc)
   in
   let curry_expressions_doc =
     {|
@@ -298,21 +221,22 @@ let conversion_flags : (bool * Common.t) Term.t =
   in
   let curry_types_doc =
     {|
-  Convert tuple-argument type constructors to curried form.
+  Convert tuple-argument function types to curried form.
 
   DIFFERENCE:
-  - SML: Multi-argument type constructors use tuples: (int * string) list
-  - OCaml: Type constructors are curried: (int, string) list
+  - SML: Function types with tuple arguments: (int * string) -> result
+  - OCaml: Curried function types: int -> string -> result
 
   TRANSFORMATION:
-  This flag adjusts type constructor syntax to match OCaml's expectations:
-    SML: (int * string) list
-    OCaml: (int, string) list  [when used with multi-param type constructors]
+  This flag converts function type signatures from tuple form to curried form:
+    SML: val f : int * string -> result
+    OCaml: val f : int -> string -> result
 
-  Note: This is separate from currying function types, which use -> in both languages.
+  This works in conjunction with --curry-expressions to ensure type signatures
+  match the converted function implementations.
 
   RECOMMENDATION:
-  Keep enabled for correct OCaml type syntax.
+  Keep enabled when using --curry-expressions to maintain type consistency.
 
   Default: enable (apply transformation silently)
   |}
@@ -321,32 +245,6 @@ let conversion_flags : (bool * Common.t) Term.t =
     Arg.value
     @@ convert_flag_arg Common.Enable
          (Cmdliner.Arg.info [ "curry-types" ] ~doc:curry_types_doc)
-  in
-  let tuple_select_doc =
-    {|
-  Transform SML tuple selector syntax to OCaml pattern matching.
-
-  BEHAVIOR:
-  SML has built-in tuple selectors #1, #2, etc. to extract tuple components:
-    #1 (a, b)  (* returns a *)
-
-  OCaml lacks built-in tuple selectors. This flag converts them to pattern matching:
-    fun (a, _) -> a
-
-  TRANSFORMATION:
-  SML: #1 tuple_expr
-  OCaml: match tuple_expr with (x, _) -> x
-
-  RECOMMENDATION:
-  Keep enabled to handle SML tuple selector syntax automatically.
-
-  Default: enable (apply transformation silently)
-  |}
-  in
-  let tuple_select_flag : Common.convert_flag Term.t =
-    Arg.value
-    @@ convert_flag_arg Common.Enable
-         (Cmdliner.Arg.info [ "tuple-select" ] ~doc:tuple_select_doc)
   in
   let guess_pattern_doc =
     {|
@@ -403,23 +301,23 @@ let conversion_flags : (bool * Common.t) Term.t =
   in
 
   let+ convert_names = convert_names_flag
-  and+ convert_comments = convert_comments_flag
-  and+ add_line_numbers = add_line_numbers_flag
   and+ convert_keywords = convert_keywords_flag
   and+ rename_types = rename_types_flag
   and+ make_make_functor = make_make_functor_flag
-  and+ rename_constructors = rename_constructors_flag
   and+ guess_pattern = guess_pattern_flag
   and+ force = convert_force_flag
-  and+ deref_pattern = deref_pattern_flag
   and+ curry_expressions = curry_expressions_flag
-  and+ curry_types = curry_types_flag
-  and+ tuple_select = tuple_select_flag in
+  and+ curry_types = curry_types_flag in
   ( force,
-    Common.make ~convert_names ~convert_comments ~add_line_numbers
-      ~convert_keywords ~rename_types ~make_make_functor ~rename_constructors
-      ~guess_pattern ~deref_pattern ~curry_expressions ~curry_types
-      ~tuple_select () )
+    Common.create Common.[ 
+      set Convert_names convert_names ;
+      set Convert_keywords convert_keywords ;
+      set Rename_types rename_types ;
+      set Make_make_functor make_make_functor ;
+      set Guess_pattern guess_pattern ;
+      set Curry_expressions curry_expressions ;
+      set Curry_types curry_types ;
+      ] )
 
 let dash_to_underscore_doc =
   {|
@@ -563,41 +461,6 @@ let debug : string list Term.t =
   in
   Arg.(value & opt (list string) [] & info [ "debug" ] ~docv:"CATEGORY" ~doc)
 
-let variable_regex_doc =
-  {|
-  Regular expression pattern for forcing variable names to lowercase in patterns.
-
-  PURPOSE:
-  Helps disambiguate SML code where variables start with uppercase (violating OCaml conventions).
-  Works in conjunction with pattern heuristics to classify identifiers correctly.
-
-  BEHAVIOR:
-  Pattern identifiers matching this regex are treated as variables and converted to lowercase:
-    Pattern: Con
-    With --variable-regex="Con" → pattern variable: con
-
-  SCOPE:
-  - Applied to pattern identifiers only (not expressions)
-  - The regex matches the last component of the name (after any module qualification)
-  - Works with the pattern guessing system to resolve ambiguities
-
-  DIFFERENCE FROM --guess-var:
-  - --variable-regex: Forces lowercase conversion in patterns
-  - --guess-var: Adds __ prefix while preserving case
-
-  EXAMPLE:
-  SML code with uppercase variables in patterns:
-    case x of X => ...
-  With --variable-regex="X":
-    match x with x -> ...
-
-  Default: empty (no regex-based variable forcing)
-  |}
-
-let variable_regex_flag : string Term.t =
-  Arg.(
-    value & opt string "" & info [ "variable-regex" ] ~doc:variable_regex_doc)
-
 let check_ocaml_doc =
   {|
   Validate generated OCaml code for syntax errors using the OCaml compiler.
@@ -632,6 +495,28 @@ let check_ocaml_doc =
 let check_ocaml_flag : bool Term.t =
   Arg.(value & flag & info [ "check-ocaml" ] ~doc:check_ocaml_doc)
 
+let remove_constructor_manifest_doc =
+  {|
+  Control generation of constructor manifest files (.ctx) alongside OCaml output.
+
+  BEHAVIOR:
+  When converting SML datatypes, the converter generates a constructor manifest file
+  (with .ctx extension) that lists all constructors and their arities. This is used
+  for post-processing and tooling support.
+
+  This flag controls whether the manifest file is generated:
+    --remove-constructor-manifest=true (default): Do not generate .ctx files.
+    --remove-constructor-manifest=false: Generate .ctx files as usual.
+
+  USE CASES:
+  - Enable (true) to skip generating manifest files if you don't need them or want to
+    manage constructor information manually.
+  - Disable (false) to keep the default behavior of generating manifest files for tooling.
+
+  Default: true (do not generate constructor manifest files)
+  |}
+let remove_constructor_manifest_flag : bool Term.t =
+  Arg.(value & opt bool true & info [ "remove-constructor-manifest" ] ~doc:remove_constructor_manifest_doc)
 let common_options : Common.t Cmdliner.Term.t =
   let+ v = verb
   and+ force, c = conversion_flags
@@ -639,29 +524,22 @@ let common_options : Common.t Cmdliner.Term.t =
   and+ q = quiet
   and+ gv = guess_var
   and+ dbg = debug
-  and+ var_reg = variable_regex_flag
   and+ check_ocaml = check_ocaml_flag
   and+ dash_to_underscore = dash_to_underscore_flag in
-  Common.make 
-    ~verbosity:v 
-    ~convert_names:(Common.get Convert_names c)
-    ~convert_comments:(Common.get Convert_comments c)
-    ~add_line_numbers:(Common.get Add_line_numbers c)
-    ~convert_keywords:(Common.get Convert_keywords c)
-    ~rename_types:(Common.get Rename_types c)
-    ~make_make_functor:(Common.get Make_make_functor c)
-    ~rename_constructors:(Common.get Rename_constructors c)
-    ~guess_pattern:(Common.get Guess_pattern c)
-    ~deref_pattern:(Common.get Deref_pattern c)
-    ~curry_expressions:(Common.get Curry_expressions c)
-    ~curry_types:(Common.get Curry_types c)
-    ~tuple_select:(Common.get Tuple_select c)
-    ~concat_output:co 
-    ~force
-    ~quiet:q 
-    ~guess_var:gv 
-    ~debug:dbg 
-    ~variable_regex:var_reg 
-    ~check_ocaml
-    ~dash_to_underscore 
-    ()
+  Common.create Common.[
+    set Verbosity v ;
+    set Convert_names (Common.get Convert_names c) ;
+    set Convert_keywords (Common.get Convert_keywords c) ;
+    set Rename_types (Common.get Rename_types c) ;
+    set Make_make_functor (Common.get Make_make_functor c) ;
+    set Guess_pattern (Common.get Guess_pattern c) ;
+    set Curry_expressions (Common.get Curry_expressions c) ;
+    set Curry_types (Common.get Curry_types c) ;
+    set Concat_output (Common.get Concat_output c) ;
+    set Force force ;
+    set Quiet q ;
+    set Guess_var gv ;
+    set Debug dbg ;
+    set Check_ocaml check_ocaml ;
+    set Dash_to_underscore dash_to_underscore
+  ]

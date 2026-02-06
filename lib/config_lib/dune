@@ -3,4 +3,5 @@
  (name config_lib)
  (modules config_lib config_lib_)
  (libraries ppxlib fpath)
- (preprocess (pps ppx_deriving.make)))
+ (preprocess
+  (pps ppx_deriving.make)))

@@ -32,7 +32,7 @@ let read_file path =
     raise e
 
 let find_manifest ~search_paths ~module_name =
-  let filename = module_name ^ ".shibboleth-constructors" in
+  let filename = module_name ^ ".sctx" in
   List.find_map
     (fun dir ->
       let path = Filename.concat dir filename in

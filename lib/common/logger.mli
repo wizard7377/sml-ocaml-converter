@@ -18,7 +18,6 @@ end
 
 module type S = sig
   val config : Config_lib.t
-
   val group : string
 end
 

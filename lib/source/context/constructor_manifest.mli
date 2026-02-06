@@ -1,8 +1,9 @@
 (** Manifest file I/O for constructor information.
 
     Manifest files (with .shibboleth-constructors extension) store constructor
-    transformation mappings in S-expression format. These files enable cross-module
-    constructor resolution by recording all constructors defined in a module.
+    transformation mappings in S-expression format. These files enable
+    cross-module constructor resolution by recording all constructors defined in
+    a module.
 
     Manifest file format (S-expression):
     {[

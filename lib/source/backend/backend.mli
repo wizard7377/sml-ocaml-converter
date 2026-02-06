@@ -1,5 +1,5 @@
-(** Precedence resolver for operator precedence handling *)
 module Precedence_resolver : module type of Precedence_resolver
+(** Precedence resolver for operator precedence handling *)
 
 (** [Make (Store) (Config)] creates a backend transformation module.
 

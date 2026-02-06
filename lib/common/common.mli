@@ -90,6 +90,7 @@ include module type of Config_lib
 
 (** Logger types *)
 type level = Logger.level = High | Medium | Low | Debug
+
 type kind = Logger.kind = Positive | Negative | Neutral | Warning
 
 module type LOG = sig

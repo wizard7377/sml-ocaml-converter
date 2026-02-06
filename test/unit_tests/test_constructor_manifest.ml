@@ -27,7 +27,7 @@ let test_roundtrip () =
 
 let test_write_and_read (switch, temp_dir) =
   let () = switch in
-  let file_path = Filename.concat temp_dir "test.shibboleth-constructors" in
+  let file_path = Filename.concat temp_dir "test.sctx" in
   let constructors =
     [
       {

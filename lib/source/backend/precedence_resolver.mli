@@ -15,8 +15,8 @@ type resolved_pat =
   | ResolvedPatApp of resolved_pat * Ast.pat Ast.node list
   | ResolvedPatInfix of resolved_pat * Ast.idx Ast.node * resolved_pat
 
-(** Resolve precedence in a flat expression sequence *)
 val resolve_precedence : Ast.expression Ast.node list -> resolved_exp
+(** Resolve precedence in a flat expression sequence *)
 
-(** Resolve precedence in a flat pattern sequence *)
 val resolve_pat_precedence : Ast.pat Ast.node list -> resolved_pat
+(** Resolve precedence in a flat pattern sequence *)

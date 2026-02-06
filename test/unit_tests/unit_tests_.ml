@@ -4,14 +4,14 @@ open Ast
 (** Helper for box_node *)
 let b = Ast.box_node
 
-(** Access Precedence_resolver from backend library *)
 module PR = Backend.Precedence_resolver
+(** Access Precedence_resolver from backend library *)
 
 (** Test configuration *)
 module TestConfig : Common.CONFIG = struct
   let config =
-    Common.make ~input_file:Common.StdIn ~output_file:Common.Silent
-      ~verbosity:3 ()
+    Common.make ~input_file:Common.StdIn ~output_file:Common.Silent ~verbosity:3
+      ()
 end
 
 module TestContext (* TODO *) = struct
@@ -310,7 +310,7 @@ let test_process_exp_idx () =
 let test_process_exp_app () =
   (* Updated for list-based ExpApp *)
   let input =
-    ExpApp [b (ExpIdx (b (IdxIdx (b "f")))); b (ExpIdx (b (IdxIdx (b "x"))))]
+    ExpApp [ b (ExpIdx (b (IdxIdx (b "f")))); b (ExpIdx (b (IdxIdx (b "x")))) ]
   in
   let result = process_exp (b input) in
   check bool "function application expression" true
@@ -513,8 +513,10 @@ let test_process_pat_constructor_with_arg () =
   (* Updated for list-based PatApp *)
   let input =
     PatApp
-      [ b (PatIdx (b (WithoutOp (b (IdxIdx (b "SOME"))))));
-        b (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))) ]
+      [
+        b (PatIdx (b (WithoutOp (b (IdxIdx (b "SOME"))))));
+        b (PatIdx (b (WithoutOp (b (IdxIdx (b "x"))))));
+      ]
   in
   let result = process_pat (b input) in
   let result_str = pattern_to_string result in
@@ -625,8 +627,7 @@ let test_process_pat_as () =
 (** Test configuration with guess_var enabled *)
 module TestConfigWithGuessVar : Common.CONFIG = struct
   let config =
-    Common.make ~input_file:Common.StdIn ~output_file:Common.Silent
-      ~verbosity:3 
+    Common.make ~input_file:Common.StdIn ~output_file:Common.Silent ~verbosity:3
       ~guess_var:(Some "[A-Z][a-zA-Z0-9_]*") ()
 end
 
@@ -656,8 +657,10 @@ let test_process_pat_ref () =
   (* Updated for list-based PatApp *)
   let input =
     PatApp
-      [ b (PatIdx (b (WithoutOp (b (IdxIdx (b "ref"))))));
-        b (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))) ]
+      [
+        b (PatIdx (b (WithoutOp (b (IdxIdx (b "ref"))))));
+        b (PatIdx (b (WithoutOp (b (IdxIdx (b "x"))))));
+      ]
   in
   let result = process_pat (b input) in
   let result_str = pattern_to_string result in
@@ -672,12 +675,16 @@ let test_process_pat_ref_nested () =
       [
         b
           (PatApp
-             [ b (PatIdx (b (WithoutOp (b (IdxIdx (b "ref"))))));
-               b (PatIdx (b (WithoutOp (b (IdxIdx (b "a")))))) ]);
+             [
+               b (PatIdx (b (WithoutOp (b (IdxIdx (b "ref"))))));
+               b (PatIdx (b (WithoutOp (b (IdxIdx (b "a"))))));
+             ]);
         b
           (PatApp
-             [ b (PatIdx (b (WithoutOp (b (IdxIdx (b "ref"))))));
-               b (PatIdx (b (WithoutOp (b (IdxIdx (b "b")))))) ]);
+             [
+               b (PatIdx (b (WithoutOp (b (IdxIdx (b "ref"))))));
+               b (PatIdx (b (WithoutOp (b (IdxIdx (b "b"))))));
+             ]);
       ]
   in
   let result = process_pat (b input) in
@@ -1158,7 +1165,7 @@ let test_let_structure () =
 let test_app_structure () =
   (* Updated for list-based ExpApp *)
   let input =
-    ExpApp [b (ExpIdx (b (IdxIdx (b "f")))); b (ExpIdx (b (IdxIdx (b "x"))))]
+    ExpApp [ b (ExpIdx (b (IdxIdx (b "f")))); b (ExpIdx (b (IdxIdx (b "x")))) ]
   in
   let result = process_exp (b input) in
   match result.pexp_desc with
@@ -1299,8 +1306,10 @@ let test_constructor_pattern_structure () =
   (* Updated for list-based PatApp *)
   let input =
     PatApp
-      [ b (PatIdx (b (WithoutOp (b (IdxIdx (b "SOME"))))));
-        b (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))) ]
+      [
+        b (PatIdx (b (WithoutOp (b (IdxIdx (b "SOME"))))));
+        b (PatIdx (b (WithoutOp (b (IdxIdx (b "x"))))));
+      ]
   in
   let result = process_pat (b input) in
   match result.ppat_desc with
@@ -1658,14 +1667,10 @@ let test_twelf_file (file_path : string) () : unit =
   (* Configure the converter *)
   let config =
     Common.make ~input_file:(Common.File [ file_path ])
-      ~output_file:Common.Silent
-      ~verbosity:0 (* Silent verbosity for tests *)
-      ~convert_names:Enable ~convert_comments:Enable
-      ~convert_keywords:Enable ~rename_types:Enable
-      ~rename_constructors:Enable ~deref_pattern:Enable
-      ~guess_pattern:Enable 
-      ~guess_var:(Some {|[A-Z]s?[0-9]?'?|}) ~variable_regex:{|[A-Z]s?[0-9]?'?|}
-      ()
+      ~output_file:Common.Silent ~verbosity:0 (* Silent verbosity for tests *)
+      ~convert_names:Enable ~convert_keywords:Enable
+      ~rename_types:Enable ~guess_pattern:Enable
+      ~guess_var:(Some {|[A-Z]s?[0-9]?'?|}) ()
   in
 
   try
@@ -1756,10 +1761,11 @@ let resolved_exp_to_string (resolved : PR.resolved_exp) : string =
     | PR.ResolvedSingle e -> Ast.show_expression e
     | PR.ResolvedApp (f, args) ->
         Printf.sprintf "App(%s, [%s])" (aux f)
-          (String.concat "; " (List.map (fun n -> Ast.show_expression n.value) args))
+          (String.concat "; "
+             (List.map (fun n -> Ast.show_expression n.value) args))
     | PR.ResolvedInfix (left, op, right) ->
-        Printf.sprintf "Infix(%s, %s, %s)" (aux left)
-          (Ast.show_idx op.value) (aux right)
+        Printf.sprintf "Infix(%s, %s, %s)" (aux left) (Ast.show_idx op.value)
+          (aux right)
   in
   aux resolved
 
@@ -1776,7 +1782,7 @@ let test_precedence_mult_higher_than_add () =
   let two = b (ExpCon (b (ConInt (b "2")))) in
   let mult = b (ExpIdx (b (IdxIdx (b "*")))) in
   let three = b (ExpCon (b (ConInt (b "3")))) in
-  let input = [one; plus; two; mult; three] in
+  let input = [ one; plus; two; mult; three ] in
 
   let result = PR.resolve_precedence input in
 
@@ -1802,7 +1808,7 @@ let test_left_associative_addition () =
   let two = b (ExpCon (b (ConInt (b "2")))) in
   let plus2 = b (ExpIdx (b (IdxIdx (b "+")))) in
   let three = b (ExpCon (b (ConInt (b "3")))) in
-  let input = [one; plus1; two; plus2; three] in
+  let input = [ one; plus1; two; plus2; three ] in
 
   let result = PR.resolve_precedence input in
 
@@ -1827,7 +1833,7 @@ let test_right_associative_cons () =
   let two = b (ExpCon (b (ConInt (b "2")))) in
   let cons2 = b (ExpIdx (b (IdxIdx (b "::")))) in
   let three = b (ExpCon (b (ConInt (b "3")))) in
-  let input = [one; cons1; two; cons2; three] in
+  let input = [ one; cons1; two; cons2; three ] in
 
   let result = PR.resolve_precedence input in
 
@@ -1850,7 +1856,7 @@ let test_function_application () =
   let f = b (ExpIdx (b (IdxIdx (b "f")))) in
   let x = b (ExpIdx (b (IdxIdx (b "x")))) in
   let y = b (ExpIdx (b (IdxIdx (b "y")))) in
-  let input = [f; x; y] in
+  let input = [ f; x; y ] in
 
   let result = PR.resolve_precedence input in
 
@@ -1858,7 +1864,7 @@ let test_function_application () =
   let expected =
     PR.ResolvedApp
       ( PR.ResolvedSingle (ExpIdx (b (IdxIdx (b "f")))),
-        [b (ExpIdx (b (IdxIdx (b "x")))); b (ExpIdx (b (IdxIdx (b "y"))))] )
+        [ b (ExpIdx (b (IdxIdx (b "x")))); b (ExpIdx (b (IdxIdx (b "y")))) ] )
   in
 
   check resolved_exp_testable "function application is left-associative"
@@ -1872,7 +1878,7 @@ let test_addition_higher_than_equality () =
   let two = b (ExpCon (b (ConInt (b "2")))) in
   let eq = b (ExpIdx (b (IdxIdx (b "=")))) in
   let three = b (ExpCon (b (ConInt (b "3")))) in
-  let input = [one; plus; two; eq; three] in
+  let input = [ one; plus; two; eq; three ] in
 
   let result = PR.resolve_precedence input in
 
@@ -1898,8 +1904,8 @@ let resolved_pat_to_string (resolved : PR.resolved_pat) : string =
         Printf.sprintf "PatApp(%s, [%s])" (aux f)
           (String.concat "; " (List.map (fun n -> Ast.show_pat n.value) args))
     | PR.ResolvedPatInfix (left, op, right) ->
-        Printf.sprintf "PatInfix(%s, %s, %s)" (aux left)
-          (Ast.show_idx op.value) (aux right)
+        Printf.sprintf "PatInfix(%s, %s, %s)" (aux left) (Ast.show_idx op.value)
+          (aux right)
   in
   aux resolved
 
@@ -1914,18 +1920,16 @@ let test_pattern_cons () =
   let x = b (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))) in
   let cons = b (PatIdx (b (WithoutOp (b (IdxIdx (b "::")))))) in
   let xs = b (PatIdx (b (WithoutOp (b (IdxIdx (b "xs")))))) in
-  let input = [x; cons; xs] in
+  let input = [ x; cons; xs ] in
 
   let result = PR.resolve_pat_precedence input in
 
   (* Expected: PatInfix(x, ::, xs) *)
   let expected =
     PR.ResolvedPatInfix
-      ( PR.ResolvedPatSingle
-          (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))),
+      ( PR.ResolvedPatSingle (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))),
         b (IdxIdx (b "::")),
-        PR.ResolvedPatSingle
-          (PatIdx (b (WithoutOp (b (IdxIdx (b "xs")))))) )
+        PR.ResolvedPatSingle (PatIdx (b (WithoutOp (b (IdxIdx (b "xs")))))) )
   in
 
   check resolved_pat_testable "pattern cons (::) resolves correctly" expected
@@ -1936,16 +1940,15 @@ let test_pattern_constructor_app () =
   (* Input sequence: [Some; x] - no operators, pure pattern application *)
   let some = b (PatIdx (b (WithoutOp (b (IdxIdx (b "Some")))))) in
   let x = b (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))) in
-  let input = [some; x] in
+  let input = [ some; x ] in
 
   let result = PR.resolve_pat_precedence input in
 
   (* Expected: PatApp(Some, [x]) *)
   let expected =
     PR.ResolvedPatApp
-      ( PR.ResolvedPatSingle
-          (PatIdx (b (WithoutOp (b (IdxIdx (b "Some")))))),
-        [b (PatIdx (b (WithoutOp (b (IdxIdx (b "x"))))))] )
+      ( PR.ResolvedPatSingle (PatIdx (b (WithoutOp (b (IdxIdx (b "Some")))))),
+        [ b (PatIdx (b (WithoutOp (b (IdxIdx (b "x")))))) ] )
   in
 
   check resolved_pat_testable "constructor application in patterns" expected
@@ -1953,15 +1956,11 @@ let test_pattern_constructor_app () =
 
 let precedence_resolver_tests =
   [
-    ( "1 + 2 * 3 precedence",
-      `Quick,
-      test_precedence_mult_higher_than_add );
+    ("1 + 2 * 3 precedence", `Quick, test_precedence_mult_higher_than_add);
     ("1 + 2 + 3 left-assoc", `Quick, test_left_associative_addition);
     ("1 :: 2 :: 3 right-assoc", `Quick, test_right_associative_cons);
     ("f x y function application", `Quick, test_function_application);
-    ( "1 + 2 = 3 precedence levels",
-      `Quick,
-      test_addition_higher_than_equality );
+    ("1 + 2 = 3 precedence levels", `Quick, test_addition_higher_than_equality);
     ("x :: xs pattern", `Quick, test_pattern_cons);
     ("Some x pattern", `Quick, test_pattern_constructor_app);
   ]

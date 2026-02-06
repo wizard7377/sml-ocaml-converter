@@ -6,8 +6,7 @@
   process_common
   process_file
   process_dir
-  process_group
-  process_cm)
+  process_group)
  (libraries
   ppx_deriving
   containers

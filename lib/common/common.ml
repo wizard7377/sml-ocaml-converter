@@ -41,7 +41,7 @@ module type S = sig
   val group : string
 end
 
-module Make (C : S) = Logger.Make(struct
+module Make (C : S) = Logger.Make (struct
   let config = C.config
   let group = C.group
 end)

@@ -3581,11 +3581,13 @@ and pat =
 
           @see 'with_op' Handling of op prefix *)
   | PatApp of pat node list
-      (** Flat pattern juxtaposition sequence - constructor application and infix patterns.
+      (** Flat pattern juxtaposition sequence - constructor application and
+          infix patterns.
 
-          Similar to [ExpApp] for expressions, represents a flat sequence of patterns
-          that can contain constructors, values, and infix operators. The backend's
-          precedence resolver restructures these according to operator precedence.
+          Similar to [ExpApp] for expressions, represents a flat sequence of
+          patterns that can contain constructors, values, and infix operators.
+          The backend's precedence resolver restructures these according to
+          operator precedence.
 
           {[
             (* SML: SOME x  -- constructor application *)

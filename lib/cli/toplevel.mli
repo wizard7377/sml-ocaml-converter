@@ -40,8 +40,7 @@ val convert_file :
       if status <> 0 then prerr_endline "Conversion failed."
     ]} *)
 
-val convert_group :
-  input_dir:path -> output_dir:path -> options:Common.t -> int
+val convert_group : input_dir:path -> output_dir:path -> options:Common.t -> int
 (** Convert a group of SML files in a directory to OCaml.
 
     This function processes all SML source files within the specified input

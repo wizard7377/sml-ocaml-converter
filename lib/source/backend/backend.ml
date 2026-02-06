@@ -461,17 +461,54 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
             rows
         in
         Builder.pexp_record fields None
-    | RecordSelector lab ->
-        (* #label -> fun r -> r.label *)
-        let lab_str =
-          name_to_string (idx_to_name lab.value)
+    | RecordSelector lab -> (
+        (* Determine if this is a numeric selector (tuple) or label selector (record).
+           The parser may produce IdxIdx for both - we check if the content is numeric. *)
+        let is_numeric s = 
+          try ignore (int_of_string s); true 
+          with Failure _ -> false 
         in
-        let r_pat = Builder.ppat_var (ghost "r") in
-        let r_exp = Builder.pexp_ident (ghost (Ppxlib.Longident.Lident "r")) in
-        let field_exp =
-          Builder.pexp_field r_exp (ghost (Ppxlib.Longident.Lident lab_str))
+        let make_tuple_selector n =
+          (* #n -> fun (_, ..., x, _, ...) -> x
+             where x is at position n (1-indexed) *)
+          let result_var = "r" in
+          (* Build a tuple pattern with wildcards and one binding at position n.
+             Generate a pattern with exactly n elements for #n where n >= 2,
+             or 2 elements for #1. *)
+          let size = max 2 n in
+          let pats = List.init size (fun i ->
+            if i = n - 1 then
+              Builder.ppat_var (ghost result_var)
+            else
+              Builder.ppat_any
+          ) in
+          let tuple_pat = Builder.ppat_tuple pats in
+          let result_exp = Builder.pexp_ident (ghost (Ppxlib.Longident.Lident result_var)) in
+          let fn_exp = Builder.pexp_fun Nolabel None tuple_pat result_exp in
+          (* Add [@shibboleth.no_curry] attribute to prevent curry transformation *)
+          let no_curry_attr = Ppxlib.Ast_helper.Attr.mk (ghost "shibboleth.no_curry") (Parsetree.PStr []) in
+          Helpers.Attr.expression fn_exp no_curry_attr
         in
-        Builder.pexp_fun Nolabel None r_pat field_exp
+        let make_record_selector lab_str =
+          (* #label -> fun r -> r#label (for records/objects) *)
+          let r_pat = Builder.ppat_var (ghost "r") in
+          let r_exp = Builder.pexp_ident (ghost (Ppxlib.Longident.Lident "r")) in
+          let field_exp = Builder.pexp_send r_exp (ghost lab_str) in
+          Builder.pexp_fun Nolabel None r_pat field_exp
+        in
+        match lab.value with
+        | IdxNum num_str ->
+            make_tuple_selector (int_of_string num_str.value)
+        | IdxIdx id_str when is_numeric id_str.value ->
+            make_tuple_selector (int_of_string id_str.value)
+        | IdxIdx id_str ->
+            make_record_selector id_str.value
+        | IdxLab lab_str ->
+            make_record_selector lab_str.value
+        | IdxVar _ | IdxLong _ ->
+            (* Shouldn't happen for selectors, but handle gracefully *)
+            failwith "Unexpected index type in record selector"
+      )
     | ArrayExp exps -> Builder.pexp_array (List.map process_exp exps) 
     | ListExp exps ->
         (* Build list from right to left using :: *)
@@ -1248,12 +1285,15 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
     | FunBind (fm, rest_opt) ->
         (* Get the function name from the first match *)
         let fname_str =
-          match fm.value with
+          let raw_name = match fm.value with
           | FunMatchPrefix (wo, _, _, _, _) -> process_with_op wo.value
           | FunMatchInfix (_, id, _, _, _, _) ->
               name_to_string (idx_to_name id.value)
           | FunMatchLow (_, id, _, _, _, _, _) ->
               name_to_string (idx_to_name id.value)
+          in
+          (* OCaml requires function names to be lowercase *)
+          Constructor_transform.transform_to_lowercase raw_name
         in
         Log.log ~subgroup:"function" ~level:Debug ~kind:Neutral
           ~msg:(Printf.sprintf "Function name: %s" fname_str)

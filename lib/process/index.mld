@@ -1,19 +1,171 @@
-Name and identifier processing for SML-to-OCaml conversion.
+{0 Process Library}
 
-{1 Synopsis}
+The Process library orchestrates the complete SML-to-OCaml conversion pipeline,
+managing file I/O, parsing, transformation, and output generation.
 
-This module handles the transformation of SML identifiers to valid OCaml names,
-managing keyword conflicts, capitalization conventions, and user-configurable
-name transformations. It is parameterized over a configuration to allow
-flexible naming strategies.
+{1 Overview}
 
-{1 Key Transformations}
+This library provides the high-level coordination for converting SML source code
+to OCaml. It handles:
 
-- SML constructor names → OCaml constructor names (capitalization)
-- SML function names → OCaml function names (keyword conflict resolution)
-- Pattern variable renaming
-- Reserved word handling ([type] → [type_])
+- Reading SML source files (individual files or groups)
+- Parsing SML to AST using the Frontend
+- Name resolution and context management
+- Backend transformation to OCaml Parsetree
+- Pretty-printing and output writing
+- Syntax validation of generated code
+
+{1 Architecture}
+
+The conversion pipeline follows a clear multi-stage architecture:
+
+{v
+  SML Source → Parse → AST → Backend → Parsetree → Print → OCaml Source
+                ↓              ↓            ↓
+           Names Store   Context      Validation
+v}
+
+{2 Main Components}
+
+{ul
+  {- {!Process} - Main orchestration class for multi-file processing}
+  {- {!Process_file} - Core single-file conversion pipeline}
+  {- {!Process_group} - Multi-file group processing (.sig/.fun/.sml)}
+  {- {!Process_common} - Output validation and error reporting utilities}
+}
+
+{1 Usage}
+
+{2 Single File Conversion}
+
+The most common use case is converting a single SML file:
+
+{[
+  let config = Common.make
+    ~input_file:(File ["example.sml"])
+    ~output_file:(FileOut "example.ml")
+    () in
+  let processor = new Process.process config in
+  let exit_code = processor#run (File ["example.sml"]) in
+  exit exit_code
+]}
+
+{2 Multi-File Conversion}
+
+For projects with multiple files, process them together:
+
+{[
+  let config = Common.make
+    ~input_file:(File ["module1.sml"; "module2.sml"; "module3.sml"])
+    ~output_file:(FileOut "combined.ml")
+    ~concat_output:true
+    () in
+  let processor = new Process.process config in
+  processor#run (File ["module1.sml"; "module2.sml"; "module3.sml"])
+]}
+
+{2 Group Processing}
+
+For SML modules split across .sig/.fun/.sml files:
+
+{[
+  let config = Common.make () in
+  let group = new Process_group.process_group "mymodule" config in
+  let members = group#find_members "mymodule" in
+  (* Finds mymodule.sig, mymodule.fun, mymodule.sml if they exist *)
+  let ocaml_output = group#parse_members members in
+  (* Concatenates: signature → functor → structure *)
+  print_endline ocaml_output
+]}
+
+{2 Fine-Grained Control}
+
+For custom processing, use the single-file pipeline directly:
+
+{[
+  let config = Common.make () in
+  let processor = new Process_file.process_file config in
+
+  (* Step 1: Parse SML *)
+  let sml_ast = processor#parse_sml sml_source_code in
+
+  (* Step 2: Convert to OCaml *)
+  let ocaml_ast = processor#convert_to_ocaml sml_ast in
+
+  (* Step 3: Pretty-print *)
+  let ocaml_code = processor#print_ocaml ocaml_ast in
+
+  (* Optional: Polish (post-processing) *)
+  let final_code = Polish.polish ocaml_code in
+  print_endline final_code
+]}
+
+{1 Error Handling}
+
+The library provides comprehensive error reporting:
+
+{ul
+  {- Syntax errors in SML source are reported with line numbers}
+  {- Conversion failures include stack traces}
+  {- Generated OCaml code can be validated (--check-ocaml)}
+  {- Validation errors show context around problematic lines}
+}
+
+Exit codes:
+- [0] - Success (all files converted without errors or warnings)
+- [1] - Errors (one or more files failed to convert)
+- [2] - Warnings (all files converted but with syntax warnings)
+
+{1 Module Dependencies}
+
+This library depends on:
+
+- {!Common} - Configuration and utilities
+- {!Frontend} - SML lexer and parser
+- {!Backend} - SML-to-OCaml AST transformation
+- {!Context} - Name resolution and constructor tracking
+- {!Polish} - Post-processing transformations
+- {!Ocaml} - OCaml-specific name processing
+
+{1 Modules}
 
 {!modules:
-Process_names
+  Process
+  Process_file
+  Process_group
+  Process_common
+  Process_dir
 }
+
+{1 Implementation Notes}
+
+{2 Name Store Threading}
+
+The {!Context.t} name store is threaded through the pipeline to maintain
+identifier context across files. Each processor instance can be initialized
+with a pre-populated store or can share stores across multiple conversions.
+
+{2 Output Modes}
+
+Three output modes are supported:
+
+- {b FileOut path} - Write to specified file
+- {b StdOut} - Write to standard output
+- {b Silent} - Don't write (useful for validation-only)
+
+{2 Concatenation Mode}
+
+When {i concat_output} is enabled:
+- Multiple files are collected and written as a single concatenated output
+- Useful for combining related modules into one OCaml file
+- Preserves processing order
+
+When disabled:
+- Each file is written immediately after conversion
+- Output paths may need unique names for each file
+
+{2 Future Extensions}
+
+{!Process_dir} is currently unimplemented but reserved for future directory-level
+batch processing features. Current directory processing is handled by the CLI
+layer using {!Process_group}.

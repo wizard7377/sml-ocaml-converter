@@ -25,33 +25,26 @@ let convert_file ~(input_files : path list) ?(output_file : path option)
     | Some p -> Common.FileOut (path_to_string p)
   in
   let cfg =
-    Common.make 
-      ~input_file:input_files'' 
-      ~output_file:output_target
-      ~verbosity:(Common.get Verbosity options)
-      ~convert_names:(Common.get Convert_names options)
-      ~convert_comments:(Common.get Convert_comments options)
-      ~add_line_numbers:(Common.get Add_line_numbers options)
-      ~convert_keywords:(Common.get Convert_keywords options)
-      ~rename_types:(Common.get Rename_types options)
-      ~make_make_functor:(Common.get Make_make_functor options)
-      ~rename_constructors:(Common.get Rename_constructors options)
-      ~guess_pattern:(Common.get Guess_pattern options)
-      ~deref_pattern:(Common.get Deref_pattern options)
-      ~curry_expressions:(Common.get Curry_expressions options)
-      ~curry_types:(Common.get Curry_types options)
-      ~tuple_select:(Common.get Tuple_select options)
-      ~toplevel_names:(Common.get Toplevel_names options)
-      ~concat_output:(Common.get Concat_output options)
-      ~force:(Common.get Force options) 
-      ~quiet:(Common.get Quiet options)
-      ~guess_var:(Common.get Guess_var options)
-      ~debug:(Common.get Debug options)
-      ~check_ocaml:(Common.get Check_ocaml options)
-      ~variable_regex:(Common.get Variable_regex options)
-      ~dash_to_underscore:(Common.get Dash_to_underscore options)
-      ~basis_shim:(Common.get Basis_shim options)
-      ()
+    Common.create Common.[
+      set Input_file input_files'' ;
+      set Output_file output_target ;
+      set Verbosity (Common.get Verbosity options) ;
+      set Convert_names (Common.get Convert_names options) ;
+      set Convert_keywords (Common.get Convert_keywords options) ;
+      set Rename_types (Common.get Rename_types options) ;
+      set Make_make_functor (Common.get Make_make_functor options) ;
+      set Guess_pattern (Common.get Guess_pattern options) ;
+      set Curry_expressions (Common.get Curry_expressions options) ;
+      set Curry_types (Common.get Curry_types options) ;
+      set Toplevel_names (Common.get Toplevel_names options) ;
+      set Concat_output (Common.get Concat_output options) ;  
+      set Force (Common.get Force options) ;
+      set Quiet (Common.get Quiet options) ;
+      set Guess_var (Common.get Guess_var options) ;
+      set Debug (Common.get Debug options) ;
+      set Check_ocaml (Common.get Check_ocaml options) ;
+      set Dash_to_underscore (Common.get Dash_to_underscore options) ;
+    ]
   in
   let process = new process cfg in
   let res = process#run input_files'' in
@@ -222,8 +215,8 @@ let process_sml_files (input_path : path) (output_path : path)
 
   (failures, warnings, List.length res)
 
-let convert_group ~(input_dir : path) ~(output_dir : path)
-    ~(options : Common.t) : int =
+let convert_group ~(input_dir : path) ~(output_dir : path) ~(options : Common.t)
+    : int =
   (* Check if input and output are the same *)
   if Fpath.equal input_dir output_dir then begin
     Printf.eprintf "Input and output directories cannot be the same.\n";

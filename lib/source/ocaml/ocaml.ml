@@ -75,7 +75,7 @@ type context = {
 let update context f = { context with name_ctx = f context.name_ctx }
 let default_context : context = {
   name_ctx = EmptyContext;
-  config = Common.make ();
+  config = Common.create [];
 }
 
 (** Track identifiers that need cascading renames *)
@@ -84,7 +84,7 @@ module Builder = Ast_builder.Make(struct
   let loc = Location.none
 end)
 module Log = Common.Make (struct
-  let config = Common.make ()
+  let config = Common.create []
   let group = "process_names"
 end)
 class process_ocaml ~(opts : Common.t) =
@@ -353,6 +353,12 @@ class process_ocaml ~(opts : Common.t) =
 
     (** Override expression traversal *)
     method! expression ctx expr =
+      (* Check if expression has [@shibboleth.no_curry] attribute *)
+      let has_no_curry_attr =
+        List.exists (fun (attr : Parsetree.attribute) ->
+          attr.attr_name.txt = "shibboleth.no_curry"
+        ) expr.pexp_attributes
+      in
       (* First check if this expression needs currying transformation.
          NOTE: We only curry function DEFINITIONS, not function APPLICATIONS.
          If someone wrote foo (1, 2), they should get foo (1, 2) in OCaml,
@@ -361,7 +367,9 @@ class process_ocaml ~(opts : Common.t) =
          - Constructors (handled separately via Pexp_construct)
          - Semantic preservation *)
       let should_transform_curry =
-        if self#should_curry then
+        if has_no_curry_attr then
+          false
+        else if self#should_curry then
           match expr.pexp_desc with
           | Pexp_fun (_, _, pat, _) ->
               (match self#extract_tuple_patterns pat with
@@ -401,6 +409,14 @@ class process_ocaml ~(opts : Common.t) =
           expr
       in
 
+      (* Strip [@shibboleth.no_curry] attribute from output *)
+      let strip_no_curry expr =
+        let new_attrs = List.filter (fun (attr : Parsetree.attribute) ->
+          attr.attr_name.txt <> "shibboleth.no_curry"
+        ) expr.pexp_attributes in
+        { expr with pexp_attributes = new_attrs }
+      in
+
       (* If we transformed, re-process the new structure; otherwise use super *)
       let expr_after_curry =
         if should_transform_curry then
@@ -408,6 +424,9 @@ class process_ocaml ~(opts : Common.t) =
         else
           super#expression ctx expr
       in
+
+      (* Strip the no_curry attribute and apply name processing *)
+      let expr_after_curry = strip_no_curry expr_after_curry in
 
       (* Then apply name processing transformations to the result *)
       match expr_after_curry.pexp_desc with

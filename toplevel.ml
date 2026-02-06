@@ -1,4 +1,5 @@
-#use_output "dune ocaml top";; 
-#require "ppxlib.metaquot";;
+#use_output "dune ocaml top"
 
-let loc = Ppxlib.Location.none;;
+#require "ppxlib.metaquot"
+
+let loc = Ppxlib.Location.none

@@ -68,7 +68,7 @@ let rec get_in_scope (scope:scope) (name:string) : string option =
   Stack.fold (get_scope_level name) None scope
 
 module Log = Common.Make (struct 
-    let config = Common.make ()
+    let config = Common.create []
     let group = "process_names"
   end)
 class process_names (config : Common.t ref) (store : Context.t ref) =
