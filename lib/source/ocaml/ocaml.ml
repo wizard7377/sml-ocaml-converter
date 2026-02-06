@@ -353,7 +353,13 @@ class process_ocaml ~(opts : Common.options) =
 
     (** Override expression traversal *)
     method! expression ctx expr =
-      (* First check if this expression needs currying transformation *)
+      (* First check if this expression needs currying transformation.
+         NOTE: We only curry function DEFINITIONS, not function APPLICATIONS.
+         If someone wrote foo (1, 2), they should get foo (1, 2) in OCaml,
+         not foo 1 2. This is important for:
+         - Functions that genuinely take a tuple argument
+         - Constructors (handled separately via Pexp_construct)
+         - Semantic preservation *)
       let should_transform_curry =
         if self#should_curry then
           match expr.pexp_desc with
@@ -361,10 +367,7 @@ class process_ocaml ~(opts : Common.options) =
               (match self#extract_tuple_patterns pat with
                | Some _ -> true
                | None -> false)
-          | Pexp_apply (_, [(Nolabel, arg)]) ->
-              (match self#is_uncurryable_tuple arg with
-               | Some _ -> true
-               | None -> false)
+          (* Removed: Pexp_apply currying - we preserve tuple arguments as-is *)
           | Pexp_function cases ->
               (match cases with
                | [{ pc_lhs; pc_guard = None; pc_rhs = _ }] ->
@@ -385,11 +388,7 @@ class process_ocaml ~(opts : Common.options) =
               (match self#extract_tuple_patterns pat with
                | Some pats -> self#build_curried_function pats body
                | None -> expr)
-          | Pexp_apply (f, [(Nolabel, arg)]) ->
-              (match self#is_uncurryable_tuple arg with
-               | Some tuple_args ->
-                   { expr with pexp_desc = Pexp_apply (f, List.map (fun a -> (Nolabel, a)) tuple_args) }
-               | None -> expr)
+          (* Removed: Pexp_apply currying *)
           | Pexp_function cases ->
               (match cases with
                | [{ pc_lhs; pc_guard = None; pc_rhs }] ->

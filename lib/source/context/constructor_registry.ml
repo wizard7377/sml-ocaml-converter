@@ -58,6 +58,41 @@ let open_module registry ~module_path =
         Hashtbl.replace registry.unqualified info.name (info :: existing))
     registry.qualified
 
+let add_module_alias registry ~alias ~target =
+  (* Copy all constructors from target module to also be accessible under alias.
+     For example, if target = ["M"] and alias = ["I"], then M.Root becomes
+     accessible as I.Root. *)
+  let target_len = List.length target in
+  let entries_to_add = ref [] in
+  Hashtbl.iter
+    (fun path info ->
+      (* Check if this constructor's path starts with target *)
+      let rec has_prefix prefix lst =
+        match (prefix, lst) with
+        | [], _ -> true
+        | _, [] -> false
+        | p :: ps, l :: ls -> p = l && has_prefix ps ls
+      in
+      if has_prefix target path then
+        (* Replace target prefix with alias prefix *)
+        let suffix = 
+          let rec drop n lst = match n, lst with
+            | 0, lst -> lst
+            | _, [] -> []
+            | n, _ :: rest -> drop (n-1) rest
+          in
+          drop target_len path
+        in
+        let new_path = alias @ suffix in
+        entries_to_add := (new_path, info) :: !entries_to_add)
+    registry.qualified;
+  (* Add the aliased entries *)
+  List.iter
+    (fun (new_path, info) ->
+      let new_info = { info with path = new_path } in
+      Hashtbl.add registry.qualified new_path new_info)
+    !entries_to_add
+
 let get_all_constructors registry =
   let constructors = ref [] in
   Hashtbl.iter

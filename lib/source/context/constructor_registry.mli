@@ -42,5 +42,10 @@ val lookup : t -> path:string list option -> string -> constructor_info option
 val open_module : t -> module_path:string list -> unit
 (** Bring all constructors from a module into unqualified scope *)
 
+val add_module_alias : t -> alias:string list -> target:string list -> unit
+(** Register a module alias. After [add_module_alias t ~alias:["I"] ~target:["M"]],
+    constructors in M become accessible via I. For example, M.Root becomes
+    accessible as I.Root. *)
+
 val get_all_constructors : t -> constructor_info list
 (** Get all constructors from the registry *)

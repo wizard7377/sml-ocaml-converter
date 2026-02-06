@@ -319,12 +319,25 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
                     Some (List.rev (List.tl (List.rev name)))
                   else None
                 in
-                Context.Constructor_registry.lookup
-                  Ctx.context.constructor_registry ~path:qual_path simple_name
+                (match Context.Constructor_registry.lookup
+                  Ctx.context.constructor_registry ~path:qual_path simple_name with
+                | Some ctor -> Some (Some ctor)
+                | None ->
+                    (* Fallback heuristic for uppercase names not in registry:
+                       - If qualified (M.Foo) and uppercase, treat as constructor
+                       - If unqualified (Foo) with multiple args and uppercase, treat as constructor
+                         (regular functions are curried; constructors take tuple args) *)
+                    let is_uppercase = String.length simple_name > 0 &&
+                        Char.uppercase_ascii simple_name.[0] = simple_name.[0] &&
+                        simple_name.[0] <> '_' in
+                    if is_uppercase && (qual_path <> None || List.length args > 1) then
+                      Some None  (* Treat as constructor but no registry entry *)
+                    else
+                      None)
             | _ -> None
           in
           (match is_ctor_app with
-          | Some ctor ->
+          | Some ctor_opt ->
               (* Constructor application - wrap args in tuple *)
               let name = match f with
                 | ResolvedSingle (ExpIdx idx) -> idx_to_name idx.value
@@ -335,21 +348,28 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
                   Some (List.rev (List.tl (List.rev name)))
                 else None
               in
-              let transformed_parts = match qual_path with
-                | Some path -> path @ [ctor.Context.Constructor_registry.ocaml_name]
-                | None -> [ctor.ocaml_name]
+              let transformed_parts = match ctor_opt with
+                | Some ctor ->
+                    (match qual_path with
+                     | Some path -> path @ [ctor.Context.Constructor_registry.ocaml_name]
+                     | None -> [ctor.ocaml_name])
+                | None ->
+                    (* Use the name as-is (already uppercase) *)
+                    name
               in
               let name_longident = build_longident ~capitalize_modules:true transformed_parts in
               let arg_exps = List.map (fun arg -> process_exp arg) args in
+              (* In OCaml, constructor args must be parenthesized in a tuple *)
               let arg_exp = match arg_exps with
-                | [single] -> single
-                | _ -> Builder.pexp_tuple arg_exps
+                | [] -> None
+                | [single] -> Some (Builder.pexp_tuple [single])
+                | _ -> Some (Builder.pexp_tuple arg_exps)
               in
-              Builder.pexp_construct (ghost name_longident) (Some arg_exp)
+              Builder.pexp_construct (ghost name_longident) arg_exp
           | None ->
               (* Regular function application - left-associative *)
               let f_exp = process_resolved_exp f in
-              let arg_exps = List.map (fun arg -> process_exp arg) args in
+              let arg_exps = List.map process_exp args in
               List.fold_left (fun acc arg ->
                 Builder.pexp_apply acc [(Nolabel, arg)]
               ) f_exp arg_exps)
@@ -845,23 +865,42 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
                       Some (List.rev (List.tl (List.rev name)))
                     else None
                   in
-                  (* Look up as constructor *)
+                  (* Look up as constructor, with fallback heuristic *)
                   let lookup_result = Context.Constructor_registry.lookup
                     Ctx.context.constructor_registry ~path:qual_path simple_name in
-                  (match lookup_result with
-                  | Some ctor ->
+                  let is_ctor = match lookup_result with
+                    | Some ctor -> Some (Some ctor)
+                    | None ->
+                        (* Fallback heuristic for uppercase names not in registry:
+                           - If qualified (M.Foo) and uppercase, treat as constructor
+                           - If unqualified (Foo) with multiple args and uppercase, treat as constructor *)
+                        let is_uppercase = String.length simple_name > 0 &&
+                            Char.uppercase_ascii simple_name.[0] = simple_name.[0] &&
+                            simple_name.[0] <> '_' in
+                        if is_uppercase && (qual_path <> None || List.length args > 1) then
+                          Some None
+                        else
+                          None
+                  in
+                  (match is_ctor with
+                  | Some ctor_opt ->
                       (* It's a constructor - build constructor pattern with qualified name *)
-                      let transformed_parts = match qual_path with
-                        | Some path -> path @ [ctor.Context.Constructor_registry.ocaml_name]
-                        | None -> [ctor.ocaml_name]
+                      let transformed_parts = match ctor_opt with
+                        | Some ctor ->
+                            (match qual_path with
+                             | Some path -> path @ [ctor.Context.Constructor_registry.ocaml_name]
+                             | None -> [ctor.ocaml_name])
+                        | None -> name (* Use name as-is *)
                       in
                       let name_longident = build_longident ~capitalize_modules:true transformed_parts in
                       let arg_pats = List.map (fun arg -> process_pat ~is_arg:true ~is_head:false arg) args in
+                      (* In OCaml, constructor args must be parenthesized in a tuple *)
                       let arg_pattern = match arg_pats with
-                        | [single] -> single
-                        | _ -> Builder.ppat_tuple arg_pats
+                        | [] -> None
+                        | [single] -> Some (Builder.ppat_tuple [single])
+                        | _ -> Some (Builder.ppat_tuple arg_pats)
                       in
-                      Builder.ppat_construct (ghost name_longident) (Some arg_pattern)
+                      Builder.ppat_construct (ghost name_longident) arg_pattern
                   | None ->
                       (* Not a constructor - treat as nested pattern (shouldn't happen often) *)
                       let f_pat = process_resolved_pat ~is_arg:false ~is_head:true f in
@@ -1660,6 +1699,16 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
             let name_str =
               name_to_string (idx_to_name id.value)
             in
+            (* Check if this is a module alias (structure I = M) *)
+            (match structure.value with
+            | StrIdx target_id ->
+                (* This is a module alias - register it so constructors are accessible *)
+                let target_path = idx_to_name target_id.value in
+                Context.Constructor_registry.add_module_alias
+                  Ctx.context.constructor_registry
+                  ~alias:[name_str]
+                  ~target:target_path
+            | _ -> ());
             (* Push module name onto path for constructor registration *)
             push_module name_str;
             (* Convert the structure body to a module expression *)
