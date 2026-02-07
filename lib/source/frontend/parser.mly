@@ -5,9 +5,11 @@
     (* Alias for convenience *)
     let b = box_node
 
-    (* Helper to create node with position information *)
+    (* Helper to create node with position information.
+       Comments are NOT captured here - they are captured at specific
+       grammar rule levels where comment boundaries are well-defined. *)
     let bp (v : 'a) (start_pos : Lexing.position) (end_pos : Lexing.position) : 'a node =
-      { value = v; pos = Some (start_pos, end_pos) }
+      { value = v; pos = Some (start_pos, end_pos); comments = [] }
 
     (* Helper to convert ident to idx *)
     let ident_to_idx = function
@@ -239,7 +241,7 @@ typ_top:
   | typ EOF { $1 }
 ;
 let boxed(r) := 
-  | v=r; { { value = v; pos=Some ($symbolstartpos , $endpos ) } } 
+  | v=r; { { value = v; pos=Some ($symbolstartpos , $endpos ); comments = [] } } 
 
 %inline ident:
   | SHORT_IDENT { ident_to_idx $1 }
@@ -1049,22 +1051,23 @@ and_fctbind_opt:
 
 (* Program that can be empty - used for final position *)
 program:
-  | dec_seq { (ProgDec (bp $1 $startpos($1) $endpos($1))) }
-  | "functor" fctbind { (ProgFun (bp $2 $startpos($2) $endpos($2))) }
-  | "signature" sigbind { (ProgStr (bp $2 $startpos($2) $endpos($2))) }
+  | dec_seq { ProgDec { value = $1; pos = Some ($startpos($1), $endpos($1)); comments = [] } }
+  | "functor" fctbind { ProgFun { value = $2; pos = Some ($startpos($2), $endpos($2)); comments = [] } }
+  | "signature" sigbind { ProgStr { value = $2; pos = Some ($startpos($2), $endpos($2)); comments = [] } }
 ;
 
 (* Non-empty program - must start with a keyword *)
 nonempty_program:
-  | nonempty_dec_seq { (ProgDec (bp $1 $startpos($1) $endpos($1))) }
-  | "functor" fctbind { (ProgFun (bp $2 $startpos($2) $endpos($2))) }
-  | "signature" sigbind { (ProgStr (bp $2 $startpos($2) $endpos($2))) }
+  | nonempty_dec_seq { ProgDec { value = $1; pos = Some ($startpos($1), $endpos($1)); comments = [] } }
+  | "functor" fctbind { ProgFun { value = $2; pos = Some ($startpos($2), $endpos($2)); comments = [] } }
+  | "signature" sigbind { ProgStr { value = $2; pos = Some ($startpos($2), $endpos($2)); comments = [] } }
 ;
 
 (* Program list - allows consecutive programs without semicolons *)
 (* Each non-final program must be non-empty to break the cycle *)
 program_list:
-  | nonempty_program SEMICOLON? program_list %prec PROGRAM_SEP { ProgSeq (b $1, b $3) }
+  | nonempty_program SEMICOLON? program_list %prec PROGRAM_SEP { ProgSeq ({ value = $1; pos = Some ($startpos($1), $endpos($1)); comments = [] },
+                                                                          { value = $3; pos = Some ($startpos($3), $endpos($3)); comments = [] }) }
   (* | nonempty_program program_list { ProgSeq (b $1, b $2) } *)
   | program { $1 }
   ;

@@ -22,7 +22,7 @@ module type TEST_CASE = sig
   val run_test : unit test_case
 end
 
-let test_config = Common.make () 
+let test_config = Common.create []
 
 module TestConfig : Common.CONFIG = struct
   let config = test_config

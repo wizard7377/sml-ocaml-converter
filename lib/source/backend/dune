@@ -5,19 +5,10 @@
  (modules
   backend
   backend_sig
-  backend_common
-  backend_const
-  backend_constants
-  backend_context
   backend_types
-  capital_utils
-  constructor_transform
-  create_ocaml
-  idx_utils
-  name_processor
+  backend_utils
   precedence_resolver
   process_label
-  process_names
-  type_var_utils)
+  process_names)
  (preprocess
   (pps ppxlib.metaquot)))

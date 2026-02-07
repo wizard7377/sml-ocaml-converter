@@ -24,8 +24,8 @@ Each test:
 4. Validates the generated OCaml is syntactically valid
 
 **Current Status:**
-- ✅ **177 tests passing** (37.8%) - Files that convert to valid OCaml
-- ❌ **291 tests failing** (62.2%) - Files exposing converter limitations
+- ✅ **217 tests passing** (46.4%) - Files that convert to valid OCaml
+- ❌ **251 tests failing** (53.6%) - Files exposing converter limitations
 
 Failing tests help identify missing features and bugs in the converter.
 

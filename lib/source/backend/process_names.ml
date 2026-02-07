@@ -6,7 +6,9 @@
     - Scoped name tracking for let bindings and modules
     - SML basis library constructor mapping (SOME -> Some, etc.)
     
-    Uses {!Capital_utils} for low-level capitalization functions. *)
+    Uses {!Backend_utils} for low-level capitalization functions. *)
+
+include Ast
 
 type context = ..
 type context += PatternHead
@@ -40,10 +42,10 @@ open! Ppxlib
 module StringMap = Map.Make(String)
 
 (* Re-export capitalization utilities for convenience *)
-let process_lowercase = Capital_utils.process_lowercase
-let process_uppercase = Capital_utils.process_uppercase
-let process_caps = Capital_utils.process_caps
-let is_lowercase = Capital_utils.is_variable_identifier
+let process_lowercase = Backend_utils.process_lowercase
+let process_uppercase = Backend_utils.process_uppercase
+let process_caps = Backend_utils.process_caps
+let is_lowercase = Backend_utils.is_variable_identifier
 
 type is_constructor = YesItIs of int | NoItsNot
 type note = int
@@ -119,7 +121,7 @@ class process_names (config : Common.t ref) (store : Context.t ref) =
       in
       aux s
     method private is_operator (s : string) : bool =
-      Capital_utils.is_operator_name s
+      Backend_utils.is_operator_name s
     (** Check if a string is an operator (non-alphanumeric identifier) *)
 
     method private build_longident (parts : string list) : Longident.t =
@@ -261,4 +263,110 @@ class process_names (config : Common.t ref) (store : Context.t ref) =
       (res0, res1)
     end
 
+(** {1 Name Processor Functor}
 
+    Unified API wrapping process_names with convenience functions. *)
+
+module type CONFIG = sig
+  val config : Common.t
+  val context : Context.t
+end
+
+module Make (Config : CONFIG) = struct
+  let process_special (name : string list) : string list option = 
+    if not @@ Common.engaged @@ Common.get Toplevel_names Config.config then 
+      None 
+    else 
+      match name with 
+      | [ "true" ] -> Some [ "true" ]
+      | [ "false" ] -> Some [ "false" ]
+      | [ "nil" ] -> Some [ "[]" ]
+      | [ "::" ] -> Some [ "::" ]
+      | [ "SOME" ] -> Some [ "Some" ]
+      | [ "NONE" ] -> Some [ "None" ]
+      | [ "ref" ] -> Some [ "ref" ]
+      | [ "hd" ] -> Some [ "List" ; "hd" ]
+      | _ -> None 
+
+  let namer : process_names =
+    new process_names (ref Config.config) (ref Config.context)
+
+  let in_core_lang (ctx : context) : bool = match ctx with
+    | ModuleValue | ModuleType | Functor -> false
+    | _ -> true
+
+  let build_longident_from_list (parts : string list) : Ppxlib.Longident.t =
+    match parts with
+    | [] -> failwith "empty name"
+    | [ x ] -> Ppxlib.Longident.Lident x
+    | first :: rest ->
+        List.fold_left
+          (fun acc part -> Ppxlib.Longident.Ldot (acc, part))
+          (Ppxlib.Longident.Lident first) rest
+
+  let process_name ~(ctx : context) (name : string list) : Ppxlib.Longident.t * bool =
+    let name = if List.exists (fun s -> String.ends_with s ~suffix:"_") name then List.map (fun s -> s ^ "__") name else name in
+    begin match process_special name with
+      | Some res -> build_longident_from_list res, true
+      | None ->
+    match name with
+    | [ name ] when in_core_lang ctx ->
+        (match Common.get Guess_var Config.config with
+        | Some regex ->
+            if Re.Str.string_match (Re.Str.regexp ("^" ^ regex ^ "$")) name 0 then
+              let newname = String.uncapitalize_ascii name ^ "_" in
+              (Longident.Lident newname, true)
+            else
+              namer#process_name ~ctx ~name:[name]
+        | None -> namer#process_name ~ctx ~name:[name])
+    | _ -> namer#process_name ~ctx ~name
+            end
+
+  let to_string ~(ctx : context) (name_parts : string list) : string =
+    Ppxlib.Longident.last_exn (process_name ~ctx name_parts |> fst)
+
+  let to_longident ~(ctx : context) (name_parts : string list) : Ppxlib.Longident.t =
+    let (res, _changed) = process_name ~ctx name_parts in
+    res
+
+  let idx_to_longident ~(ctx : context) (idx : idx) : Ppxlib.Longident.t =
+    to_longident ~ctx (Backend_utils.idx_to_name idx)
+
+  let idx_to_string ~(ctx : context) (idx : idx) : string =
+    to_string ~ctx (Backend_utils.idx_to_name idx)
+
+  let process_with_op ~(ctx : context) (wo : with_op) : string =
+    match wo with
+    | WithOp id -> idx_to_string ~ctx id.value
+    | WithoutOp id -> idx_to_string ~ctx id.value
+
+  let is_valid ~(ctx : context) (name : string list) : bool =
+    namer#is_good ~ctx ~name
+
+  let push_context () : note = namer#push_context ()
+  let pop_context (n : note) : unit = namer#pop_context n
+
+  let add_name ?(global = false) ~from ~res () : unit =
+    namer#add_name ~global ~from ~res ()
+
+  let get_name (from : string) : string = namer#get_name from
+
+  let matches_pattern (name : string) : bool =
+    match Common.get Guess_var Config.config with
+    | Some regex ->
+        Re.Str.string_match (Re.Str.regexp ("^" ^ regex ^ "$")) name 0
+    | None -> false  
+end
+
+(* Context aliases for convenience *)
+let context_value = Value
+let context_type = Type
+let context_constructor = Constructor
+let context_operator = Operator
+let context_label = Label
+let context_module_value = ModuleValue
+let context_module_type = ModuleType
+let context_functor = Functor
+let context_pattern_head = PatternHead
+let context_pattern_tail = PatternTail
+let context_empty = Empty

@@ -5,28 +5,29 @@
     - [.fun] files (functor implementations)
     - [.sml] files (structure implementations/exports)
 
-    These files are processed together and concatenated into a single OCaml output. *)
+    These files are processed together and concatenated into a single OCaml
+    output. *)
 
 open Common
 
-(** Internal representation of SML code. *)
 type sml_code
+(** Internal representation of SML code. *)
 
-(** Internal representation of OCaml code. *)
 type ocaml_code
+(** Internal representation of OCaml code. *)
 
-(** Group member files record. *)
 type t = {
-  interface : string option;       (** Path to .sig file, if present *)
+  interface : string option;  (** Path to .sig file, if present *)
   implementation : string option;  (** Path to .fun file, if present *)
-  exports : string option;         (** Path to .sml file, if present *)
+  exports : string option;  (** Path to .sml file, if present *)
 }
+(** Group member files record. *)
 
 (** Group processor for related SML files.
 
-    Processes a set of related files (.sig/.fun/.sml) that together define
-    a single SML module. All files are converted and concatenated in the
-    correct order: signature → functor → structure. *)
+    Processes a set of related files (.sig/.fun/.sml) that together define a
+    single SML module. All files are converted and concatenated in the correct
+    order: signature → functor → structure. *)
 class process_group : string -> Common.t -> object
   method get_store : unit -> Context.t
   (** Get the accumulated name resolution context. *)
@@ -57,8 +58,8 @@ class process_group : string -> Common.t -> object
   method parse_members : t -> string
   (** [parse_members members] converts all member files to OCaml.
 
-      Processes each file through the full pipeline and concatenates results
-      in the standard order: interface, implementation, exports.
+      Processes each file through the full pipeline and concatenates results in
+      the standard order: interface, implementation, exports.
 
       @param members Record of file paths to process
       @return Concatenated OCaml output from all files

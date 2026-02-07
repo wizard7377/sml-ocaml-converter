@@ -30,21 +30,21 @@ module Make (Deps : TYPE_DEPS) : TYPE_PROCESSOR = struct
   
   (** Convert an SML type to an OCaml core type. *)
   let rec process_type_value (ty : Ast.typ Ast.node) : Parsetree.core_type =
-    (labeller#cite Helpers.Attr.core_type ty.pos)
+    (labeller#cite Helpers.Attr.core_type ty.comments)
       (match ty.value with
       | TypVar name -> (
           match name.value with
-          | Ast.IdxVar v -> Type_var_utils.process_type_var_name v.value
+          | Ast.IdxVar v -> Backend_utils.process_type_var_name v.value
           | _ -> failwith "Expected type variable")
       | TypCon (args, head) ->
           let head_longident =
-            build_longident (Idx_utils.idx_to_name head.value)
+            build_longident (Backend_utils.idx_to_name head.value)
           in
           
           let args' = List.map (fun arg -> process_type_value arg) args in
           Builder.ptyp_constr (ghost head_longident) args'
       | TypPar ty' ->
-          labeller#cite Helpers.Attr.core_type ty.pos (process_type_value ty')
+          labeller#cite Helpers.Attr.core_type ty.comments (process_type_value ty')
       | TypFun (ty1, ty2) -> make_arrow ty1 ty2
       | TypTuple tys ->
           Builder.ptyp_tuple (List.map (fun t -> process_type_value t) tys)
@@ -58,12 +58,12 @@ module Make (Deps : TYPE_DEPS) : TYPE_PROCESSOR = struct
   (** Convert SML record type rows to OCaml object fields. *)
   and process_object_field_type (field : Ast.typ_row Ast.node) :
       Parsetree.object_field list =
-    List.map (labeller#cite Helpers.Attr.object_field field.pos)
+    List.map (labeller#cite Helpers.Attr.object_field field.comments)
     @@
     match field.value with
     | Ast.TypRow (name, ty, rest) -> (
         let label_name =
-          name_to_string (Idx_utils.idx_to_name name.value)
+          name_to_string (Backend_utils.idx_to_name name.value)
         in
         let here : Parsetree.object_field =
           Builder.otag (ghost label_name) (process_type_value ty)

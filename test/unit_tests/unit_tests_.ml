@@ -10,8 +10,11 @@ module PR = Backend.Precedence_resolver
 (** Test configuration *)
 module TestConfig : Common.CONFIG = struct
   let config =
-    Common.make ~input_file:Common.StdIn ~output_file:Common.Silent ~verbosity:3
-      ()
+    Common.create [
+      Common.set Input_file Common.StdIn;
+      Common.set Output_file Common.Silent;
+      Common.set Verbosity 3
+    ]
 end
 
 module TestContext (* TODO *) = struct
@@ -627,8 +630,12 @@ let test_process_pat_as () =
 (** Test configuration with guess_var enabled *)
 module TestConfigWithGuessVar : Common.CONFIG = struct
   let config =
-    Common.make ~input_file:Common.StdIn ~output_file:Common.Silent ~verbosity:3
-      ~guess_var:(Some "[A-Z][a-zA-Z0-9_]*") ()
+    Common.create [
+      Common.set Input_file Common.StdIn;
+      Common.set Output_file Common.Silent;
+      Common.set Verbosity 3;
+      Common.set Guess_var (Some "[A-Z][a-zA-Z0-9_]*")
+    ]
 end
 
 module TestContextWithGuessVar = struct
@@ -1666,11 +1673,16 @@ let test_twelf_file (file_path : string) () : unit =
 
   (* Configure the converter *)
   let config =
-    Common.make ~input_file:(Common.File [ file_path ])
-      ~output_file:Common.Silent ~verbosity:0 (* Silent verbosity for tests *)
-      ~convert_names:Enable ~convert_keywords:Enable
-      ~rename_types:Enable ~guess_pattern:Enable
-      ~guess_var:(Some {|[A-Z]s?[0-9]?'?|}) ()
+    Common.create [
+      Common.set Input_file (Common.File [ file_path ]);
+      Common.set Output_file Common.Silent;
+      Common.set Verbosity 0;
+      Common.set Convert_names Enable;
+      Common.set Convert_keywords Enable;
+      Common.set Rename_types Enable;
+      Common.set Guess_pattern Enable;
+      Common.set Guess_var (Some {|[A-Z]s?[0-9]?'?|})
+    ]
   in
 
   try

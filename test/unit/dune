@@ -1,4 +1,0 @@
-(executable
- (name test_constructor_registry)
- (modules test_constructor_registry)
- (libraries alcotest context))

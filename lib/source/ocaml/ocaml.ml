@@ -442,16 +442,14 @@ class process_ocaml ~(opts : Common.t) =
           { expr_after_curry with pexp_desc = Pexp_ident new_lid }
 
       | Pexp_construct (lid, arg_opt) ->
-          (* Constructor expression *)
+          (* Constructor expression - argument already processed by super#expression above *)
           let new_lid = self#process_loc_longident InConstructorDecl lid in
-          let new_arg = Option.map (super#expression ctx) arg_opt in
-          { expr_after_curry with pexp_desc = Pexp_construct (new_lid, new_arg) }
+          { expr_after_curry with pexp_desc = Pexp_construct (new_lid, arg_opt) }
 
       | Pexp_field (e, lid) ->
-          (* Record field access *)
-          let new_e = super#expression ctx e in
+          (* Record field access - expression already processed by super#expression above *)
           let new_lid = self#process_loc_longident InLabel lid in
-          { expr_after_curry with pexp_desc = Pexp_field (new_e, new_lid) }
+          { expr_after_curry with pexp_desc = Pexp_field (e, new_lid) }
 
       | _ ->
           expr_after_curry

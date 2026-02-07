@@ -3,7 +3,7 @@ let comment_re =
     (Re.seq
        [
          Re.str "[";
-         Re.rep1 (Re.str "@");
+         Re.group ?name:(Some "ats") (Re.rep1 (Re.str "@"));
          Re.str "sml.comment";
          Re.rep Re.space;
          Re.str "\"";
@@ -28,12 +28,24 @@ let clean_comment (input : string) : string =
 let comment_replace : Re.Group.t -> string =
  fun grp ->
   let group_names = Re.group_names comment_re in
+  let ats_len =
+    match List.assoc_opt "ats" group_names with
+    | Some idx -> (
+        match Re.Group.get_opt grp idx with
+        | Some s -> String.length s
+        | None -> 2)
+    | None -> 2
+  in
   match List.assoc_opt "body" group_names with
   | Some body -> (
       Re.Group.get_opt grp body |> function
       | Some body ->
-          let res = "(*" ^ clean_comment body ^ "*)" in
-          res
+          let comment = "(*" ^ clean_comment body ^ "*)" in
+          (* Node-attached attributes (@ or @@) get a newline prefix so
+             they appear on their own line instead of glued to the expression.
+             Floating attributes (@@@) already have their own line from Pprintast. *)
+          if ats_len < 3 then "\n" ^ comment
+          else comment
       | None -> "")
   | None -> ""
 

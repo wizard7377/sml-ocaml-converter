@@ -309,15 +309,17 @@ let conversion_flags : (bool * Common.t) Term.t =
   and+ curry_expressions = curry_expressions_flag
   and+ curry_types = curry_types_flag in
   ( force,
-    Common.create Common.[ 
-      set Convert_names convert_names ;
-      set Convert_keywords convert_keywords ;
-      set Rename_types rename_types ;
-      set Make_make_functor make_make_functor ;
-      set Guess_pattern guess_pattern ;
-      set Curry_expressions curry_expressions ;
-      set Curry_types curry_types ;
-      ] )
+    Common.create
+      Common.
+        [
+          set Convert_names convert_names;
+          set Convert_keywords convert_keywords;
+          set Rename_types rename_types;
+          set Make_make_functor make_make_functor;
+          set Guess_pattern guess_pattern;
+          set Curry_expressions curry_expressions;
+          set Curry_types curry_types;
+        ] )
 
 let dash_to_underscore_doc =
   {|
@@ -515,8 +517,14 @@ let remove_constructor_manifest_doc =
 
   Default: true (do not generate constructor manifest files)
   |}
+
 let remove_constructor_manifest_flag : bool Term.t =
-  Arg.(value & opt bool true & info [ "remove-constructor-manifest" ] ~doc:remove_constructor_manifest_doc)
+  Arg.(
+    value & opt bool true
+    & info
+        [ "remove-constructor-manifest" ]
+        ~doc:remove_constructor_manifest_doc)
+
 let common_options : Common.t Cmdliner.Term.t =
   let+ v = verb
   and+ force, c = conversion_flags
@@ -526,20 +534,22 @@ let common_options : Common.t Cmdliner.Term.t =
   and+ dbg = debug
   and+ check_ocaml = check_ocaml_flag
   and+ dash_to_underscore = dash_to_underscore_flag in
-  Common.create Common.[
-    set Verbosity v ;
-    set Convert_names (Common.get Convert_names c) ;
-    set Convert_keywords (Common.get Convert_keywords c) ;
-    set Rename_types (Common.get Rename_types c) ;
-    set Make_make_functor (Common.get Make_make_functor c) ;
-    set Guess_pattern (Common.get Guess_pattern c) ;
-    set Curry_expressions (Common.get Curry_expressions c) ;
-    set Curry_types (Common.get Curry_types c) ;
-    set Concat_output (Common.get Concat_output c) ;
-    set Force force ;
-    set Quiet q ;
-    set Guess_var gv ;
-    set Debug dbg ;
-    set Check_ocaml check_ocaml ;
-    set Dash_to_underscore dash_to_underscore
-  ]
+  Common.create
+    Common.
+      [
+        set Verbosity v;
+        set Convert_names (Common.get Convert_names c);
+        set Convert_keywords (Common.get Convert_keywords c);
+        set Rename_types (Common.get Rename_types c);
+        set Make_make_functor (Common.get Make_make_functor c);
+        set Guess_pattern (Common.get Guess_pattern c);
+        set Curry_expressions (Common.get Curry_expressions c);
+        set Curry_types (Common.get Curry_types c);
+        set Concat_output (Common.get Concat_output c);
+        set Force force;
+        set Quiet q;
+        set Guess_var gv;
+        set Debug dbg;
+        set Check_ocaml check_ocaml;
+        set Dash_to_underscore dash_to_underscore;
+      ]

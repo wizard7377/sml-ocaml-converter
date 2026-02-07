@@ -2,27 +2,27 @@ open Alcotest
 
 let test_lowercase_constructor () =
   check string "lowercase a -> A_" "A_"
-    (Constructor_transform.transform_constructor "a");
+    (Backend.Backend_utils.transform_constructor "a");
   check string "lowercase some -> Some_" "Some_"
-    (Constructor_transform.transform_constructor "some")
+    (Backend.Backend_utils.transform_constructor "some")
 
 let test_uppercase_with_underscore () =
   check string "B_ -> B__" "B__"
-    (Constructor_transform.transform_constructor "B_")
+    (Backend.Backend_utils.transform_constructor "B_")
 
 let test_already_valid () =
   check string "Foo unchanged" "Foo"
-    (Constructor_transform.transform_constructor "Foo");
+    (Backend.Backend_utils.transform_constructor "Foo");
   check string "SOME -> Some (capitalize)" "Some"
-    (Constructor_transform.transform_constructor "SOME")
+    (Backend.Backend_utils.transform_constructor "SOME")
 
 let test_variable_lowercase () =
   check string "SOME -> some_" "some_"
-    (Constructor_transform.transform_to_lowercase "SOME");
+    (Backend.Backend_utils.transform_to_lowercase "SOME");
   check string "Foo -> foo_" "foo_"
-    (Constructor_transform.transform_to_lowercase "Foo");
+    (Backend.Backend_utils.transform_to_lowercase "Foo");
   check string "bar -> bar" "bar"
-    (Constructor_transform.transform_to_lowercase "bar")
+    (Backend.Backend_utils.transform_to_lowercase "bar")
 
 let () =
   run "Constructor_transform"

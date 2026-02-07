@@ -25,26 +25,28 @@ let convert_file ~(input_files : path list) ?(output_file : path option)
     | Some p -> Common.FileOut (path_to_string p)
   in
   let cfg =
-    Common.create Common.[
-      set Input_file input_files'' ;
-      set Output_file output_target ;
-      set Verbosity (Common.get Verbosity options) ;
-      set Convert_names (Common.get Convert_names options) ;
-      set Convert_keywords (Common.get Convert_keywords options) ;
-      set Rename_types (Common.get Rename_types options) ;
-      set Make_make_functor (Common.get Make_make_functor options) ;
-      set Guess_pattern (Common.get Guess_pattern options) ;
-      set Curry_expressions (Common.get Curry_expressions options) ;
-      set Curry_types (Common.get Curry_types options) ;
-      set Toplevel_names (Common.get Toplevel_names options) ;
-      set Concat_output (Common.get Concat_output options) ;  
-      set Force (Common.get Force options) ;
-      set Quiet (Common.get Quiet options) ;
-      set Guess_var (Common.get Guess_var options) ;
-      set Debug (Common.get Debug options) ;
-      set Check_ocaml (Common.get Check_ocaml options) ;
-      set Dash_to_underscore (Common.get Dash_to_underscore options) ;
-    ]
+    Common.create
+      Common.
+        [
+          set Input_file input_files'';
+          set Output_file output_target;
+          set Verbosity (Common.get Verbosity options);
+          set Convert_names (Common.get Convert_names options);
+          set Convert_keywords (Common.get Convert_keywords options);
+          set Rename_types (Common.get Rename_types options);
+          set Make_make_functor (Common.get Make_make_functor options);
+          set Guess_pattern (Common.get Guess_pattern options);
+          set Curry_expressions (Common.get Curry_expressions options);
+          set Curry_types (Common.get Curry_types options);
+          set Toplevel_names (Common.get Toplevel_names options);
+          set Concat_output (Common.get Concat_output options);
+          set Force (Common.get Force options);
+          set Quiet (Common.get Quiet options);
+          set Guess_var (Common.get Guess_var options);
+          set Debug (Common.get Debug options);
+          set Check_ocaml (Common.get Check_ocaml options);
+          set Dash_to_underscore (Common.get Dash_to_underscore options);
+        ]
   in
   let process = new process cfg in
   let res = process#run input_files'' in

@@ -1,5 +1,5 @@
-(** Exception raised when generated OCaml code has syntax errors. *)
 exception Output_syntax_error of string
+(** Exception raised when generated OCaml code has syntax errors. *)
 
 (** Result type for syntax validation. *)
 type check_result = Good | Bad of Syntaxerr.error | Err of exn
@@ -12,8 +12,8 @@ let print_error ~(err : Syntaxerr.error) : string =
   Format.pp_print_flush fmt ();
   Buffer.contents buffer
 
-(** Display error context with line numbers around the error location.
-    Shows [context] lines before and after the error position.
+(** Display error context with line numbers around the error location. Shows
+    [context] lines before and after the error position.
 
     @param context Number of context lines to show (default: 4)
     @param file_content Source file split into lines
@@ -38,8 +38,8 @@ let display_error_context_lines ?(context = 4) (file_content : string list)
   in
   String.concat "\n" contents0
 
-(** Display error context by reading from a file.
-    Convenience wrapper around {!display_error_context_lines}.
+(** Display error context by reading from a file. Convenience wrapper around
+    {!display_error_context_lines}.
 
     @param context Number of context lines (default: 4)
     @param filename Path to source file
@@ -54,8 +54,8 @@ let display_error_context ?(context = 4) (filename : string)
   in
   display_error_context_lines ~context file_content p0 p1
 
-(** Display error context from a string instead of a file.
-    Used for showing errors in generated code that hasn't been written to disk.
+(** Display error context from a string instead of a file. Used for showing
+    errors in generated code that hasn't been written to disk.
 
     @param context Number of context lines (default: 4)
     @param _filename Filename (for API compatibility, not used)
@@ -68,8 +68,8 @@ let display_error_context_from_string ?(context = 4) (_filename : string)
   let file_content = String.split_on_char '\n' content in
   display_error_context_lines ~context file_content p0 p1
 
-(** Extract output file path from configuration for error messages.
-    Returns a descriptive string if not writing to a file. *)
+(** Extract output file path from configuration for error messages. Returns a
+    descriptive string if not writing to a file. *)
 let get_output_file_path (config : Common.t) : string =
   match Common.get Output_file config with
   | Common.FileOut path -> path

@@ -81,6 +81,16 @@ type 'a node = {
           The [[@opaque]] attribute prevents [ppx_deriving.show] from displaying
           position details in pretty-printed output. This keeps debug output
           concise and focused on AST structure rather than source locations. *)
+  comments : string list;
+      (** Comments directly associated with this AST node.
+
+          Populated by the parser from the lexer's comment stream. Each string
+          is the full comment text (including delimiters like [(* ... *)]).
+          Comments are assigned to nodes based on their source position falling
+          within the node's position range.
+
+          An error is raised during backend conversion if any comment is not
+          converted to the output OCaml. *)
 }
 [@@deriving show]
 
@@ -124,7 +134,7 @@ type 'a node = {
 
     @param v The AST value to wrap
     @return A node containing [v] with no position info *)
-let box_node (v : 'a) : 'a node = { value = v; pos = None }
+let box_node (v : 'a) : 'a node = { value = v; pos = None; comments = [] }
 
 (** Extract the value from a node wrapper, discarding metadata.
 

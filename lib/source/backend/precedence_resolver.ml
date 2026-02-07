@@ -58,7 +58,7 @@ type resolved_exp =
 let extract_operator (exp : expression node) : idx node option =
   match exp.value with
   | ExpIdx idx ->
-      let name = Idx_utils.idx_to_string idx.value in
+      let name = Backend_utils.idx_to_string idx.value in
       if is_operator name then Some idx else None
   | _ -> None
 
@@ -71,7 +71,7 @@ let find_operators (items : expression node list) :
     | exp :: rest -> (
         match extract_operator exp with
         | Some op_idx -> (
-            let op_name = Idx_utils.idx_to_string op_idx.value in
+            let op_name = Backend_utils.idx_to_string op_idx.value in
             match get_precedence op_name with
             | Some (prec, assoc) ->
                 (pos, prec, assoc, op_idx) :: find_at (pos + 1) rest
@@ -210,7 +210,7 @@ let extract_pat_operator (p : pat node) : idx node option =
   | PatIdx wo -> (
       match wo.value with
       | WithoutOp idx ->
-          let name = Idx_utils.idx_to_string idx.value in
+          let name = Backend_utils.idx_to_string idx.value in
           if is_operator name then Some idx else None
       | WithOp idx ->
           (* op prefix - this is explicitly an operator being used as a value *)
@@ -225,7 +225,7 @@ let find_pat_operators (items : pat node list) :
     | p :: rest -> (
         match extract_pat_operator p with
         | Some op_idx -> (
-            let op_name = Idx_utils.idx_to_string op_idx.value in
+            let op_name = Backend_utils.idx_to_string op_idx.value in
             match get_precedence op_name with
             | Some (prec, assoc) ->
                 (pos, prec, assoc, op_idx) :: find_at (pos + 1) rest
