@@ -1,0 +1,8 @@
+(library
+ (public_name shibboleth.format_lib)
+ (name format_lib)
+ (modules format_lib format_types format_utils format_ident format_flags format_views
+          format_core_type format_pattern format_expression format_attrs
+          format_class_type format_class_expr format_module_type format_module_expr
+          format_type_decl)
+ (libraries config_lib ppxlib re fmt fmt.tty bos fpath))

@@ -153,6 +153,10 @@ class process_file : ?store:Context.t -> Common.t -> object
       @param ocaml OCaml code from {!convert_to_ocaml}
       @return Formatted OCaml source text ready to write to a file *)
 
+  method get_constructors : Context.Constructor_registry.constructor_info list
+  (** [get_constructors] returns the constructors discovered during the last
+      {!convert_to_ocaml} call. Empty before any conversion has been run. *)
+
   method process_file : string -> string
   (** [process_file path] performs the complete conversion pipeline. *)
 end

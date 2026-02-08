@@ -16,6 +16,13 @@ module type LOG = sig
     msg:string ->
     unit ->
     unit
+  val log_fmt :
+    ?subgroup:string ->
+    ?level:level ->
+    ?kind:kind ->
+    msg:(unit Fmt.t) ->
+    unit ->
+    unit
 end
 
 module type S = sig
@@ -78,4 +85,27 @@ module Make (C : S) : LOG = struct
   let log ?(subgroup = "") ?(level = High) ?(kind = Negative) ~(msg : string)
       (() : unit) =
     log_with ~cfg:C.config ~subgroup ~level ~kind ~msg ()
-end
+  let log_fmt ?(subgroup = "") ?(level = High) ?(kind = Negative) ~(msg : (unit Fmt.t))
+      (() : unit) =
+    if get_should_print ~cfg:C.config ~subgroup level kind then begin
+      let prefix_msg =
+        match kind with
+        | Positive -> "SUCCESS "
+        | Negative -> "ERROR "
+        | Neutral -> "INFO "
+        | Warning -> "WARNING "
+      in
+      let fmt_style =
+        `Fg
+          Fmt.(
+            match kind with
+            | Positive -> `Green
+            | Negative -> `Red
+            | Neutral -> `Blue
+            | Warning -> `Yellow)
+      in
+      let format_bold = Fmt.(styled `Bold string) in
+      Fmt.epr "%a" Fmt.(styled fmt_style format_bold) prefix_msg;
+      msg Stdlib.Format.err_formatter ()
+    end
+  end

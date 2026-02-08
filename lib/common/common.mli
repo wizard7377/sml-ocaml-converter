@@ -93,8 +93,8 @@ type level = Logger.level = High | Medium | Low | Debug
 
 type kind = Logger.kind = Positive | Negative | Neutral | Warning
 
-module type LOG = sig
-  val log :
+module type LOG = sig 
+    val log :
     ?subgroup:string -> ?level:level -> ?kind:kind -> msg:string -> unit -> unit
 
   val log_with :
@@ -105,7 +105,14 @@ module type LOG = sig
     msg:string ->
     unit ->
     unit
-end
+  val log_fmt :
+    ?subgroup:string ->
+    ?level:level ->
+    ?kind:kind ->
+    msg:(unit Fmt.t) ->
+    unit ->
+    unit
+    end
 
 module type S = sig
   val config : t

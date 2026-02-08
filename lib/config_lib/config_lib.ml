@@ -45,8 +45,11 @@ type t = {
       (** Input source specification (file paths or stdin). *)
   output_file : target; [@default Silent]
       (** Output target specification (file path, stdout, or silent). *)
-  remove_constructor_manifest : bool; [@default true]
-      (** If true, do not generate a constructor manifest file. *)
+  context_output : string option; [@default None]
+      (** Output path for the combined .sctx context file. *)
+  context_input : string option; [@default None]
+      (** Input path for extra context to load from a previously-generated .sctx
+          file. *)
 }
 [@@deriving make]
 
@@ -73,7 +76,8 @@ let get : type a. a flag -> t -> a =
   | Dash_to_underscore -> cfg.dash_to_underscore
   | Input_file -> cfg.input_file
   | Output_file -> cfg.output_file
-  | Remove_constructor_manifest -> cfg.remove_constructor_manifest
+  | Context_output -> cfg.context_output
+  | Context_input -> cfg.context_input
 
 let set : type a. a flag -> a -> arg =
  fun flag value ->
@@ -96,8 +100,8 @@ let set : type a. a flag -> a -> arg =
   | Dash_to_underscore -> fun cfg -> { cfg with dash_to_underscore = value }
   | Input_file -> fun cfg -> { cfg with input_file = value }
   | Output_file -> fun cfg -> { cfg with output_file = value }
-  | Remove_constructor_manifest ->
-      fun cfg -> { cfg with remove_constructor_manifest = value }
+  | Context_output -> fun cfg -> { cfg with context_output = value }
+  | Context_input -> fun cfg -> { cfg with context_input = value }
 
 let create (args : arg list) : t =
   List.fold_left (fun cfg f -> f cfg) (make ()) args

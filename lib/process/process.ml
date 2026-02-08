@@ -21,6 +21,9 @@ class process ?(store = Context.create (Context.Info.create [])) cfg_init =
     val mutable has_errors : bool = false
     val mutable errors_store : (string * string) list = []
     val mutable warning_store : (string * string) list = []
+
+    val mutable accumulated_contexts :
+      Context.Constructor_manifest.module_context list = []
     method set_config c = cfg <- c
     method get_config () = cfg
     method get_store () = store
@@ -62,8 +65,53 @@ class process ?(store = Context.create (Context.Info.create [])) cfg_init =
         transformations (dash→underscore), directory creation, and different
         output modes (file, stdout, silent). *)
 
+    method private load_input_context : unit =
+      match Common.get Context_input cfg with
+      | Some path -> (
+          try
+            let modules =
+              Context.Constructor_manifest.read_combined_file path
+            in
+            List.iter
+              (fun (mc : Context.Constructor_manifest.module_context) ->
+                List.iter
+                  (fun (ci : Context.Constructor_registry.constructor_info) ->
+                    Context.Constructor_registry.add_constructor
+                      store.constructor_registry ~path:ci.path ~name:ci.name
+                      ~ocaml_name:ci.ocaml_name)
+                  mc.constructors)
+              modules;
+            Log.log ~level:Medium ~kind:Neutral
+              ~msg:(Printf.sprintf "Loaded context from %s" path)
+              ()
+          with e ->
+            Log.log ~level:High ~kind:Warning
+              ~msg:
+                (Printf.sprintf "Failed to load context from %s: %s" path
+                   (Printexc.to_string e))
+              ())
+      | None -> ()
+
+    method private write_output_context : unit =
+      match Common.get Context_output cfg with
+      | Some path -> (
+          try
+            Context.Constructor_manifest.write_combined_file path
+              accumulated_contexts;
+            Log.log ~level:Medium ~kind:Neutral
+              ~msg:(Printf.sprintf "Wrote combined context to %s" path)
+              ()
+          with e ->
+            Log.log ~level:High ~kind:Warning
+              ~msg:
+                (Printf.sprintf "Failed to write combined context to %s: %s"
+                   path (Printexc.to_string e))
+              ())
+      | None -> ()
+
     method run (input : input) : int =
       try
+        self#load_input_context;
         match input with
         | File files ->
             total <- List.length files;
@@ -76,6 +124,7 @@ class process ?(store = Context.create (Context.Info.create [])) cfg_init =
                      ()))
                 errors_store
             else ();
+            self#write_output_context;
             res
         | StdIn -> assert false
       with e ->
@@ -203,6 +252,20 @@ class process ?(store = Context.create (Context.Info.create [])) cfg_init =
 
       let ocaml_ast = process#convert_to_ocaml sml_ast in
       self#log_verbose "Finished converting to OCaml AST.";
+
+      (* Accumulate constructors for combined context output *)
+      let constructors = process#get_constructors in
+      if constructors <> [] then begin
+        let module_path =
+          match Common.get Output_file cfg with
+          | FileOut p -> p
+          | _ -> file
+        in
+        accumulated_contexts <-
+          Context.Constructor_manifest.
+            { module_path; constructors }
+          :: accumulated_contexts
+      end;
 
       let ocaml_code' = process#print_ocaml ocaml_ast in
       self#log_verbose "Finished printing OCaml code.";

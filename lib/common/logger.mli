@@ -14,6 +14,14 @@ module type LOG = sig
     msg:string ->
     unit ->
     unit
+  
+  val log_fmt :
+    ?subgroup:string ->
+    ?level:level ->
+    ?kind:kind ->
+    msg:(unit Fmt.t) ->
+    unit ->
+    unit
 end
 
 module type S = sig

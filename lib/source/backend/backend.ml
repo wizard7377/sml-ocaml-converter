@@ -66,6 +66,12 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
 
   (* Name processing removed - using literal translation only *)
 
+  let escape_keyword (s : string) : string =
+    if Ppxlib.Keyword.is_keyword s
+       && is_flag_enabled (Common.get Convert_keywords config)
+    then s ^ "_"
+    else s
+
   let sanitize_ident (s : string) : string =
     let buf = Buffer.create (String.length s) in
     String.iter
@@ -75,7 +81,16 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
         | '`' -> Buffer.add_string buf "_bq"
         | _ -> Buffer.add_char buf c)
       s;
-    Buffer.contents buf
+    let result = Buffer.contents buf in
+    (* OCaml lexer always tokenizes :: as the cons constructor, so operators
+       starting with :: followed by more characters (like ::=) are invalid.
+       Prefix with @ to produce a valid OCaml operator (e.g. @::=). *)
+    let result =
+      if String.length result > 2 && String.sub result 0 2 = "::"
+      then "@" ^ result
+      else result
+    in
+    escape_keyword result
 
   (** Capitalize all but the last element in a list (for module path capitalization).
       ["test"; "foo"; "ok"] becomes ["Test_"; "Foo_"; "ok"] 
@@ -495,7 +510,8 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
           (* #label -> fun r -> r#label (for records/objects) *)
           let r_pat = Builder.ppat_var (ghost "r") in
           let r_exp = Builder.pexp_ident (ghost (Ppxlib.Longident.Lident "r")) in
-          let field_exp = Builder.pexp_send r_exp (ghost lab_str) in
+          let lab_str' = sanitize_ident lab_str in
+          let field_exp = Builder.pexp_send r_exp (ghost @@ lab_str') in
           Builder.pexp_fun Nolabel None r_pat field_exp
         in
         match lab.value with
@@ -888,7 +904,16 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
     (* Comments attach directly as attributes on pattern nodes (Immediate mode) *)
 
     let rec process_resolved_pat ~is_arg ~is_head (resolved : Precedence_resolver.resolved_pat) : Parsetree.pattern =
-      match resolved with
+      Log.log ~subgroup:"pattern_resolved" ~level:Debug ~kind:Neutral
+        ~msg:(Printf.sprintf "Processing resolved pattern: %s (is_head=%b, is_arg=%b)"
+          (match resolved with
+           | ResolvedPatSingle _ -> "ResolvedPatSingle"
+           | ResolvedPatApp _ -> "ResolvedPatApp"
+           | ResolvedPatInfix _ -> "ResolvedPatInfix")
+          is_head is_arg)
+        ();
+      
+      let res = begin match resolved with
       | ResolvedPatSingle p ->
           process_pat ~is_arg ~is_head { value = p; pos = None; comments = [] }
 
@@ -914,48 +939,28 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
                       Some (List.rev (List.tl (List.rev name)))
                     else None
                   in
-                  (* Look up as constructor, with fallback heuristic *)
+                  (* Head of pattern application is always a constructor *)
                   let lookup_result = Context.Constructor_registry.lookup
                     Ctx.context.constructor_registry ~path:qual_path simple_name in
-                  let is_ctor = match lookup_result with
-                    | Some ctor -> Some (Some ctor)
+                  let transformed_parts = match lookup_result with
+                    | Some ctor ->
+                        (match qual_path with
+                         | Some path -> path @ [ctor.Context.Constructor_registry.ocaml_name]
+                         | None -> [ctor.ocaml_name])
                     | None ->
-                        (* Fallback heuristic for uppercase names not in registry:
-                           - If qualified (M.Foo) and uppercase, treat as constructor
-                           - If unqualified (Foo) with multiple args and uppercase, treat as constructor *)
-                        let is_uppercase = String.length simple_name > 0 &&
-                            Char.uppercase_ascii simple_name.[0] = simple_name.[0] &&
-                            simple_name.[0] <> '_' in
-                        if is_uppercase && (qual_path <> None || List.length args > 1) then
-                          Some None
-                        else
-                          None
+                        let transformed_name = Backend_utils.transform_constructor simple_name in
+                        (match qual_path with
+                         | Some path -> path @ [transformed_name]
+                         | None -> [transformed_name])
                   in
-                  (match is_ctor with
-                  | Some ctor_opt ->
-                      (* It's a constructor - build constructor pattern with qualified name *)
-                      let transformed_parts = match ctor_opt with
-                        | Some ctor ->
-                            (match qual_path with
-                             | Some path -> path @ [ctor.Context.Constructor_registry.ocaml_name]
-                             | None -> [ctor.ocaml_name])
-                        | None -> name (* Use name as-is *)
-                      in
-                      let name_longident = build_longident ~capitalize_modules:true transformed_parts in
-                      let arg_pats = List.map (fun arg -> process_pat ~is_arg:true ~is_head:false arg) args in
-                      (* In OCaml, constructor args must be parenthesized in a tuple *)
-                      let arg_pattern = match arg_pats with
-                        | [] -> None
-                        | [single] -> Some (Builder.ppat_tuple [single])
-                        | _ -> Some (Builder.ppat_tuple arg_pats)
-                      in
-                      Builder.ppat_construct (ghost name_longident) arg_pattern
-                  | None ->
-                      (* Not a constructor - treat as nested pattern (shouldn't happen often) *)
-                      let f_pat = process_resolved_pat ~is_arg:false ~is_head:true f in
-                      let arg_pats = List.map (fun arg -> process_pat ~is_arg:true ~is_head:false arg) args in
-                      (* Build tuple of all parts *)
-                      Builder.ppat_tuple (f_pat :: arg_pats))
+                  let name_longident = build_longident ~capitalize_modules:true transformed_parts in
+                  let arg_pats = List.map (fun arg -> process_pat ~is_arg:true ~is_head:false arg) args in
+                  let arg_pattern = match arg_pats with
+                    | [] -> None
+                    | [single] -> Some (Builder.ppat_tuple [single])
+                    | _ -> Some (Builder.ppat_tuple arg_pats)
+                  in
+                  Builder.ppat_construct (ghost name_longident) arg_pattern
                   end
               | WithOp _ ->
                   (* op prefix - build as tuple *)
@@ -985,6 +990,14 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
           | None ->
               (* Should not happen - operators in patterns should be constructors *)
               failwith (Printf.sprintf "Unknown pattern operator: %s" op_name))
+          end in
+      Log.log_fmt ~subgroup:"pattern_resolved" ~level:Debug ~kind:Neutral
+        ~msg:(Fmt.concat Fmt.[
+          const string "Resolved pattern converted to OCaml: ";
+          const string @@ Precedence_resolver.show_resolved_pat resolved ;
+          const string " -> ";
+          const Format_lib.pattern res
+        ]) (); res
     in
 
     let res = begin match pat.value with
@@ -1005,43 +1018,53 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
             let lookup_result = Context.Constructor_registry.lookup
               Ctx.context.constructor_registry ~path:qual_path simple_name in
             (match lookup_result with
-            (* Qualified names (qual_path is Some) must be constructors *)
             | Some ctor_info when is_head || Option.is_some qual_path || not (is_variable_identifier simple_name) ->
-                (* It's a constructor - use transformed name *)
                 let transformed_parts = match qual_path with
                   | Some path -> path @ [ctor_info.Context.Constructor_registry.ocaml_name]
                   | None -> [ctor_info.ocaml_name]
                 in
                 let name_longident = build_longident ~capitalize_modules:true transformed_parts in
                 Builder.ppat_construct (ghost name_longident) None
+            | None when is_head ->
+                (* Head of pattern application: always a constructor *)
+                let transformed_name = Backend_utils.transform_constructor simple_name in
+                let transformed_parts = match qual_path with
+                  | Some path -> path @ [transformed_name]
+                  | None -> [transformed_name]
+                in
+                let name_longident = build_longident ~capitalize_modules:true transformed_parts in
+                Builder.ppat_construct (ghost name_longident) None
             | _ ->
-                (* It's a variable - force lowercase *)
                 let name_str = Backend_utils.transform_to_lowercase simple_name in
                 Builder.ppat_var (ghost name_str))
         | WithoutOp id ->
             let id_name = idx_to_name id.value in
             let simple_name = name_to_string id_name in
-            (* Extract module path if qualified *)
             let qual_path =
               if List.length id_name > 1 then
                 Some (List.rev (List.tl (List.rev id_name)))
               else None
             in
-            (* Try to look up as constructor *)
             let lookup_result = Context.Constructor_registry.lookup
               Ctx.context.constructor_registry ~path:qual_path simple_name in
             (match lookup_result with
-            (* Qualified names (qual_path is Some) must be constructors *)
             | Some ctor_info when is_head || Option.is_some qual_path || not (is_variable_identifier simple_name) ->
-                (* It's a constructor - use transformed name *)
                 let transformed_parts = match qual_path with
                   | Some path -> path @ [ctor_info.Context.Constructor_registry.ocaml_name]
                   | None -> [ctor_info.ocaml_name]
                 in
                 let name_longident = build_longident ~capitalize_modules:true transformed_parts in
                 Builder.ppat_construct (ghost name_longident) None
+            | None when is_head ->
+                (* Head of pattern application: always a constructor *)
+                let transformed_name = Backend_utils.transform_constructor simple_name in
+                let transformed_parts = match qual_path with
+                  | Some path -> path @ [transformed_name]
+                  | None -> [transformed_name]
+                in
+                let name_longident = build_longident ~capitalize_modules:true transformed_parts in
+                Builder.ppat_construct (ghost name_longident) None
             | _ ->
-                (* It's a variable - force lowercase *)
                 let name_str = Backend_utils.transform_to_lowercase simple_name in
                 Builder.ppat_var (ghost name_str)))
     | PatApp pat_list ->
@@ -1154,7 +1177,7 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
           | None -> pat_with_type
           | Some as_id ->
               let as_name =
-                process_lowercase (name_to_string (idx_to_name as_id.value))
+                escape_keyword (process_lowercase (name_to_string (idx_to_name as_id.value)))
               in
               Builder.ppat_alias pat_with_type (ghost as_name)
         in
@@ -1256,25 +1279,34 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
 
       @param vb The value binding(s)
       @return List of OCaml value bindings *)
+  and flat_val_bind (vb : Ast.value_binding) : Ppxlib.Ast.rec_flag * (Ast.pat node * Ast.expression node) list =
+    match vb with
+    | ValBind (pat, expression, rest_opt) ->
+        let recursive , rest = match rest_opt with None -> Asttypes.Nonrecursive , [] | Some r -> flat_val_bind r.value in
+        recursive, ((pat, expression) :: rest)
+    | ValBindRec vb ->
+        (* Recursive value bindings *)
+        let _, vb' = flat_val_bind vb.value in
+        (Asttypes.Recursive, vb')
   and process_val_bind (vb : Ast.value_binding) : Parsetree.value_binding list =
+    let (rec_flag, bindings) = flat_val_bind vb in
+      process_val_bindings rec_flag bindings
+
+  and process_val_bindings (recursive : Asttypes.rec_flag) (bindings : (Ast.pat node * Ast.expression node) list) : Parsetree.value_binding list =
     Log.log ~subgroup:"binding" ~level:Debug ~kind:Neutral
       ~msg:"Processing value binding"
       ();
-    match vb with
-    | ValBind (pat, expression, rest_opt) ->
-        let pat' = process_pat pat in
-        let expression' = process_exp expression in
-        let binding =
-          labeller#cite Helpers.Attr.value_binding pat.comments
-            (Builder.value_binding ~pat:pat' ~expr:expression')
-        in
-        let rest =
-          match rest_opt with None -> [] | Some r -> process_val_bind r.value
-        in
-        binding :: rest
-    | ValBindRec vb ->
-        (* Recursive value bindings *)
-        process_val_bind vb.value
+    List.map (fun (pat, exp) ->
+      let pat' = process_pat pat in 
+      let exp' = process_exp exp in
+      let vb = Builder.value_binding ~pat:pat' ~expr:exp' in
+      (* Attach comments to the value binding *)
+      let vb_with_comments =
+        labeller#cite Helpers.Attr.value_binding pat.comments
+        @@ labeller#cite_for_node Helpers.Attr.value_binding pat.pos
+        @@ vb      in
+      vb_with_comments) bindings
+
 
   (** Convert SML function bindings to OCaml.
 
@@ -1603,8 +1635,8 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
       @return The identifier string *)
   and process_with_op (wo : Ast.with_op) : string =
     match wo with
-    | WithOp id -> idx_to_string id.value
-    | WithoutOp id -> idx_to_string id.value
+    | WithOp id -> name_to_string (idx_to_name id.value)
+    | WithoutOp id -> name_to_string (idx_to_name id.value)
 
   (** {1 Structure Processing}
 
@@ -1642,7 +1674,7 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
         in
         Builder.pstr_module
           (Builder.module_binding
-             ~name:(ghost (Some (idx_to_string id.value)))
+             ~name:(ghost (Some (name_to_string (idx_to_name id.value))))
              ~expr:(Builder.pmod_ident (ghost name)))
         :: []
     | StructStr declaration ->
@@ -1663,7 +1695,7 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
         in
         Builder.pstr_module
           (Builder.module_binding
-             ~name:(ghost (Some (idx_to_string id.value)))
+             ~name:(ghost (Some (name_to_string (idx_to_name id.value))))
              ~expr:mod_expr)
         :: []
     | FunctorAppAnonymous (_id, declaration) ->
@@ -1979,7 +2011,7 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
         match vd with
         | ValDesc (id, ty, rest_opt) ->
             let name_str =
-              name_to_string (idx_to_name id.value)
+              escape_keyword (process_lowercase @@ name_to_string (idx_to_name id.value))
             in
             let core_type = process_type ty in
             let vdesc =
@@ -2061,7 +2093,7 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
         | ConDesc (id, ty_opt, rest_opt) ->
             (* Same as process_con_bind *)
             let name_str =
-              name_to_string (idx_to_name id.value)
+              Backend_utils.transform_constructor (name_to_string (idx_to_name id.value))
             in
             let args =
               match ty_opt with
@@ -2092,7 +2124,7 @@ module Make (Ctx : CONTEXT) (Config : CONFIG) = struct
         | ExnDesc (id, ty_opt, rest_opt) ->
             (* Similar to process_exn_bind but for signatures *)
             let name_str =
-              name_to_string (idx_to_name id.value)
+              Backend_utils.transform_constructor (name_to_string (idx_to_name id.value))
             in
             let args =
               match ty_opt with

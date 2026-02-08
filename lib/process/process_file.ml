@@ -13,10 +13,18 @@ class process_file ?(store = Context.create (Context.Info.create [])) cfg_init =
     val mutable cfg = cfg_init
     val mutable store = store
     val mutable lexbuf : string = ""
+
+    val mutable last_constructors :
+      Context.Constructor_registry.constructor_info list = []
+
     method get_store () : Context.t = store
     method set_store (s : Context.t) = store <- s
     method get_config () : t = cfg
     method set_config (c : t) = cfg <- c
+
+    method get_constructors : Context.Constructor_registry.constructor_info list
+        =
+      last_constructors
 
     method private get_fmt =
       match Common.get Output_file cfg with
@@ -38,7 +46,6 @@ class process_file ?(store = Context.create (Context.Info.create [])) cfg_init =
         ~msg:"Building initial context..." ();
       let ctx0 = Context.merge ctx (self#get_store ()) in
       let ctx1 = Context.merge ctx0 Context.basis_context in
-      (* TODO Make this a flag *)
       Log.log_with ~cfg ~level:Low ~kind:Neutral
         ~msg:"Converting SML to OCaml (backend phase)..." ();
       let module BackendContext = struct
@@ -50,24 +57,7 @@ class process_file ?(store = Context.create (Context.Info.create [])) cfg_init =
       end in
       let module Backend = Backend.Make (BackendContext) (BackendConfig) in
       let raw_ocaml = Backend.process_sml ~prog:sml in
-      (* Generate constructor manifest if output file is specified *)
-      (match Common.get Output_file cfg with
-      | FileOut output_path -> (
-          let manifest_path = output_path ^ ".sctx" in
-          let constructors = Backend.get_all_constructors () in
-          try
-            Context.Constructor_manifest.write_file manifest_path constructors;
-            Log.log_with ~cfg ~level:Low ~kind:Neutral
-              ~msg:
-                (Printf.sprintf "Wrote constructor manifest to %s" manifest_path)
-              ()
-          with e ->
-            Log.log_with ~cfg ~level:Low ~kind:Warning
-              ~msg:
-                (Printf.sprintf "Failed to write constructor manifest: %s"
-                   (Printexc.to_string e))
-              ())
-      | _ -> ());
+      last_constructors <- Backend.get_all_constructors ();
       Log.log_with ~cfg ~level:Low ~kind:Neutral
         ~msg:"Post-processing names (ocaml phase)..." ();
       let post_processor = new Ocaml.process_ocaml ~opts:(self#get_config ()) in

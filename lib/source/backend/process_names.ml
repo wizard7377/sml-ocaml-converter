@@ -9,7 +9,8 @@
     Uses {!Backend_utils} for low-level capitalization functions. *)
 
 include Ast
-
+let keywords = ["and";"as";"assert";"asr";"begin";"class";"constraint";"do";"done";"downto";"else";"end";"exception";"external";"false";"for";"fun";"function";"functor";"if";"in";"include";"inherit";"initializer";"land";"lazy";"let";"lor";"lsl";"lsr";"lxor";"match";"method";"mod";"module";"mutable";"new";"nonrec";"object";"of";"open";"or";"private";"rec";"sig";"struct";"then";"to";"true";"try";"type";"val";"virtual";"when";"while";"with"]
+let is_keyword (s : string) : bool = List.mem s keywords
 type context = ..
 type context += PatternHead
 type context += PatternTail
@@ -252,7 +253,7 @@ class process_names (config : Common.t ref) (store : Context.t ref) =
         )
           in 
       let (scope, basename) = self#split_name res in
-      let (res0, res1) = (if Ppxlib.Keyword.is_keyword basename && Common.is_flag_enabled (Common.get Convert_keywords !config) then
+      let (res0, res1) = (if (is_keyword) (String.lowercase_ascii basename) && Common.is_flag_enabled (Common.get Convert_keywords !config) then
         let new_basename = basename ^ "_" in
         let full_name = scope @ [ new_basename ] in
         (self#build_longident full_name, b)

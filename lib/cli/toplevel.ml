@@ -46,6 +46,8 @@ let convert_file ~(input_files : path list) ?(output_file : path option)
           set Debug (Common.get Debug options);
           set Check_ocaml (Common.get Check_ocaml options);
           set Dash_to_underscore (Common.get Dash_to_underscore options);
+          set Context_output (Common.get Context_output options);
+          set Context_input (Common.get Context_input options);
         ]
   in
   let process = new process cfg in

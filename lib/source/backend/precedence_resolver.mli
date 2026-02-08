@@ -14,7 +14,10 @@ type resolved_pat =
   | ResolvedPatSingle of Ast.pat
   | ResolvedPatApp of resolved_pat * Ast.pat Ast.node list
   | ResolvedPatInfix of resolved_pat * Ast.idx Ast.node * resolved_pat
+  
+val show_resolved_pat : resolved_pat -> string
 
+(** Show function for resolved expressions *)
 val resolve_precedence : Ast.expression Ast.node list -> resolved_exp
 (** Resolve precedence in a flat expression sequence *)
 

@@ -2,4 +2,4 @@
  (public_name shibboleth.common)
  (name common)
  (modules common format logger)
- (libraries config_lib ppxlib re fmt fmt.tty bos fpath))
+ (libraries format_lib config_lib ppxlib re fmt fmt.tty bos fpath))

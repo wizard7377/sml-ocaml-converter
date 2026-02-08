@@ -11,4 +11,4 @@
   process_label
   process_names)
  (preprocess
-  (pps ppxlib.metaquot)))
+  (pps ppx_deriving.show ppxlib.metaquot)))

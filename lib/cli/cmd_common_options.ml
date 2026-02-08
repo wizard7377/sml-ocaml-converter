@@ -497,33 +497,53 @@ let check_ocaml_doc =
 let check_ocaml_flag : bool Term.t =
   Arg.(value & flag & info [ "check-ocaml" ] ~doc:check_ocaml_doc)
 
-let remove_constructor_manifest_doc =
+let context_output_doc =
   {|
-  Control generation of constructor manifest files (.ctx) alongside OCaml output.
+  Output path for a combined constructor context file (.sctx).
 
   BEHAVIOR:
-  When converting SML datatypes, the converter generates a constructor manifest file
-  (with .ctx extension) that lists all constructors and their arities. This is used
-  for post-processing and tooling support.
+  When specified, a single .sctx file is written at the end of the conversion
+  containing constructor information from all processed files. This file can be
+  loaded in subsequent conversions using --context-input to provide cross-module
+  constructor resolution.
 
-  This flag controls whether the manifest file is generated:
-    --remove-constructor-manifest=true (default): Do not generate .ctx files.
-    --remove-constructor-manifest=false: Generate .ctx files as usual.
+  If not specified, no .sctx file is generated.
 
   USE CASES:
-  - Enable (true) to skip generating manifest files if you don't need them or want to
-    manage constructor information manually.
-  - Disable (false) to keep the default behavior of generating manifest files for tooling.
-
-  Default: true (do not generate constructor manifest files)
+  - Export constructor context from one conversion for use in another
+  - Build a shared context across separately compiled modules
+  - Enable cross-module constructor resolution in batch workflows
   |}
 
-let remove_constructor_manifest_flag : bool Term.t =
+let context_output_flag : string option Term.t =
   Arg.(
-    value & opt bool true
-    & info
-        [ "remove-constructor-manifest" ]
-        ~doc:remove_constructor_manifest_doc)
+    value
+    & opt (some string) None
+    & info [ "context-output" ] ~doc:context_output_doc ~docv:"PATH")
+
+let context_input_doc =
+  {|
+  Input path for extra constructor context to load (.sctx).
+
+  BEHAVIOR:
+  When specified, constructor information is loaded from the given .sctx file
+  before conversion begins. This allows the converter to resolve constructors
+  defined in separately compiled modules.
+
+  The loaded context is merged with the built-in SML Basis context and any
+  constructors discovered during parsing.
+
+  USE CASES:
+  - Load constructor context exported from a previous conversion
+  - Provide cross-module constructor resolution for incremental builds
+  - Chain multiple conversions with shared constructor knowledge
+  |}
+
+let context_input_flag : string option Term.t =
+  Arg.(
+    value
+    & opt (some string) None
+    & info [ "context-input" ] ~doc:context_input_doc ~docv:"PATH")
 
 let common_options : Common.t Cmdliner.Term.t =
   let+ v = verb
@@ -533,7 +553,9 @@ let common_options : Common.t Cmdliner.Term.t =
   and+ gv = guess_var
   and+ dbg = debug
   and+ check_ocaml = check_ocaml_flag
-  and+ dash_to_underscore = dash_to_underscore_flag in
+  and+ dash_to_underscore = dash_to_underscore_flag
+  and+ ctx_out = context_output_flag
+  and+ ctx_in = context_input_flag in
   Common.create
     Common.
       [
@@ -552,4 +574,6 @@ let common_options : Common.t Cmdliner.Term.t =
         set Debug dbg;
         set Check_ocaml check_ocaml;
         set Dash_to_underscore dash_to_underscore;
+        set Context_output ctx_out;
+        set Context_input ctx_in;
       ]

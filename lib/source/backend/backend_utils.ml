@@ -119,7 +119,12 @@ let is_all_uppercase s = String.for_all (fun c -> Char.uppercase_ascii c = c) s
 *)
 let transform_constructor name =
   if String.length name = 0 then name
-  else if String.ends_with ~suffix:"_" name then name ^ "_"
+  else if String.ends_with ~suffix:"_" name then
+    let base = String.sub name 0 (String.length name - 1) in
+    if Ppxlib.Keyword.is_keyword base then
+      String.capitalize_ascii base ^ "_"
+    else
+      name ^ "_"
   else if Char.uppercase_ascii name.[0] = name.[0] then
     if is_all_uppercase name && String.length name > 1 then
       String.capitalize_ascii (String.lowercase_ascii name)

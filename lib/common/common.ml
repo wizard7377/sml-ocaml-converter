@@ -34,7 +34,26 @@ let convert_path_dashes_to_underscores (p : Fpath.t) : Fpath.t =
 
 include Config_lib
 include Logger
+module type LOG = sig 
+    val log :
+    ?subgroup:string -> ?level:level -> ?kind:kind -> msg:string -> unit -> unit
 
+  val log_with :
+    cfg:t ->
+    ?subgroup:string ->
+    ?level:level ->
+    ?kind:kind ->
+    msg:string ->
+    unit ->
+    unit
+  val log_fmt :
+    ?subgroup:string ->
+    ?level:level ->
+    ?kind:kind ->
+    msg:(unit Fmt.t) ->
+    unit ->
+    unit
+    end
 (* Override Logger.S and Make to use Common.t (= Config_lib.t) *)
 module type S = sig
   val config : t

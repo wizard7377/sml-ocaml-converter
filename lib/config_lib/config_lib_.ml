@@ -21,7 +21,8 @@ type _ flag =
   | Dash_to_underscore : bool flag
   | Input_file : source flag
   | Output_file : target flag
-  | Remove_constructor_manifest : bool flag
+  | Context_output : string option flag
+  | Context_input : string option flag
 
 (** Check if a conversion flag is active (not Disable). *)
 let is_flag_enabled = function Enable | Warn | Note -> true | Disable -> false

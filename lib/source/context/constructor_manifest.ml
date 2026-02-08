@@ -38,3 +38,41 @@ let find_manifest ~search_paths ~module_name =
       let path = Filename.concat dir filename in
       if Sys.file_exists path then Some path else None)
     search_paths
+
+(** Combined context: bundles constructor info from multiple modules into a
+    single file. *)
+
+type module_context = {
+  module_path : string;
+  constructors : Constructor_registry.constructor_info list;
+}
+[@@deriving sexp]
+
+let combined_to_sexp (modules : module_context list) : Sexplib0.Sexp.t =
+  sexp_of_list sexp_of_module_context modules
+
+let combined_from_sexp (sexp : Sexplib0.Sexp.t) : module_context list =
+  list_of_sexp module_context_of_sexp sexp
+
+let write_combined_file path modules =
+  let sexp = combined_to_sexp modules in
+  let content = Sexplib0.Sexp.to_string_hum sexp in
+  let oc = open_out path in
+  try
+    output_string oc content;
+    output_char oc '\n';
+    close_out oc
+  with e ->
+    close_out_noerr oc;
+    raise e
+
+let read_combined_file path =
+  let ic = open_in path in
+  try
+    let content = really_input_string ic (in_channel_length ic) in
+    close_in ic;
+    let sexp = Sexplib.Sexp.of_string content in
+    combined_from_sexp sexp
+  with e ->
+    close_in_noerr ic;
+    raise e

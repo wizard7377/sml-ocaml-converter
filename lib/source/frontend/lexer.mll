@@ -128,7 +128,6 @@ rule token = parse
   (* Decimal integers with optional negation: ~num or num *)
   | '~' num as s  { INT_LIT s }
   | num as s      { INT_LIT s }
-
   (* Punctuation and operators *)
   | '('           { LPAREN }
   | ')'           { RPAREN }

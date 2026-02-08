@@ -203,7 +203,8 @@ type resolved_pat =
       (** Left-associative pattern application *)
   | ResolvedPatInfix of resolved_pat * idx node * resolved_pat
       (** Binary infix pattern (e.g., x :: xs) *)
-
+  [@@deriving show]
+let show_resolved_pat = show_resolved_pat
 (** Extract operator from pattern node *)
 let extract_pat_operator (p : pat node) : idx node option =
   match p.value with
